@@ -117,10 +117,20 @@ export function formatTokens(n: number): string {
 // Cost estimation
 // ---------------------------------------------------------------------------
 
+// Internal pricing shape used by the cost-estimation functions. The
+// generated `ModelCost` type mirrors `models.dev` exactly (snake_case,
+// optional `cache_read` / `cache_write`); we adapt it to non-optional
+// camelCase fields here so callers stay simple. Where the upstream omits
+// a cache tier we fall back to `input` — conservative (no discount
+// applied) and keeps `estimateCacheSavings` returning 0 naturally.
+interface ResolvedPricing {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
 // Strip a leading `provider/` segment, e.g. `openai/gpt-4o` → `gpt-4o`.
-// OpenCode reports models in `provider/model` form; the pricing table is
-// keyed by the full `provider/model` string. Returns the input
-// unchanged when there is no prefix.
 function stripProviderPrefix(model: string): string {
   const slash = model.indexOf("/");
   return slash > 0 ? model.slice(slash + 1) : model;
@@ -133,13 +143,19 @@ function stripDateSuffix(model: string): string {
   return model.replace(/-(20\d{2}-?\d{2}-?\d{2}|latest)$/, "");
 }
 
-// Resolve a model string to its pricing tier. The generated PRICING
-// object uses `provider/model` keys.
-//   1. Raw exact match.
-//   2. Strip provider prefix and/or date suffix, then:
-//      a. Exact match on bare name
-//      b. startsWith match on bare name without date suffix
-function resolvePricing(model: string) {
+// Resolve a model string to its pricing tier. PRICING is keyed by
+// `provider/model`. Walked in two passes so exact bare matches always
+// win over prefix matches — otherwise `gpt-4o-2024-05-13` would resolve
+// to `openai/gpt-4o`'s price (alphabetically first; `keyBare.startsWith`
+// is true) instead of the dated entry's specific price.
+//   1. Exact match on the full string (`provider/model`).
+//   2. First pass — exact bare match (`keyBare === bare`). Catches a
+//      bare-keyed input (`gpt-4o`, `gpt-4o-mini`, `gpt-4o-2024-05-13`)
+//      hitting the corresponding `provider/<id>` entry verbatim.
+//   3. Second pass — `keyBare.startsWith(withoutDate)`. Catches a
+//      date-suffixed input whose exact dated entry isn't tracked
+//      (`claude-opus-4-1-20260105` falls back to `claude-opus-4-1`).
+function resolvePricing(model: string): ResolvedPricing | undefined {
   if (!model) return undefined;
 
   const exact = PRICING[model];
@@ -149,10 +165,11 @@ function resolvePricing(model: string) {
   const withoutDate = stripDateSuffix(bare);
 
   for (const [key, p] of Object.entries(PRICING)) {
-    const keyBare = stripProviderPrefix(key);
-    if (keyBare === bare || keyBare === withoutDate || key.startsWith(withoutDate)) {
-      return p;
-    }
+    if (stripProviderPrefix(key) === bare) return p;
+  }
+
+  for (const [key, p] of Object.entries(PRICING)) {
+    if (stripProviderPrefix(key).startsWith(withoutDate)) return p;
   }
 
   // User-supplied override for models we don't ship a maintained rate for.
@@ -198,13 +215,11 @@ type Priceable = Pick<
 export function estimateCost(usage: Priceable): number {
   const pricing = resolvePricing(usage.model);
   if (!pricing) return 0;
-  const cacheRead = pricing.cacheRead ?? 0;
-  const cacheWrite = pricing.cacheWrite ?? pricing.input;
   return (
     (usage.input_tokens * pricing.input +
       usage.output_tokens * pricing.output +
-      usage.cache_read_tokens * cacheRead +
-      usage.cache_write_tokens * cacheWrite) /
+      usage.cache_read_tokens * pricing.cacheRead +
+      usage.cache_write_tokens * pricing.cacheWrite) /
     1_000_000
   );
 }
@@ -221,13 +236,11 @@ export function estimateCostBreakdown(usage: Priceable): CostBreakdown {
   if (!pricing) {
     return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   }
-  const cacheRead = pricing.cacheRead ?? 0;
-  const cacheWrite = pricing.cacheWrite ?? pricing.input;
   return {
     input: (usage.input_tokens * pricing.input) / 1_000_000,
     output: (usage.output_tokens * pricing.output) / 1_000_000,
-    cacheRead: (usage.cache_read_tokens * cacheRead) / 1_000_000,
-    cacheWrite: (usage.cache_write_tokens * cacheWrite) / 1_000_000,
+    cacheRead: (usage.cache_read_tokens * pricing.cacheRead) / 1_000_000,
+    cacheWrite: (usage.cache_write_tokens * pricing.cacheWrite) / 1_000_000,
   };
 }
 
@@ -237,10 +250,8 @@ export function estimateCostBreakdown(usage: Priceable): CostBreakdown {
 export function estimateCacheSavings(usage: Priceable): number {
   const pricing = resolvePricing(usage.model);
   if (!pricing) return 0;
-  const cacheRead = pricing.cacheRead ?? 0;
-  if (cacheRead === 0) return 0;
   const wouldHaveCost = (usage.cache_read_tokens * pricing.input) / 1_000_000;
-  const actualCost = (usage.cache_read_tokens * cacheRead) / 1_000_000;
+  const actualCost = (usage.cache_read_tokens * pricing.cacheRead) / 1_000_000;
   return wouldHaveCost - actualCost;
 }
 

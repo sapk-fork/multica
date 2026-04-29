@@ -119,26 +119,21 @@ function serializeCost(cost) {
     "//",
     "// Regenerate with: node scripts/generate-pricing.mjs",
     "",
-    "// Cost values are USD per million tokens, matching the raw",
-    "// `cost` shape on models.dev — fields are optional and only",
-    "// present when the upstream provider charges separately.",
-    "export interface ModelCost {",
-    "  input: number;",
-    "  output: number;",
-    "  reasoning?: number;",
-    "  cache_read?: number;",
-    "  cache_write?: number;",
-    "  input_audio?: number;",
-    "  output_audio?: number;",
-    "}",
-    "",
     "// Keys are `<provider>/<model>` to match what OpenCode and other",
     "// multi-provider runtimes report on the wire.",
-    "export const PRICING: Readonly<Record<string, ModelCost>> = {",
+    "export const PRICING: Readonly<Record<string, {",
+    "  input: number;",
+    "  output: number;",
+    "  cacheRead: number;",
+    "  cacheWrite: number;",
+    "}>> = {",
   ];
 
   for (const r of rows) {
-    lines.push(`  ${JSON.stringify(r.key)}: ${serializeCost(r.cost)},`);
+    const c = r.cost;
+    const cacheRead = c.cache_read ?? c.input;
+    const cacheWrite = c.cache_write ?? c.input;
+    lines.push(`  ${JSON.stringify(r.key)}: { input: ${c.input}, output: ${c.output}, cacheRead: ${cacheRead}, cacheWrite: ${cacheWrite} },`);
   }
   lines.push("};");
   lines.push("");

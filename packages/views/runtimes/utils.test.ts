@@ -185,6 +185,40 @@ describe("estimateCost — OpenCode provider/model parity", () => {
     expect(cost).toBeCloseTo(0.8 + 4, 6);
   });
 
+  it("resolves the gpt-4o family to each entry's specific price", () => {
+    // Three sibling entries in the snapshot share the `gpt-4o` prefix but
+    // carry different prices. The resolver must hit the *exact* bare key
+    // for each one rather than greedily falling through a startsWith
+    // match — otherwise `gpt-4o-2024-05-13` would resolve to `gpt-4o`'s
+    // price (alphabetically first) instead of its own.
+    const bareGpt4o = estimateCost(
+      usage({
+        model: "gpt-4o",
+        input_tokens: ONE_M,
+        output_tokens: ONE_M,
+      }),
+    );
+    expect(bareGpt4o).toBeCloseTo(2.5 + 10, 6); // openai/gpt-4o → $2.50 / $10
+
+    const gpt4oMini = estimateCost(
+      usage({
+        model: "gpt-4o-mini",
+        input_tokens: ONE_M,
+        output_tokens: ONE_M,
+      }),
+    );
+    expect(gpt4oMini).toBeCloseTo(0.15 + 0.6, 6); // openai/gpt-4o-mini → $0.15 / $0.60
+
+    const gpt4oDated = estimateCost(
+      usage({
+        model: "gpt-4o-2024-05-13",
+        input_tokens: ONE_M,
+        output_tokens: ONE_M,
+      }),
+    );
+    expect(gpt4oDated).toBeCloseTo(5 + 15, 6); // openai/gpt-4o-2024-05-13 → $5 / $15
+  });
+
   it("breakdown sums match the total cost", () => {
     const u = usage({
       model: "openai/gpt-4o-mini",
