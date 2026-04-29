@@ -134,26 +134,25 @@ function stripDateSuffix(model: string): string {
 }
 
 // Resolve a model string to its pricing tier. The generated PRICING
-// object uses `provider/model` keys. Tries in order:
+// object uses `provider/model` keys.
 //   1. Raw exact match.
-//   2. Strip `provider/` prefix → exact match.
-//   3. startsWith match on date-stripped name.
+//   2. Strip provider prefix and/or date suffix, then:
+//      a. Exact match on bare name
+//      b. startsWith match on bare name without date suffix
 function resolvePricing(model: string) {
   if (!model) return undefined;
 
   const exact = PRICING[model];
   if (exact) return exact;
 
-  const hasProvider = model.includes("/");
-  const bare = hasProvider ? model.split("/")[1] : model;
-
-  const bareExact = PRICING[bare];
-  if (bareExact) return bareExact;
-
-  const bareStripped = stripDateSuffix(bare);
+  const bare = stripProviderPrefix(model);
+  const withoutDate = stripDateSuffix(bare);
 
   for (const [key, p] of Object.entries(PRICING)) {
-    if (key.startsWith(bareStripped)) return p;
+    const keyBare = stripProviderPrefix(key);
+    if (keyBare === bare || keyBare === withoutDate || key.startsWith(withoutDate)) {
+      return p;
+    }
   }
 
   // User-supplied override for models we don't ship a maintained rate for.

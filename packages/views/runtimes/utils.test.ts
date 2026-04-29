@@ -92,6 +92,28 @@ describe("resolvePricing / isModelPriced", () => {
   it("treats empty strings as unknown", () => {
     expect(isModelPriced("")).toBe(false);
   });
+
+  it("matches bare model names without provider prefix", () => {
+    for (const m of [
+      "gpt-4o",
+      "gpt-4o-mini",
+      "claude-sonnet-4-5",
+      "claude-opus-4-1",
+      "gemini-2.5-pro",
+    ]) {
+      expect(isModelPriced(m), m).toBe(true);
+    }
+  });
+
+  it("matches bare models with date suffix", () => {
+    expect(isModelPriced("claude-opus-4-1-20260105")).toBe(true);
+    expect(isModelPriced("gpt-4o-2024-08-06")).toBe(true);
+  });
+
+  it("matches provider-prefixed models with date suffix", () => {
+    expect(isModelPriced("anthropic/claude-opus-4-1-20260105")).toBe(true);
+    expect(isModelPriced("openai/gpt-4o-2024-08-06")).toBe(true);
+  });
 });
 
 describe("estimateCost — OpenCode provider/model parity", () => {
