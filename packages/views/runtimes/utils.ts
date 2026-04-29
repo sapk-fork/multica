@@ -198,8 +198,8 @@ type Priceable = Pick<
 export function estimateCost(usage: Priceable): number {
   const pricing = resolvePricing(usage.model);
   if (!pricing) return 0;
-  const cacheRead = pricing.cache_read ?? pricing.cacheRead ?? 0;
-  const cacheWrite = pricing.cache_write ?? pricing.cacheWrite ?? pricing.input;
+  const cacheRead = pricing.cacheRead ?? 0;
+  const cacheWrite = pricing.cacheWrite ?? pricing.input;
   return (
     (usage.input_tokens * pricing.input +
       usage.output_tokens * pricing.output +
@@ -221,8 +221,8 @@ export function estimateCostBreakdown(usage: Priceable): CostBreakdown {
   if (!pricing) {
     return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   }
-  const cacheRead = pricing.cache_read ?? pricing.cacheRead ?? 0;
-  const cacheWrite = pricing.cache_write ?? pricing.cacheWrite ?? pricing.input;
+  const cacheRead = pricing.cacheRead ?? 0;
+  const cacheWrite = pricing.cacheWrite ?? pricing.input;
   return {
     input: (usage.input_tokens * pricing.input) / 1_000_000,
     output: (usage.output_tokens * pricing.output) / 1_000_000,
@@ -237,7 +237,7 @@ export function estimateCostBreakdown(usage: Priceable): CostBreakdown {
 export function estimateCacheSavings(usage: Priceable): number {
   const pricing = resolvePricing(usage.model);
   if (!pricing) return 0;
-  const cacheRead = pricing.cache_read ?? pricing.cacheRead ?? 0;
+  const cacheRead = pricing.cacheRead ?? 0;
   if (cacheRead === 0) return 0;
   const wouldHaveCost = (usage.cache_read_tokens * pricing.input) / 1_000_000;
   const actualCost = (usage.cache_read_tokens * cacheRead) / 1_000_000;
