@@ -133,53 +133,11 @@ function stripDateSuffix(model: string): string {
   return model.replace(/-(20\d{2}-?\d{2}-?\d{2}|latest)$/, "");
 }
 
-// Common provider prefixes to try when a bare model name is given.
-// This allows `claude-sonnet-4-5` to match `anthropic/claude-sonnet-4-5`.
-const PROVIDER_PREFIXES = [
-  "anthropic",
-  "openai",
-  "google",
-  "opencode",
-  "opencode-go",
-  "moonshotai",
-  "xai",
-  "deepseek",
-  "mistral",
-];
-
-// Provider prefix aliases: maps provider tokens that aren't in the generated
-// pricing to variants that are. For example, `deepseek/chat` isn't
-// in the generated file, but `opencode-go/deepseek-v4-flash` may be
-// close enough for cost estimation purposes.
-const PROVIDER_ALIASES: Record<string, string[]> = {
-  deepseek: ["opencode-go"],
-  xai: ["opencode"],
-  mistral: ["opencode"],
-};
-
-// Model name aliases: some providers report different model names than
-// what's in the generated pricing. Map the reported names to ones we have.
-const MODEL_ALIASES: Record<string, string> = {
-  "deepseek-chat": "deepseek-v4-flash",
-  "deepseek-reasoner": "deepseek-v4-pro",
-  "grok-4": "grok-code",
-  "grok-3-mini": "grok-code",
-};
-
 // Resolve a model string to its pricing tier. The generated PRICING
-// object uses `provider/model` keys. Walks normalisations in order
-// so the daemon-reported model name doesn't have to match exactly:
+// object uses `provider/model` keys. Tries in order:
 //   1. Raw exact match.
-//   2. Strip `provider/` prefix → exact match. Catches the case
-//      `anthropic/claude-sonnet-4-5` reusing the bare entry.
-//   3. Add common provider prefixes for bare model names.
-//   4. Strip date / `-latest` suffix → exact match.
-//      Catches `openai/gpt-4o-2024-08-06`, `claude-sonnet-4-5-20250929`.
-//   5. startsWith fallback on the bare-stripped name. Necessary because
-//      providers occasionally append region / size suffixes we don't
-//      enumerate (`-eu`, `-128k`, etc.).
-// Anything that misses all five is genuinely unknown; we return undefined
-// so callers can distinguish "$0 spend" from "spent but model not priced".
+//   2. Strip `provider/` prefix → exact match.
+//   3. startsWith match on date-stripped name.
 function resolvePricing(model: string) {
   if (!model) return undefined;
 
@@ -188,65 +146,14 @@ function resolvePricing(model: string) {
 
   const hasProvider = model.includes("/");
   const bare = hasProvider ? model.split("/")[1] : model;
-  const providerPart = hasProvider ? model.split("/")[0] : null;
 
-  if (bare !== model) {
-    const bareExact = PRICING[bare];
-    if (bareExact) return bareExact;
-  }
-
-  if (!hasProvider) {
-    for (const provider of PROVIDER_PREFIXES) {
-      const withProvider = `${provider}/${bare}`;
-      const withProviderExact = PRICING[withProvider];
-      if (withProviderExact) return withProviderExact;
-    }
-  } else if (providerPart && PROVIDER_ALIASES[providerPart]) {
-    if (MODEL_ALIASES[bare]) {
-      const aliasModel = MODEL_ALIASES[bare];
-      for (const alias of PROVIDER_ALIASES[providerPart]) {
-        const withAlias = `${alias}/${aliasModel}`;
-        const withAliasExact = PRICING[withAlias];
-        if (withAliasExact) return withAliasExact;
-      }
-    }
-    for (const alias of PROVIDER_ALIASES[providerPart]) {
-      const withAlias = `${alias}/${bare}`;
-      const withAliasExact = PRICING[withAlias];
-      if (withAliasExact) return withAliasExact;
-    }
-  }
+  const bareExact = PRICING[bare];
+  if (bareExact) return bareExact;
 
   const bareStripped = stripDateSuffix(bare);
-  if (bareStripped !== bare) {
-    const strippedExact = PRICING[bareStripped];
-    if (strippedExact) return strippedExact;
-
-    if (!hasProvider) {
-      for (const provider of PROVIDER_PREFIXES) {
-        const withProvider = `${provider}/${bareStripped}`;
-        const withProviderExact = PRICING[withProvider];
-        if (withProviderExact) return withProviderExact;
-      }
-    } else if (providerPart && PROVIDER_ALIASES[providerPart]) {
-      if (MODEL_ALIASES[bareStripped]) {
-        const aliasModel = MODEL_ALIASES[bareStripped];
-        for (const alias of PROVIDER_ALIASES[providerPart]) {
-          const withAlias = `${alias}/${aliasModel}`;
-          const withAliasExact = PRICING[withAlias];
-          if (withAliasExact) return withAliasExact;
-        }
-      }
-      for (const alias of PROVIDER_ALIASES[providerPart]) {
-        const withAlias = `${alias}/${bareStripped}`;
-        const withAliasExact = PRICING[withAlias];
-        if (withAliasExact) return withAliasExact;
-      }
-    }
-  }
 
   for (const [key, p] of Object.entries(PRICING)) {
-    if (bare.startsWith(key) || bareStripped.startsWith(key)) return p;
+    if (key.startsWith(bareStripped)) return p;
   }
 
   // User-supplied override for models we don't ship a maintained rate for.
