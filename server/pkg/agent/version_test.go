@@ -67,8 +67,12 @@ func TestCheckMinCLIVersion(t *testing.T) {
 		{"git-describe dev build past old tag", "v0.2.15-235-gdaf0e935", nil},
 		{"git-describe dirty dev build", "v0.2.15-235-gdaf0e935-dirty", nil},
 		{"git-describe dev build past current tag", "v0.2.20-3-gabc1234", nil},
-		{"pseudo-version from buildinfo", "v0.0.0-20260511140000-abcdef123456", nil},
-		{"pseudo-version short hash", "v0.0.0-20260101000000-a1b2c3d4e5f6", nil},
+		{"pseudo-version form 1 no base", "v0.0.0-20260511140000-abcdef123456", nil},
+		{"pseudo-version form 1 another", "v0.0.0-20260101000000-a1b2c3d4e5f6", nil},
+		{"pseudo-version form 3 release base", "v0.2.4-0.20191109021931-daa7c04131f5", nil},
+		{"pseudo-version form 2 pre-release base", "v0.2.3-pre.0.20191109021931-daa7c04131f5", nil},
+		{"pseudo-version form 1 major > 0", "v1.0.0-20260101000000-abcdef123456", nil},
+		{"Makefile fallback no git", "v0.0.0-19700101000000-000000000000", nil},
 	}
 	for _, tt := range tests {
 		err := CheckMinCLIVersion(tt.input)

@@ -40,14 +40,23 @@ var (
 // gate for staging or production users running stale stable releases.
 var devDescribeRe = regexp.MustCompile(`^v?\d+\.\d+\.\d+-\d+-g[0-9a-fA-F]+`)
 
-// pseudoVersionRe matches Go pseudo-version strings produced by
-// golang.org/x/mod/module.PseudoVersion and the buildinfo.ResolveDevVersion
-// helper, e.g. `v0.0.0-20260511140000-abcdef123456`. These are emitted when
-// the CLI is built with `go build` (no ldflags) inside a git repo: the Go
-// toolchain embeds VCS metadata, and the init-time helper formats it as a
-// pseudo-version. Like dev-describe strings, these always represent a build
-// from the latest source, so they pass the minimum-version gate.
-var pseudoVersionRe = regexp.MustCompile(`^v0\.0\.0-\d{14}-[0-9a-fA-F]+$`)
+// pseudoVersionRe matches Go pseudo-version strings per
+// https://go.dev/doc/modules/version-numbers#pseudo-version. All three forms
+// are accepted:
+//
+//	Form 1 (no base version):  vX.0.0-yyyymmddhhmmss-abcdef123456
+//	Form 2 (pre-release base): vX.Y.Z-pre.0.yyyymmddhhmmss-abcdef123456
+//	Form 3 (release base):     vX.Y.(Z+1)-0.yyyymmddhhmmss-abcdef123456
+//
+// The timestamp is the commit time (UTC), and the revision is a 12-character
+// hex prefix of the commit hash. These always represent a build from the
+// latest source, so they pass the minimum-version gate.
+var pseudoVersionRe = regexp.MustCompile(
+	`^v\d+\.\d+\.\d+(?:` +
+		`-0\.\d{14}` +
+		`|-[a-zA-Z]+\.\d+\.\d{14}` +
+		`|-\d{14}` +
+		`)-[0-9a-fA-F]{12}$`)
 
 // CheckMinCLIVersion returns nil when `detected` parses as ≥ minimum. Returns
 // ErrCLIVersionMissing for empty or unparsable input, and ErrCLIVersionTooOld
