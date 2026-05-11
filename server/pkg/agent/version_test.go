@@ -63,9 +63,12 @@ func TestCheckMinCLIVersion(t *testing.T) {
 		{"tagged release below minimum", "v0.2.15", ErrCLIVersionTooOld},
 		{"empty string", "", ErrCLIVersionMissing},
 		{"unparsable", "not-a-version", ErrCLIVersionMissing},
+		{"bare dev", "dev", ErrCLIVersionMissing},
 		{"git-describe dev build past old tag", "v0.2.15-235-gdaf0e935", nil},
 		{"git-describe dirty dev build", "v0.2.15-235-gdaf0e935-dirty", nil},
 		{"git-describe dev build past current tag", "v0.2.20-3-gabc1234", nil},
+		{"pseudo-version from buildinfo", "v0.0.0-20260511140000-abcdef123456", nil},
+		{"pseudo-version short hash", "v0.0.0-20260101000000-a1b2c3d4e5f6", nil},
 	}
 	for _, tt := range tests {
 		err := CheckMinCLIVersion(tt.input)

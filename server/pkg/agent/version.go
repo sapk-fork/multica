@@ -40,6 +40,15 @@ var (
 // gate for staging or production users running stale stable releases.
 var devDescribeRe = regexp.MustCompile(`^v?\d+\.\d+\.\d+-\d+-g[0-9a-fA-F]+`)
 
+// pseudoVersionRe matches Go pseudo-version strings produced by
+// golang.org/x/mod/module.PseudoVersion and the buildinfo.ResolveDevVersion
+// helper, e.g. `v0.0.0-20260511140000-abcdef123456`. These are emitted when
+// the CLI is built with `go build` (no ldflags) inside a git repo: the Go
+// toolchain embeds VCS metadata, and the init-time helper formats it as a
+// pseudo-version. Like dev-describe strings, these always represent a build
+// from the latest source, so they pass the minimum-version gate.
+var pseudoVersionRe = regexp.MustCompile(`^v0\.0\.0-\d{14}-[0-9a-fA-F]+$`)
+
 // CheckMinCLIVersion returns nil when `detected` parses as ≥ minimum. Returns
 // ErrCLIVersionMissing for empty or unparsable input, and ErrCLIVersionTooOld
 // when parsable but below the minimum. The caller can check for these
@@ -54,6 +63,9 @@ func CheckMinCLIVersion(detected string) error {
 		return ErrCLIVersionMissing
 	}
 	if devDescribeRe.MatchString(d) {
+		return nil
+	}
+	if pseudoVersionRe.MatchString(d) {
 		return nil
 	}
 	parsed, err := parseSemver(d)

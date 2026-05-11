@@ -12,7 +12,11 @@ RUN cd server && go mod download
 # Copy server source
 COPY server/ ./server/
 
-# Build binaries
+# Build binaries.
+# VERSION should be passed via --build-arg (e.g. from CI or Makefile).
+# The Go pseudo-version init-time fallback does NOT work inside Docker because
+# .git is not in the build context, so "dev" would remain and be rejected by
+# the server's version gate. Always pass VERSION for production images.
 ARG VERSION=dev
 ARG COMMIT=unknown
 RUN cd server && CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o bin/server ./cmd/server

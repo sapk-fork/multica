@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/multica-ai/multica/server/internal/buildinfo"
 	"github.com/multica-ai/multica/server/internal/cli"
 )
 
@@ -25,11 +26,11 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+	version = buildinfo.ResolveDevVersion(version)
+
 	rootCmd.Version = fmt.Sprintf("%s (commit: %s, built: %s)\ngo: %s, os/arch: %s/%s", version, commit, date, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	rootCmd.SetVersionTemplate("multica {{.Version}}\n")
 
-	// Tag every CLI HTTP request with this binary's build version so the
-	// server can split logs/metrics by client version.
 	cli.ClientVersion = version
 
 	rootCmd.PersistentFlags().String("server-url", "", "Multica server URL (env: MULTICA_SERVER_URL)")

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/multica-ai/multica/server/internal/analytics"
+	"github.com/multica-ai/multica/server/internal/buildinfo"
 	"github.com/multica-ai/multica/server/internal/daemonws"
 	"github.com/multica-ai/multica/server/internal/events"
 	"github.com/multica-ai/multica/server/internal/handler"
@@ -24,7 +25,7 @@ import (
 )
 
 var (
-	version = "dev"
+	version = buildinfo.ResolveDevVersion("dev")
 	commit  = "unknown"
 )
 
