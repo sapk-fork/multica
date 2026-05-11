@@ -34,8 +34,6 @@ afterEach(() => {
 
 const zeroUsage = usage({});
 
-const ONE_M = 1_000_000;
-
 describe("resolvePricing / isModelPriced", () => {
   it("matches full provider/model keys exactly", () => {
     expect(isModelPriced("anthropic/claude-sonnet-4-5")).toBe(true);

@@ -177,8 +177,8 @@ function resolvePricing(model: string): ResolvedPricing | undefined {
   // user can either pin a dated snapshot specifically or price the family.
   const custom = getCustomPricing(model);
   if (custom) return custom;
-  if (bareStripped !== bare) {
-    const customStripped = getCustomPricing(bareStripped);
+  if (withoutDate !== bare) {
+    const customStripped = getCustomPricing(withoutDate);
     if (customStripped) return customStripped;
   }
 
