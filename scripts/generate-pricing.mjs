@@ -52,31 +52,7 @@ async function loadModelsDev() {
   return await res.json();
 }
 
-// Stable JSON-ish field order so generated diffs only show real price
-// changes, not key reshuffles.
-const COST_FIELD_ORDER = [
-  "input",
-  "output",
-  "reasoning",
-  "cache_read",
-  "cache_write",
-  "input_audio",
-  "output_audio",
-];
 
-function serializeCost(cost) {
-  // We deliberately emit only the enumerated number fields. models.dev
-  // sometimes includes context-tier objects (e.g.
-  // `gemini-2.5-pro.cost.context_over_200k`); the Multica usage stream
-  // doesn't carry context size, so we always price at the standard
-  // tier. If a new flat number field appears upstream, add it to
-  // COST_FIELD_ORDER and ModelCost together.
-  const entries = [];
-  for (const k of COST_FIELD_ORDER) {
-    if (typeof cost[k] === "number") entries.push(`${k}: ${cost[k]}`);
-  }
-  return `{ ${entries.join(", ")} }`;
-}
 
 (async () => {
   const db = await loadModelsDev();
@@ -131,7 +107,11 @@ function serializeCost(cost) {
 
   for (const r of rows) {
     const c = r.cost;
-    const cacheRead = c.cache_read ?? c.input;
+    // Clamp cacheRead to input so estimateCacheSavings never goes negative.
+    // models.dev has a few upstream-quirky rows (e.g. gpt-3.5-turbo) where
+    // cache_read > input, which would make "money saved by the cache" a
+    // negative number. A discount can never cost more than the full rate.
+    const cacheRead = Math.min(c.cache_read ?? c.input, c.input);
     const cacheWrite = c.cache_write ?? c.input;
     lines.push(`  ${JSON.stringify(r.key)}: { input: ${c.input}, output: ${c.output}, cacheRead: ${cacheRead}, cacheWrite: ${cacheWrite} },`);
   }

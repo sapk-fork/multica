@@ -2,7 +2,7 @@
 //
 // Source: https://models.dev/api.json (MIT, community-maintained,
 // the same dataset OpenCode uses internally).
-// Snapshot: 2026-04-29
+// Snapshot: 2026-05-11
 // Providers: anthropic, openai, google, moonshotai, opencode, opencode-go
 //
 // Regenerate with: node scripts/generate-pricing.mjs
@@ -60,6 +60,7 @@ export const PRICING: Readonly<Record<string, {
   "google/gemini-3-flash-preview": { input: 0.5, output: 3, cacheRead: 0.05, cacheWrite: 0.5 },
   "google/gemini-3-pro-preview": { input: 2, output: 12, cacheRead: 0.2, cacheWrite: 2 },
   "google/gemini-3.1-flash-image-preview": { input: 0.25, output: 60, cacheRead: 0.25, cacheWrite: 0.25 },
+  "google/gemini-3.1-flash-lite": { input: 0.25, output: 1.5, cacheRead: 0.025, cacheWrite: 1 },
   "google/gemini-3.1-flash-lite-preview": { input: 0.25, output: 1.5, cacheRead: 0.025, cacheWrite: 1 },
   "google/gemini-3.1-pro-preview": { input: 2, output: 12, cacheRead: 0.2, cacheWrite: 2 },
   "google/gemini-3.1-pro-preview-customtools": { input: 2, output: 12, cacheRead: 0.2, cacheWrite: 2 },
@@ -80,7 +81,7 @@ export const PRICING: Readonly<Record<string, {
   "moonshotai/kimi-k2-turbo-preview": { input: 2.4, output: 10, cacheRead: 0.6, cacheWrite: 2.4 },
   "moonshotai/kimi-k2.5": { input: 0.6, output: 3, cacheRead: 0.1, cacheWrite: 0.6 },
   "moonshotai/kimi-k2.6": { input: 0.95, output: 4, cacheRead: 0.16, cacheWrite: 0.95 },
-  "openai/gpt-3.5-turbo": { input: 0.5, output: 1.5, cacheRead: 1.25, cacheWrite: 0.5 },
+  "openai/gpt-3.5-turbo": { input: 0.5, output: 1.5, cacheRead: 0.5, cacheWrite: 0.5 },
   "openai/gpt-4": { input: 30, output: 60, cacheRead: 30, cacheWrite: 30 },
   "openai/gpt-4-turbo": { input: 10, output: 30, cacheRead: 10, cacheWrite: 10 },
   "openai/gpt-4.1": { input: 2, output: 8, cacheRead: 0.5, cacheWrite: 2 },
@@ -133,7 +134,7 @@ export const PRICING: Readonly<Record<string, {
   "opencode-go/glm-5": { input: 1, output: 3.2, cacheRead: 0.2, cacheWrite: 1 },
   "opencode-go/glm-5.1": { input: 1.4, output: 4.4, cacheRead: 0.26, cacheWrite: 1.4 },
   "opencode-go/kimi-k2.5": { input: 0.6, output: 3, cacheRead: 0.1, cacheWrite: 0.6 },
-  "opencode-go/kimi-k2.6": { input: 0.32, output: 1.34, cacheRead: 0.054, cacheWrite: 0.32 },
+  "opencode-go/kimi-k2.6": { input: 0.95, output: 4, cacheRead: 0.16, cacheWrite: 0.95 },
   "opencode-go/mimo-v2-omni": { input: 0.4, output: 2, cacheRead: 0.08, cacheWrite: 0.4 },
   "opencode-go/mimo-v2-pro": { input: 1, output: 3, cacheRead: 0.2, cacheWrite: 1 },
   "opencode-go/mimo-v2.5": { input: 0.4, output: 2, cacheRead: 0.08, cacheWrite: 0.4 },
@@ -152,6 +153,7 @@ export const PRICING: Readonly<Record<string, {
   "opencode/claude-sonnet-4": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
   "opencode/claude-sonnet-4-5": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
   "opencode/claude-sonnet-4-6": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+  "opencode/deepseep-v4-flash-free": { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   "opencode/gemini-3-flash": { input: 0.5, output: 3, cacheRead: 0.05, cacheWrite: 0.5 },
   "opencode/gemini-3-pro": { input: 2, output: 12, cacheRead: 0.2, cacheWrite: 2 },
   "opencode/gemini-3.1-pro": { input: 2, output: 12, cacheRead: 0.2, cacheWrite: 2 },
@@ -163,7 +165,7 @@ export const PRICING: Readonly<Record<string, {
   "opencode/glm-5.1": { input: 1.4, output: 4.4, cacheRead: 0.26, cacheWrite: 1.4 },
   "opencode/gpt-5": { input: 1.07, output: 8.5, cacheRead: 0.107, cacheWrite: 1.07 },
   "opencode/gpt-5-codex": { input: 1.07, output: 8.5, cacheRead: 0.107, cacheWrite: 1.07 },
-  "opencode/gpt-5-nano": { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  "opencode/gpt-5-nano": { input: 0.05, output: 0.4, cacheRead: 0.005, cacheWrite: 0.05 },
   "opencode/gpt-5.1": { input: 1.07, output: 8.5, cacheRead: 0.107, cacheWrite: 1.07 },
   "opencode/gpt-5.1-codex": { input: 1.07, output: 8.5, cacheRead: 0.107, cacheWrite: 1.07 },
   "opencode/gpt-5.1-codex-max": { input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 1.25 },
@@ -199,5 +201,6 @@ export const PRICING: Readonly<Record<string, {
   "opencode/qwen3.5-plus": { input: 0.2, output: 1.2, cacheRead: 0.02, cacheWrite: 0.25 },
   "opencode/qwen3.6-plus": { input: 0.5, output: 3, cacheRead: 0.05, cacheWrite: 0.625 },
   "opencode/qwen3.6-plus-free": { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  "opencode/ring-2.6-1t-free": { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   "opencode/trinity-large-preview-free": { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 };
