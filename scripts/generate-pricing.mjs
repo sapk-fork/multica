@@ -4,8 +4,8 @@
 // providers Multica runtimes actually emit, and write a static pricing
 // snapshot to packages/views/runtimes/pricing.generated.ts.
 //
-// Output is keyed by `<provider>/<model>` to match what OpenCode and
-// other multi-provider runtimes report on the wire. Only the `cost`
+// Output is keyed by both `<provider>/<model>` (OpenCode form) and
+// bare `<model>` (Claude-direct / legacy daemon form). Only the `cost`
 // field of each model entry is preserved.
 //
 // Usage:
@@ -65,7 +65,7 @@ async function loadModelsDev() {
     );
   }
 
-  const rows = [];
+  const rows = new Map(); // deduplicate by key
   let pricedCount = 0;
   let skippedNoCost = 0;
   for (const provider of ALLOWED_PROVIDERS) {
@@ -78,11 +78,22 @@ async function loadModelsDev() {
         skippedNoCost++;
         continue;
       }
-      rows.push({ key: `${provider}/${id}`, cost });
-      pricedCount++;
+      // Emit both the provider-prefixed key (OpenCode form) and the bare
+      // key (legacy daemon form). The resolver is a simple exact match,
+      // so both shapes need their own row.
+      // First-party providers (anthropic, openai, google) win over
+      // aggregators (opencode, opencode-go) when a bare key collides.
+      const withProvider = `${provider}/${id}`;
+      if (!rows.has(withProvider)) {
+        rows.set(withProvider, cost);
+        pricedCount++;
+      }
+      if (!rows.has(id)) {
+        rows.set(id, cost);
+        pricedCount++;
+      }
     }
   }
-  rows.sort((a, b) => a.key.localeCompare(b.key));
 
   const today = new Date().toISOString().slice(0, 10);
   const lines = [
@@ -95,9 +106,10 @@ async function loadModelsDev() {
     "//",
     "// Regenerate with: node scripts/generate-pricing.mjs",
     "",
-    "// Keys are `<provider>/<model>` to match what OpenCode and other",
-    "// multi-provider runtimes report on the wire.",
-    "export const PRICING: Readonly<Record<string, {",
+    "// Keys are either `<provider>/<model>` (OpenCode form) or bare `<model>`",
+    "// (legacy daemon form). The resolver does a simple exact match, so both",
+    "// shapes need their own row.",
+    "export const MODEL_PRICING: Readonly<Record<string, {",
     "  input: number;",
     "  output: number;",
     "  cacheRead: number;",
@@ -105,15 +117,16 @@ async function loadModelsDev() {
     "}>> = {",
   ];
 
-  for (const r of rows) {
-    const c = r.cost;
+  const sortedKeys = [...rows.keys()].sort();
+  for (const key of sortedKeys) {
+    const c = rows.get(key);
     // Clamp cacheRead to input so estimateCacheSavings never goes negative.
     // models.dev has a few upstream-quirky rows (e.g. gpt-3.5-turbo) where
     // cache_read > input, which would make "money saved by the cache" a
     // negative number. A discount can never cost more than the full rate.
     const cacheRead = Math.min(c.cache_read ?? c.input, c.input);
     const cacheWrite = c.cache_write ?? c.input;
-    lines.push(`  ${JSON.stringify(r.key)}: { input: ${c.input}, output: ${c.output}, cacheRead: ${cacheRead}, cacheWrite: ${cacheWrite} },`);
+    lines.push(`  ${JSON.stringify(key)}: { input: ${c.input}, output: ${c.output}, cacheRead: ${cacheRead}, cacheWrite: ${cacheWrite} },`);
   }
   lines.push("};");
   lines.push("");

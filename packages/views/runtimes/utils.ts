@@ -5,7 +5,7 @@ import type {
 } from "@multica/core/types";
 import { getCustomPricing } from "@multica/core/runtimes/custom-pricing-store";
 
-import { PRICING } from "./pricing.generated";
+import { MODEL_PRICING } from "./pricing.generated";
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -117,68 +117,25 @@ export function formatTokens(n: number): string {
 // Cost estimation
 // ---------------------------------------------------------------------------
 
-// Internal pricing shape used by the cost-estimation functions. The
-// generated `ModelCost` type mirrors `models.dev` exactly (snake_case,
-// optional `cache_read` / `cache_write`); we adapt it to non-optional
-// camelCase fields here so callers stay simple. Where the upstream omits
-// a cache tier we fall back to `input` — conservative (no discount
-// applied) and keeps `estimateCacheSavings` returning 0 naturally.
-interface ResolvedPricing {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-}
-
-// Strip a leading `provider/` segment, e.g. `openai/gpt-4o` → `gpt-4o`.
-function stripProviderPrefix(model: string): string {
-  const slash = model.indexOf("/");
-  return slash > 0 ? model.slice(slash + 1) : model;
-}
-
-// Strip a trailing date / `-latest` tag, e.g. `claude-sonnet-4-5-20250929`
-// → `claude-sonnet-4-5`. Anthropic, OpenAI and Google all version their
-// model snapshots this way; the family is what we price.
-function stripDateSuffix(model: string): string {
-  return model.replace(/-(20\d{2}-?\d{2}-?\d{2}|latest)$/, "");
-}
-
-// Resolve a model string to its pricing tier. PRICING is keyed by
-// `provider/model`. Walked in two passes so exact bare matches always
-// win over prefix matches — otherwise `gpt-4o-2024-05-13` would resolve
-// to `openai/gpt-4o`'s price (alphabetically first; `keyBare.startsWith`
-// is true) instead of the dated entry's specific price.
-//   1. Exact match on the full string (`provider/model`).
-//   2. First pass — exact bare match (`keyBare === bare`). Catches a
-//      bare-keyed input (`gpt-4o`, `gpt-4o-mini`, `gpt-4o-2024-05-13`)
-//      hitting the corresponding `provider/<id>` entry verbatim.
-//   3. Second pass — `keyBare.startsWith(withoutDate)`. Catches a
-//      date-suffixed input whose exact dated entry isn't tracked
-//      (`claude-opus-4-1-20260105` falls back to `claude-opus-4-1`).
-function resolvePricing(model: string): ResolvedPricing | undefined {
+// Resolve a model string to its pricing tier. MODEL_PRICING is keyed by
+// both `<provider>/<model>` (OpenCode form) and bare `<model>` (legacy
+// daemon form). Exact match only, with one tolerance: providers ship
+// dated snapshots (`claude-sonnet-4-5-20250929`, `gpt-5-2025-08-07`)
+// where the family is what we price and the date is volatile, so we
+// strip a trailing date / "latest" tag and try again. Anything still
+// unmapped falls back to the user-supplied custom pricing store.
+function resolvePricing(model: string) {
   if (!model) return undefined;
+  if (MODEL_PRICING[model]) return MODEL_PRICING[model];
 
-  const exact = PRICING[model];
-  if (exact) return exact;
-
-  const bare = stripProviderPrefix(model);
-  const withoutDate = stripDateSuffix(bare);
-
-  for (const [key, p] of Object.entries(PRICING)) {
-    if (stripProviderPrefix(key) === bare) return p;
-  }
-
-  for (const [key, p] of Object.entries(PRICING)) {
-    if (stripProviderPrefix(key).startsWith(withoutDate)) return p;
-  }
+  const stripped = model.replace(/-(20\d{2}-\d{2}-\d{2}|20\d{6}|latest)$/, "");
+  if (stripped !== model && MODEL_PRICING[stripped]) return MODEL_PRICING[stripped];
 
   // User-supplied override for models we don't ship a maintained rate for.
-  // Checked exact-then-stripped to mirror the catalog lookup above, so a
-  // user can either pin a dated snapshot specifically or price the family.
   const custom = getCustomPricing(model);
   if (custom) return custom;
-  if (withoutDate !== bare) {
-    const customStripped = getCustomPricing(withoutDate);
+  if (stripped !== model) {
+    const customStripped = getCustomPricing(stripped);
     if (customStripped) return customStripped;
   }
 
