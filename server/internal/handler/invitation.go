@@ -95,7 +95,19 @@ func (h *Handler) CreateInvitation(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Check if there is already a pending invitation.
+	// Drop any past-due pending invitations to 'expired' first. The partial unique
+	// index idx_invitation_unique_pending only filters by status = 'pending', so a
+	// stale row would otherwise block CreateInvitation below — see issue #2055.
+	if err := h.Queries.ExpireStalePendingInvitations(r.Context(), db.ExpireStalePendingInvitationsParams{
+		WorkspaceID:  requester.WorkspaceID,
+		InviteeEmail: email,
+	}); err != nil {
+		slog.Warn("expire stale invitations failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", workspaceID, "email", email)...)
+		writeError(w, http.StatusInternalServerError, "failed to create invitation")
+		return
+	}
+
+	// Check if there is still a live pending invitation.
 	_, err = h.Queries.GetPendingInvitationByEmail(r.Context(), db.GetPendingInvitationByEmailParams{
 		WorkspaceID:  requester.WorkspaceID,
 		InviteeEmail: email,
@@ -414,6 +426,18 @@ func (h *Handler) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Accepting an invite is the physical event that "completes" onboarding for an
+	// invitee — atomic with CreateMember so the invariant
+	// "member row exists ↔ onboarded_at != null" cannot be violated.
+	// COALESCE in MarkUserOnboarded keeps this idempotent for users joining
+	// additional workspaces after their first.
+	firstOnboardingCompletion := !user.OnboardedAt.Valid
+	onboardedUser, err := qtx.MarkUserOnboarded(r.Context(), user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to mark user onboarded")
+		return
+	}
+
 	if err := tx.Commit(r.Context()); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to accept invitation")
 		return
@@ -449,6 +473,19 @@ func (h *Handler) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
 		wsID,
 		daysSinceInvite,
 	))
+	if firstOnboardingCompletion {
+		onboardedAt := ""
+		if onboardedUser.OnboardedAt.Valid {
+			onboardedAt = onboardedUser.OnboardedAt.Time.UTC().Format("2006-01-02T15:04:05Z07:00")
+		}
+		h.Analytics.Capture(analytics.OnboardingCompleted(
+			userID,
+			wsID,
+			analytics.OnboardingPathInviteAccept,
+			onboardedAt,
+			onboardedUser.CloudWaitlistEmail.Valid,
+		))
+	}
 
 	writeJSON(w, http.StatusOK, memberResp)
 }

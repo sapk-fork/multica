@@ -10,6 +10,7 @@ import {
   PopoverContent,
 } from "@multica/ui/components/ui/popover";
 import { Button } from "@multica/ui/components/ui/button";
+import { useT } from "../../../i18n";
 
 export function DueDatePicker({
   dueDate,
@@ -17,14 +18,19 @@ export function DueDatePicker({
   trigger: customTrigger,
   triggerRender,
   align = "start",
+  defaultOpen = false,
 }: {
   dueDate: string | null;
   onUpdate: (updates: Partial<UpdateIssueRequest>) => void;
   trigger?: React.ReactNode;
   triggerRender?: React.ReactElement;
   align?: "start" | "center" | "end";
+  /** Open the popover on first mount. Used by progressive-disclosure
+   *  sidebars so a newly-added field immediately enters edit state. */
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const { t } = useT("issues");
+  const [open, setOpen] = useState(defaultOpen);
   const date = dueDate ? new Date(dueDate) : undefined;
   const isOverdue = date ? date < new Date() : false;
 
@@ -42,7 +48,7 @@ export function DueDatePicker({
                 {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               </span>
             ) : (
-              <span className="text-muted-foreground">Due date</span>
+              <span className="text-muted-foreground">{t(($) => $.pickers.due_date.trigger_label)}</span>
             )}
           </>
         )}
@@ -67,7 +73,7 @@ export function DueDatePicker({
               }}
               className="text-muted-foreground hover:text-foreground"
             >
-              Clear date
+              {t(($) => $.pickers.due_date.clear_action)}
             </Button>
           </div>
         )}

@@ -6,3 +6,5 @@ export * from "./local-skills";
 export * from "./types";
 export * from "./derive-health";
 export * from "./use-runtime-health";
+export * from "./cli-version";
+export * from "./custom-pricing-store";

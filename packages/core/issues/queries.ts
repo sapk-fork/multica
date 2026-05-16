@@ -1,32 +1,66 @@
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
-import type { IssueStatus, ListIssuesParams, ListIssuesCache } from "../types";
+import type {
+  GroupedIssuesResponse,
+  IssueStatus,
+  ListGroupedIssuesParams,
+  ListIssuesParams,
+  ListIssuesCache,
+} from "../types";
 import { BOARD_STATUSES } from "./config";
 
 export const issueKeys = {
   all: (wsId: string) => ["issues", wsId] as const,
   list: (wsId: string) => [...issueKeys.all(wsId), "list"] as const,
+  assigneeGroupsAll: (wsId: string) =>
+    [...issueKeys.all(wsId), "assignee-groups"] as const,
+  assigneeGroups: (wsId: string, filter: AssigneeGroupedIssuesFilter) =>
+    [...issueKeys.assigneeGroupsAll(wsId), filter] as const,
   /** All "my issues" queries — use for bulk invalidation. */
   myAll: (wsId: string) => [...issueKeys.all(wsId), "my"] as const,
   /** Per-scope "my issues" list with filter identity baked into the key. */
   myList: (wsId: string, scope: string, filter: MyIssuesFilter) =>
     [...issueKeys.myAll(wsId), scope, filter] as const,
+  myAssigneeGroupsAll: (wsId: string) =>
+    [...issueKeys.myAll(wsId), "assignee-groups"] as const,
+  myAssigneeGroups: (
+    wsId: string,
+    scope: string,
+    filter: AssigneeGroupedIssuesFilter,
+  ) => [...issueKeys.myAssigneeGroupsAll(wsId), scope, filter] as const,
   detail: (wsId: string, id: string) =>
     [...issueKeys.all(wsId), "detail", id] as const,
   children: (wsId: string, id: string) =>
     [...issueKeys.all(wsId), "children", id] as const,
   childProgress: (wsId: string) =>
     [...issueKeys.all(wsId), "child-progress"] as const,
-  timeline: (issueId: string) => ["issues", "timeline", issueId] as const,
+  /** Full-issue timeline (single TanStack Query, no cursor). */
+  timeline: (issueId: string) =>
+    ["issues", "timeline", issueId] as const,
   reactions: (issueId: string) => ["issues", "reactions", issueId] as const,
   subscribers: (issueId: string) =>
     ["issues", "subscribers", issueId] as const,
   usage: (issueId: string) => ["issues", "usage", issueId] as const,
+  /** Issue-level attachments — used by the description editor so its
+   *  inline file-card / image NodeViews can re-sign download URLs at
+   *  click time. */
+  attachments: (issueId: string) => ["issues", "attachments", issueId] as const,
+  /** Per-issue task list (issue-detail Execution log section). */
+  tasks: (issueId: string) => ["issues", "tasks", issueId] as const,
+  /** Prefix-match key for invalidating tasks across all issues — used by
+   *  the global WS task: prefix path so any task lifecycle event refreshes
+   *  every per-issue list, regardless of which issue is currently mounted. */
+  tasksAll: () => ["issues", "tasks"] as const,
 };
 
 export type MyIssuesFilter = Pick<
   ListIssuesParams,
   "assignee_id" | "assignee_ids" | "creator_id" | "project_id"
+>;
+
+export type AssigneeGroupedIssuesFilter = Omit<
+  ListGroupedIssuesParams,
+  "group_by" | "limit" | "offset" | "group_assignee_type" | "group_assignee_id"
 >;
 
 /** Page size per status column. */
@@ -76,6 +110,22 @@ export function issueListOptions(wsId: string) {
   });
 }
 
+export function issueAssigneeGroupsOptions(
+  wsId: string,
+  filter: AssigneeGroupedIssuesFilter,
+) {
+  return queryOptions<GroupedIssuesResponse>({
+    queryKey: issueKeys.assigneeGroups(wsId, filter),
+    queryFn: () =>
+      api.listGroupedIssues({
+        group_by: "assignee",
+        limit: ISSUE_PAGE_SIZE,
+        offset: 0,
+        ...filter,
+      }),
+  });
+}
+
 /**
  * Server-filtered issue list for the My Issues page.
  * Each scope gets its own cache entry so switching tabs is instant after first load.
@@ -89,6 +139,23 @@ export function myIssueListOptions(
     queryKey: issueKeys.myList(wsId, scope, filter),
     queryFn: () => fetchFirstPages(filter),
     select: flattenIssueBuckets,
+  });
+}
+
+export function myIssueAssigneeGroupsOptions(
+  wsId: string,
+  scope: string,
+  filter: AssigneeGroupedIssuesFilter,
+) {
+  return queryOptions<GroupedIssuesResponse>({
+    queryKey: issueKeys.myAssigneeGroups(wsId, scope, filter),
+    queryFn: () =>
+      api.listGroupedIssues({
+        group_by: "assignee",
+        limit: ISSUE_PAGE_SIZE,
+        offset: 0,
+        ...filter,
+      }),
   });
 }
 
@@ -120,6 +187,13 @@ export function childIssuesOptions(wsId: string, id: string) {
   });
 }
 
+/**
+ * Single-fetch timeline options. The endpoint returns the full ordered set of
+ * comments + activities for an issue (server caps at 2000 as a safety net).
+ * Cursor pagination was removed in #1929 — at observed data sizes (p99 ~30
+ * entries per issue) it added complexity without a UX win and broke reply
+ * threads at page boundaries.
+ */
 export function issueTimelineOptions(issueId: string) {
   return queryOptions({
     queryKey: issueKeys.timeline(issueId),
@@ -148,5 +222,16 @@ export function issueUsageOptions(issueId: string) {
   return queryOptions({
     queryKey: issueKeys.usage(issueId),
     queryFn: () => api.getIssueUsage(issueId),
+  });
+}
+
+// Backs the description editor's fresh-sign download flow: NodeViews resolve
+// an attachment id by matching the markdown URL against this list. The list
+// is workspace-private metadata and lives on the same cache lifetime as the
+// rest of the issue detail surface.
+export function issueAttachmentsOptions(issueId: string) {
+  return queryOptions({
+    queryKey: issueKeys.attachments(issueId),
+    queryFn: () => api.listAttachments(issueId),
   });
 }

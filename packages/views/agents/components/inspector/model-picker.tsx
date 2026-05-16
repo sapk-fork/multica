@@ -10,6 +10,7 @@ import {
   PropertyPicker,
 } from "../../../issues/components/pickers";
 import { CHIP_CLASS } from "./chip";
+import { useT } from "../../../i18n";
 
 /**
  * Inline model picker for the agent inspector. Lighter cousin of
@@ -26,13 +27,17 @@ export function ModelPicker({
   runtimeId,
   runtimeOnline,
   value,
+  canEdit = true,
   onChange,
 }: {
   runtimeId: string | null;
   runtimeOnline: boolean;
   value: string;
+  /** When false, render a static read-only display and skip the popover. */
+  canEdit?: boolean;
   onChange: (next: string) => Promise<void> | void;
 }) {
+  const { t } = useT("agents");
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -41,13 +46,12 @@ export function ModelPicker({
   );
   const supported = modelsQuery.data?.supported ?? true;
   // Memoise the model list so every downstream useMemo gets a stable
-  // reference — `?? []` would mint a fresh array on every render and
-  // invalidate filters / defaultModel needlessly.
+  // reference; `?? []` would mint a fresh array on every render and
+  // invalidate filters needlessly.
   const models = useMemo(
     () => modelsQuery.data?.models ?? [],
     [modelsQuery.data],
   );
-  const defaultModel = useMemo(() => models.find((m) => m.default), [models]);
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -64,6 +68,9 @@ export function ModelPicker({
   );
   const canCreate = trimmedSearch.length > 0 && !exactMatch;
 
+  const triggerLabel = value || t(($) => $.pickers.model_default);
+  const triggerTitle = t(($) => $.pickers.model_tooltip, { value: triggerLabel });
+
   const select = async (id: string) => {
     setOpen(false);
     setSearch("");
@@ -73,15 +80,21 @@ export function ModelPicker({
   if (!supported && !modelsQuery.isLoading) {
     return (
       <span className="truncate italic text-muted-foreground">
-        Managed by runtime
+        {t(($) => $.pickers.model_managed_by_runtime)}
       </span>
     );
   }
 
-  const triggerLabel =
-    value ||
-    (defaultModel ? `Default — ${defaultModel.label}` : "Default");
-  const triggerTitle = `Model · ${triggerLabel}`;
+  if (!canEdit) {
+    return (
+      <span
+        className="min-w-0 truncate px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
+        title={triggerTitle}
+      >
+        {triggerLabel}
+      </span>
+    );
+  }
 
   return (
     <PropertyPicker
@@ -106,7 +119,7 @@ export function ModelPicker({
         <div className="p-1.5">
           <Input
             autoFocus
-            placeholder="Search or type a model ID"
+            placeholder={t(($) => $.pickers.model_search_placeholder)}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-7 text-xs"
@@ -117,7 +130,7 @@ export function ModelPicker({
       {modelsQuery.isLoading && (
         <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" />
-          Discovering models…
+          {t(($) => $.pickers.model_discovering)}
         </div>
       )}
 
@@ -137,7 +150,7 @@ export function ModelPicker({
                 <span className="truncate font-medium">{m.label}</span>
                 {m.default && (
                   <span className="shrink-0 rounded bg-primary/10 px-1 text-[10px] font-medium text-primary">
-                    default
+                    {t(($) => $.pickers.model_default_badge)}
                   </span>
                 )}
               </div>
@@ -152,7 +165,7 @@ export function ModelPicker({
 
       {!modelsQuery.isLoading && filtered.length === 0 && !canCreate && (
         <p className="px-3 py-3 text-center text-xs text-muted-foreground">
-          No models available
+          {t(($) => $.pickers.model_empty)}
         </p>
       )}
 
@@ -160,11 +173,11 @@ export function ModelPicker({
         <PickerItem
           selected={false}
           onClick={() => void select(trimmedSearch)}
-          tooltip={`Use “${trimmedSearch}” as a custom model id`}
+          tooltip={t(($) => $.pickers.model_custom_tooltip, { value: trimmedSearch })}
         >
           <Plus className="h-3.5 w-3.5 shrink-0 text-primary" />
           <span className="truncate text-primary">
-            Use &ldquo;{trimmedSearch}&rdquo;
+            {t(($) => $.pickers.model_custom_use, { value: trimmedSearch })}
           </span>
         </PickerItem>
       )}
@@ -174,9 +187,9 @@ export function ModelPicker({
           type="button"
           onClick={() => void select("")}
           className="mt-1 flex w-full items-center border-t px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-accent/50"
-          title="Clear and fall back to the runtime's provider default"
+          title={t(($) => $.pickers.model_clear_title)}
         >
-          Clear (use provider default)
+          {t(($) => $.pickers.model_clear)}
         </button>
       )}
     </PropertyPicker>

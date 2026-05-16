@@ -45,6 +45,7 @@ const (
 // funnel-ready label.
 type completeOnboardingRequest struct {
 	CompletionPath string `json:"completion_path,omitempty"`
+	WorkspaceID    string `json:"workspace_id,omitempty"`
 }
 
 var validCompletionPaths = map[string]struct{}{
@@ -52,6 +53,7 @@ var validCompletionPaths = map[string]struct{}{
 	analytics.OnboardingPathRuntimeSkipped: {},
 	analytics.OnboardingPathCloudWaitlist:  {},
 	analytics.OnboardingPathSkipExisting:   {},
+	analytics.OnboardingPathInviteAccept:   {},
 }
 
 // CompleteOnboarding marks the authenticated user as having completed
@@ -105,6 +107,7 @@ func (h *Handler) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 		}
 		h.Analytics.Capture(analytics.OnboardingCompleted(
 			userID,
+			req.WorkspaceID,
 			path,
 			onboardedAt,
 			user.CloudWaitlistEmail.Valid,

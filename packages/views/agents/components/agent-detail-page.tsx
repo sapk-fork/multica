@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
+  Lock,
   MoreHorizontal,
   Trash2,
 } from "lucide-react";
@@ -14,7 +15,7 @@ import {
   type AgentPresenceDetail,
   useWorkspacePresenceMap,
 } from "@multica/core/agents";
-import { api } from "@multica/core/api";
+import { api, ApiError } from "@multica/core/api";
 import { useAuthStore } from "@multica/core/auth";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { useWorkspacePaths } from "@multica/core/paths";
@@ -24,7 +25,9 @@ import {
   workspaceKeys,
 } from "@multica/core/workspace/queries";
 import { runtimeListOptions } from "@multica/core/runtimes";
+import { useAgentPermissions } from "@multica/core/permissions";
 import { Button } from "@multica/ui/components/ui/button";
+import { CapabilityBanner } from "@multica/ui/components/common/capability-banner";
 import {
   Dialog,
   DialogContent,
@@ -45,12 +48,14 @@ import { PageHeader } from "../../layout/page-header";
 import { availabilityConfig } from "../presence";
 import { AgentDetailInspector } from "./agent-detail-inspector";
 import { AgentOverviewPane } from "./agent-overview-pane";
+import { useT } from "../../i18n";
 
 interface AgentDetailPageProps {
   agentId: string;
 }
 
 export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
+  const { t } = useT("agents");
   const wsId = useWorkspaceId();
   const paths = useWorkspacePaths();
   const navigation = useNavigation();
@@ -74,15 +79,34 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
   const presence: AgentPresenceDetail | null =
     agent ? presenceMap.get(agent.id) ?? null : null;
 
+  // Fallback fetch: when the agent is missing from the workspace list, hit
+  // GET /api/agents/{id} directly to disambiguate "doesn't exist" (404) from
+  // "you can't see this private agent" (403). Only fires after the list has
+  // settled, so the common path makes zero extra requests.
+  const { error: detailError } = useQuery({
+    queryKey: ["agent-detail-probe", wsId, agentId],
+    queryFn: () => api.getAgent(agentId),
+    enabled: !agentsLoading && !agent && !!agentId,
+    retry: false,
+  });
+  const isForbidden =
+    detailError instanceof ApiError && detailError.status === 403;
+
+  // Permission hook MUST be called unconditionally — its `agent | null`
+  // signature handles the not-found / loading case internally so the early
+  // returns below don't violate the rules of hooks. Backend gates archive
+  // and restore identically to edit, so a single `canEdit` covers them all.
+  const { canEdit } = useAgentPermissions(agent, wsId);
+
   const [confirmArchive, setConfirmArchive] = useState(false);
 
   const handleUpdate = async (id: string, data: Record<string, unknown>) => {
     try {
       await api.updateAgent(id, data as UpdateAgentRequest);
       qc.invalidateQueries({ queryKey: workspaceKeys.agents(wsId) });
-      toast.success("Agent updated");
+      toast.success(t(($) => $.detail.agent_updated_toast));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to update agent");
+      toast.error(e instanceof Error ? e.message : t(($) => $.detail.update_failed_toast));
       throw e;
     }
   };
@@ -91,9 +115,9 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
     try {
       await api.archiveAgent(id);
       qc.invalidateQueries({ queryKey: workspaceKeys.agents(wsId) });
-      toast.success("Agent archived");
+      toast.success(t(($) => $.detail.agent_archived_toast));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to archive agent");
+      toast.error(e instanceof Error ? e.message : t(($) => $.detail.archive_failed_toast));
     }
   };
 
@@ -101,9 +125,9 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
     try {
       await api.restoreAgent(id);
       qc.invalidateQueries({ queryKey: workspaceKeys.agents(wsId) });
-      toast.success("Agent restored");
+      toast.success(t(($) => $.detail.agent_restored_toast));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to restore agent");
+      toast.error(e instanceof Error ? e.message : t(($) => $.detail.restore_failed_toast));
     }
   };
 
@@ -112,19 +136,44 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
     return <DetailLoadingSkeleton />;
   }
 
+  // --- No permission (private agent the caller is not in allowed_principals for) ---
+  if (!agent && isForbidden) {
+    return (
+      <div className="flex flex-1 min-h-0 flex-col">
+        <BackHeader paths={paths.agents()} title={t(($) => $.detail.back_to_agents)} />
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+          <Lock className="h-8 w-8 text-muted-foreground" />
+          <div>
+            <p className="text-sm font-medium">{t(($) => $.detail.no_access_title)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t(($) => $.detail.no_access_hint)}
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => navigation.push(paths.agents())}
+          >
+            {t(($) => $.detail.back_to_agents_full)}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   // --- Not found / error ---
   if (!agent) {
     return (
       <div className="flex flex-1 min-h-0 flex-col">
-        <BackHeader paths={paths.agents()} title="Agents" />
+        <BackHeader paths={paths.agents()} title={t(($) => $.detail.back_to_agents)} />
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-16 text-center">
           <AlertCircle className="h-8 w-8 text-destructive" />
           <div>
-            <p className="text-sm font-medium">Agent not found</p>
+            <p className="text-sm font-medium">{t(($) => $.detail.not_found_title)}</p>
             <p className="mt-1 text-xs text-muted-foreground">
               {agentsError instanceof Error
                 ? agentsError.message
-                : "This agent may have been archived or deleted."}
+                : t(($) => $.detail.not_found_default)}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -134,14 +183,14 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
               size="sm"
               onClick={() => refetchAgents()}
             >
-              Try again
+              {t(($) => $.detail.try_again)}
             </Button>
             <Button
               type="button"
               size="sm"
               onClick={() => navigation.push(paths.agents())}
             >
-              Back to agents
+              {t(($) => $.detail.back_to_agents_full)}
             </Button>
           </div>
         </div>
@@ -163,27 +212,40 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
         agent={agent}
         presence={presence}
         backHref={paths.agents()}
+        canArchive={canEdit.allowed}
         onArchive={() => setConfirmArchive(true)}
       />
+
+      {!canEdit.allowed && (
+        <div className="px-6 pt-3">
+          <CapabilityBanner
+            reason={canEdit.reason}
+            resource="agent"
+            ownerName={owner?.name}
+          />
+        </div>
+      )}
 
       {isArchived && (
         <div className="flex shrink-0 items-center gap-2 border-b bg-muted/50 px-6 py-2 text-xs text-muted-foreground">
           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
           <span className="flex-1">
-            This agent is archived. It cannot be assigned or mentioned.
+            {t(($) => $.detail.archived_banner)}
           </span>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-6 text-xs"
-            onClick={() => handleRestore(agent.id)}
-          >
-            Restore
-          </Button>
+          {canEdit.allowed && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-xs"
+              onClick={() => handleRestore(agent.id)}
+            >
+              {t(($) => $.detail.restore)}
+            </Button>
+          )}
         </div>
       )}
 
-      <div className="grid flex-1 min-h-0 grid-cols-[320px_minmax(0,1fr)] gap-4 p-6">
+      <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-y-auto p-3 md:grid md:grid-cols-[320px_minmax(0,1fr)] md:gap-4 md:overflow-hidden md:p-6">
         <AgentDetailInspector
           agent={agent}
           runtime={runtime}
@@ -192,6 +254,7 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
           runtimes={runtimes}
           members={members}
           currentUserId={currentUser?.id ?? null}
+          canEdit={canEdit.allowed}
           onUpdate={handleUpdate}
         />
 
@@ -216,12 +279,10 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
               </div>
               <DialogHeader className="flex-1 gap-1">
                 <DialogTitle className="text-sm font-semibold">
-                  Archive agent?
+                  {t(($) => $.detail.archive_dialog_title)}
                 </DialogTitle>
                 <DialogDescription className="text-xs">
-                  &quot;{agent.name}&quot; will be archived. It won&apos;t be
-                  assignable or mentionable, but all history is preserved. You
-                  can restore it later.
+                  {t(($) => $.detail.archive_dialog_description, { name: agent.name })}
                 </DialogDescription>
               </DialogHeader>
             </div>
@@ -230,7 +291,7 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
                 variant="ghost"
                 onClick={() => setConfirmArchive(false)}
               >
-                Cancel
+                {t(($) => $.detail.archive_dialog_cancel)}
               </Button>
               <Button
                 variant="destructive"
@@ -240,7 +301,7 @@ export function AgentDetailPage({ agentId }: AgentDetailPageProps) {
                   navigation.push(paths.agents());
                 }}
               >
-                Archive
+                {t(($) => $.detail.archive_dialog_confirm)}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -254,15 +315,20 @@ function DetailHeader({
   agent,
   presence,
   backHref,
+  canArchive,
   onArchive,
 }: {
   agent: Agent;
   presence: AgentPresenceDetail | null;
   backHref: string;
+  canArchive: boolean;
   onArchive: () => void;
 }) {
+  const { t } = useT("agents");
   const isArchived = !!agent.archived_at;
-  const av = presence ? availabilityConfig[presence.availability] : null;
+  const av = presence
+    ? { ...availabilityConfig[presence.availability], label: t(($) => $.availability[presence.availability]) }
+    : null;
   // Last-task state is intentionally not surfaced in the header — the
   // Recent work section on this page already shows the same information
   // (and richer: titles, timestamps, error messages). Showing "Completed"
@@ -276,7 +342,7 @@ function DetailHeader({
           className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Agents
+          {t(($) => $.detail.back_to_agents)}
         </AppLink>
         <span className="text-muted-foreground/40">/</span>
         <h1 className="truncate text-sm font-medium">{agent.name}</h1>
@@ -290,7 +356,7 @@ function DetailHeader({
         )}
       </div>
 
-      {!isArchived && (
+      {!isArchived && canArchive && (
         <DropdownMenu>
           <DropdownMenuTrigger
             render={<Button variant="ghost" size="icon-sm" />}
@@ -303,7 +369,7 @@ function DetailHeader({
               onClick={onArchive}
             >
               <Trash2 className="h-3.5 w-3.5" />
-              Archive Agent
+              {t(($) => $.detail.more_archive)}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -334,7 +400,7 @@ function DetailLoadingSkeleton() {
       <PageHeader className="px-5">
         <Skeleton className="h-5 w-48" />
       </PageHeader>
-      <div className="grid flex-1 min-h-0 grid-cols-[320px_minmax(0,1fr)] gap-4 p-6">
+      <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-y-auto p-3 md:grid md:grid-cols-[320px_minmax(0,1fr)] md:gap-4 md:overflow-hidden md:p-6">
         <div className="flex flex-col gap-4 rounded-lg border p-5">
           <Skeleton className="h-14 w-14 rounded-lg" />
           <Skeleton className="h-5 w-40" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -10,18 +10,20 @@ import {
   Search,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import type { Agent, AgentRuntime, CreateAgentRequest } from "@multica/core/types";
 import {
   type AgentAvailability,
-  type LastTaskState,
   agentRunCounts30dOptions,
   summarizeActivityWindow,
   useWorkspaceActivityMap,
   useWorkspacePresenceMap,
 } from "@multica/core/agents";
+import { useAgentsViewStore } from "@multica/core/agents/stores";
 import { api } from "@multica/core/api";
 import { useAuthStore } from "@multica/core/auth";
 import { useWorkspaceId } from "@multica/core/hooks";
+import { canAssignAgentToIssue } from "@multica/core/permissions";
 import { useWorkspacePaths } from "@multica/core/paths";
 import {
   agentListOptions,
@@ -38,67 +40,41 @@ import {
 } from "@multica/ui/components/ui/dropdown-menu";
 import { Input } from "@multica/ui/components/ui/input";
 import { Skeleton } from "@multica/ui/components/ui/skeleton";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@multica/ui/components/ui/tooltip";
-import { useScrollFade } from "@multica/ui/hooks/use-scroll-fade";
+import { DataTable } from "@multica/ui/components/ui/data-table";
 import { useNavigation } from "../../navigation";
 import { PageHeader } from "../../layout/page-header";
-import {
-  availabilityConfig,
-  availabilityOrder,
-  lastTaskOrder,
-  taskStateConfig,
-} from "../presence";
+import { availabilityConfig, availabilityOrder } from "../presence";
 import { CreateAgentDialog } from "./create-agent-dialog";
-import { AGENT_LIST_GRID, AgentListItem } from "./agent-list-item";
+import { type AgentRow, createAgentColumns } from "./agent-columns";
+import { useT } from "../../i18n";
+import { matchesPinyin } from "../../editor/extensions/pinyin-match";
 
-// Filter axes layered top → bottom by frequency:
+// Filter axes:
 //
-//   View         = which dataset are we looking at (Active vs Archived).
-//                  Archived is low-frequency, so it is NOT a top-level
-//                  segment — it is a ghost link in the toolbar.
+//   View         = active vs archived dataset. Archived is low-frequency,
+//                  accessed through a ghost link in the toolbar.
 //   Scope        = ownership lens (All vs Mine). Layer-1 segment.
-//   Availability = "Can it take work?" — 3-state chip group.
-//   Last task    = "What was the last thing it did?" — 5-state chip group.
-//
-// Availability and Last task are independent axes (Option B). Filter is
-// the intersection: "online + last failed" is a meaningful combination
-// (find broken-but-alive agents). Counts on each chip reflect "if I
-// selected this chip on this axis (with the other axis's current
-// selection), this many agents would match".
+//   Availability = "Can the agent take work right now?" — 3-state chip
+//                  group (online / unstable / offline) sourced from
+//                  AgentAvailability. The only chip filter we keep —
+//                  the previous Workload axis was dropped because its
+//                  "queued / failed / cancelled" buckets became
+//                  meaningless once Failed left the workload model.
 type View = "active" | "archived";
 type Scope = "all" | "mine";
 type AvailabilityFilter = "all" | AgentAvailability;
-type LastTaskFilter = "all" | LastTaskState;
-
-const AVAILABILITY_DESCRIPTION: Record<AgentAvailability, string> = {
-  online: "Runtime online — agent ready to take work",
-  unstable:
-    "Runtime just dropped (< 5 min) — queued work is paused, system is auto-retrying",
-  offline: "Runtime unreachable",
-};
-
-const LAST_TASK_DESCRIPTION: Record<LastTaskState, string> = {
-  running: "At least one task running or queued right now",
-  completed: "Most recent task completed successfully",
-  failed: "Most recent task failed — needs attention",
-  cancelled: "Most recent task was cancelled",
-  idle: "No task history yet",
-};
 
 type SortKey = "recent" | "name" | "runs" | "created";
 const SORT_KEYS: SortKey[] = ["recent", "name", "runs", "created"];
-const SORT_LABEL: Record<SortKey, string> = {
-  recent: "Recent activity",
-  name: "Name",
-  runs: "Most runs",
-  created: "Recently created",
+const SORT_LABEL_KEY: Record<SortKey, "label_recent" | "label_name" | "label_runs" | "label_created"> = {
+  recent: "label_recent",
+  name: "label_name",
+  runs: "label_runs",
+  created: "label_created",
 };
 
 export function AgentsPage() {
+  const { t } = useT("agents");
   const wsId = useWorkspaceId();
   const paths = useWorkspacePaths();
   const navigation = useNavigation();
@@ -125,13 +101,12 @@ export function AgentsPage() {
   const { byAgent: activityMap } = useWorkspaceActivityMap(wsId);
 
   const [view, setView] = useState<View>("active");
-  // Default to "mine" — matches runtimes page convention and the visual
-  // ordering (Mine first). All is one click away when users want the
-  // workspace-wide view.
-  const [scope, setScope] = useState<Scope>("mine");
+  // Scope (Mine/All) is persisted per workspace so it survives list →
+  // detail → back navigation. Default is "mine" on first visit.
+  const scope = useAgentsViewStore((s) => s.scope);
+  const setScope = useAgentsViewStore((s) => s.setScope);
   const [availabilityFilter, setAvailabilityFilter] =
     useState<AvailabilityFilter>("all");
-  const [lastTaskFilter, setLastTaskFilter] = useState<LastTaskFilter>("all");
   const [sort, setSort] = useState<SortKey>("recent");
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -142,9 +117,6 @@ export function AgentsPage() {
   const [duplicateTemplate, setDuplicateTemplate] = useState<Agent | null>(
     null,
   );
-
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const fadeStyle = useScrollFade(scrollRef);
 
   const runtimesById = useMemo(() => {
     const m = new Map<string, AgentRuntime>();
@@ -176,102 +148,83 @@ export function AgentsPage() {
     [agents, view],
   );
 
-  // Layer 1b — ownership scope. Counts shown on the segment are
-  // computed against the inView set so the numbers always reflect
+  // Layer 1b — visibility. Personal (visibility=private) agents owned by
+  // someone else are hidden from regular members; workspace owners/admins
+  // still see everything. Mirrors the assign-to-issue gate so the list
+  // only ever shows agents the user could actually act on. Backend keeps
+  // returning all agents, so admin tools (and the API itself) are
+  // unaffected — this is a UI-only filter.
+  const visibleInView = useMemo(() => {
+    return inView.filter((a) =>
+      canAssignAgentToIssue(a, {
+        userId: currentUser?.id ?? null,
+        role: myRole,
+      }).allowed,
+    );
+  }, [inView, currentUser?.id, myRole]);
+
+  // Layer 1c — ownership scope. Counts shown on the segment are
+  // computed against the visibleInView set so the numbers always reflect
   // "what would I see if I clicked this".
   const scopeCounts = useMemo(() => {
     let mine = 0;
     if (currentUser) {
-      for (const a of inView) {
+      for (const a of visibleInView) {
         if (a.owner_id === currentUser.id) mine += 1;
       }
     }
-    return { all: inView.length, mine };
-  }, [inView, currentUser]);
+    return { all: visibleInView.length, mine };
+  }, [visibleInView, currentUser]);
 
   const inScope = useMemo(() => {
-    if (scope === "all" || !currentUser) return inView;
-    return inView.filter((a) => a.owner_id === currentUser.id);
-  }, [inView, scope, currentUser]);
+    // Archived view ignores Mine / All — its toolbar has no scope
+    // segment, so silently filtering by `scope` would hide other
+    // people's archived agents without any UI to explain why.
+    if (view === "archived") return visibleInView;
+    if (scope === "all" || !currentUser) return visibleInView;
+    return visibleInView.filter((a) => a.owner_id === currentUser.id);
+  }, [visibleInView, scope, currentUser, view]);
 
-  // Layer 2 — chip counts on each axis. Counts cross-filter against the
-  // OTHER axis so the displayed number is "if I clicked this chip with
-  // the other axis as-is, this many agents would match". Stable mental
-  // model: numbers don't dance unless the user actually changes scope.
+  // Final cut — availability chip + search.
+  const filteredAgents = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return inScope.filter((a) => {
+      // Availability chip filter only applies to the Active view —
+      // archived agents have no presence to match against.
+      if (view === "active" && availabilityFilter !== "all") {
+        const detail = presenceMap.get(a.id);
+        if (detail?.availability !== availabilityFilter) return false;
+      }
+      if (q) {
+        if (
+          !a.name.toLowerCase().includes(q) &&
+          !matchesPinyin(a.name, q) &&
+          !(a.description ?? "").toLowerCase().includes(q)
+        ) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [inScope, view, availabilityFilter, presenceMap, search]);
+
+  // Per-availability counts for the chip badges. Computed against
+  // `inScope` (ignoring the availability filter itself) so the numbers
+  // reflect "if I clicked this chip, this many agents would match"
+  // rather than collapsing to 0 for the unselected chips.
   const availabilityCounts = useMemo(() => {
     const counts: Record<AgentAvailability, number> = {
       online: 0,
       unstable: 0,
       offline: 0,
     };
-    let total = 0;
     for (const a of inScope) {
       const detail = presenceMap.get(a.id);
       if (!detail) continue;
-      if (lastTaskFilter !== "all" && detail.lastTask !== lastTaskFilter) {
-        continue;
-      }
       counts[detail.availability] += 1;
-      total += 1;
     }
-    return { counts, total };
-  }, [inScope, presenceMap, lastTaskFilter]);
-
-  const lastTaskCounts = useMemo(() => {
-    const counts: Record<LastTaskState, number> = {
-      running: 0,
-      completed: 0,
-      failed: 0,
-      cancelled: 0,
-      idle: 0,
-    };
-    let total = 0;
-    for (const a of inScope) {
-      const detail = presenceMap.get(a.id);
-      if (!detail) continue;
-      if (
-        availabilityFilter !== "all" &&
-        detail.availability !== availabilityFilter
-      ) {
-        continue;
-      }
-      counts[detail.lastTask] += 1;
-      total += 1;
-    }
-    return { counts, total };
-  }, [inScope, presenceMap, availabilityFilter]);
-
-  // Final cut — apply both axes + search.
-  const filteredAgents = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return inScope.filter((a) => {
-      // Filter chips only apply to the Active view; Archived hides the
-      // chip rows entirely (presence is undefined for archived agents).
-      if (view === "active") {
-        const detail = presenceMap.get(a.id);
-        if (
-          availabilityFilter !== "all" &&
-          detail?.availability !== availabilityFilter
-        ) {
-          return false;
-        }
-        if (
-          lastTaskFilter !== "all" &&
-          detail?.lastTask !== lastTaskFilter
-        ) {
-          return false;
-        }
-      }
-      if (q) {
-        if (
-          !a.name.toLowerCase().includes(q) &&
-          !(a.description ?? "").toLowerCase().includes(q)
-        )
-          return false;
-      }
-      return true;
-    });
-  }, [inScope, availabilityFilter, lastTaskFilter, view, search, presenceMap]);
+    return counts;
+  }, [inScope, presenceMap]);
 
   const sortedAgents = useMemo(() => {
     const xs = [...filteredAgents];
@@ -330,33 +283,81 @@ export function AgentsPage() {
     if (view === "archived" && archivedCount === 0) setView("active");
   }, [view, archivedCount]);
 
-  const handleCreate = async (data: CreateAgentRequest) => {
+  const handleCreate = async (data: CreateAgentRequest): Promise<Agent> => {
     const agent = await api.createAgent(data);
-    // When duplicating, carry the source agent's skill assignments over.
-    // Skills aren't part of CreateAgentRequest (they're managed via
-    // setAgentSkills) so the create endpoint can't take them inline; we
-    // do a follow-up call. Failure here doesn't abort the duplicate —
-    // the agent already exists and the user can re-attach skills from
-    // the detail page.
-    if (duplicateTemplate?.skills.length) {
-      try {
-        await api.setAgentSkills(agent.id, {
-          skill_ids: duplicateTemplate.skills.map((s) => s.id),
-        });
-      } catch {
-        // Surfaced softly; the agent itself is fine.
-      }
-    }
-    qc.invalidateQueries({ queryKey: workspaceKeys.agents(wsId) });
+    // Skill follow-up is now owned by the dialog (it reads the user's
+    // form selection, which already includes the duplicate source's
+    // skills as a default when applicable). The dialog will call
+    // setAgentSkills after we return; we just have to surface the
+    // created agent so it can.
+    qc.setQueryData<Agent[]>(workspaceKeys.agents(wsId), (current = []) => {
+      const exists = current.some((a) => a.id === agent.id);
+      return exists
+        ? current.map((a) => (a.id === agent.id ? agent : a))
+        : [...current, agent];
+    });
     setShowCreate(false);
     setDuplicateTemplate(null);
     navigation.push(paths.agentDetail(agent.id));
+    qc.invalidateQueries({ queryKey: workspaceKeys.agents(wsId) });
+    return agent;
   };
 
-  const handleDuplicate = (agent: Agent) => {
+  const handleDuplicate = useCallback((agent: Agent) => {
     setDuplicateTemplate(agent);
     setShowCreate(true);
-  };
+  }, []);
+
+  // Assemble per-row data once per render — agent + runtime + presence +
+  // activity + role flags. The columns reach into `row.original` and never
+  // pull their own queries, which keeps each cell a pure function.
+  const agentRows = useMemo<AgentRow[]>(() => {
+    return sortedAgents.map((agent) => {
+      const isOwner =
+        !!currentUser?.id && agent.owner_id === currentUser.id;
+      const canManage = isWorkspaceAdmin || isOwner;
+      const ownerIdToShow =
+        scope === "all" &&
+        agent.owner_id &&
+        agent.owner_id !== currentUser?.id
+          ? agent.owner_id
+          : null;
+      return {
+        agent,
+        runtime: runtimesById.get(agent.runtime_id) ?? null,
+        presence: presenceMap.get(agent.id) ?? null,
+        activity: activityMap.get(agent.id) ?? null,
+        runCount: runCountsById.get(agent.id) ?? 0,
+        ownerIdToShow,
+        isOwnedByMe: isOwner,
+        canManage,
+      };
+    });
+  }, [
+    sortedAgents,
+    currentUser,
+    isWorkspaceAdmin,
+    scope,
+    runtimesById,
+    presenceMap,
+    activityMap,
+    runCountsById,
+  ]);
+
+  const columns = useMemo(
+    () => createAgentColumns({ onDuplicate: handleDuplicate, t }),
+    [handleDuplicate, t],
+  );
+
+  const table = useReactTable({
+    data: agentRows,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    enableColumnResizing: true,
+    // Pin the kebab column right so it stays accessible during horizontal
+    // scroll — matches the pattern in Linear / Notion / GitHub.
+    initialState: { columnPinning: { right: ["actions"] } },
+  });
 
   // ---- Loading ----
   if (isLoading) {
@@ -387,30 +388,7 @@ export function AgentsPage() {
 
   // ---- List request error ----
   if (listError) {
-    return (
-      <div className="flex flex-1 min-h-0 flex-col">
-        <PageHeaderBar totalCount={0} onCreate={() => setShowCreate(true)} />
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-          <AlertCircle className="h-8 w-8 text-destructive" />
-          <div>
-            <p className="text-sm font-medium">Couldn&rsquo;t load agents</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {listError instanceof Error
-                ? listError.message
-                : "Something went wrong fetching the agent list."}
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => refetchList()}
-          >
-            Try again
-          </Button>
-        </div>
-      </div>
-    );
+    return <ListError onCreate={() => setShowCreate(true)} listError={listError} onRetry={refetchList} />;
   }
 
   const showEmpty = totalActiveCount === 0 && archivedCount === 0;
@@ -439,20 +417,16 @@ export function AgentsPage() {
                   setSort={setSort}
                   search={search}
                   setSearch={setSearch}
-                />
-                <PresenceFilterRows
-                  availabilityFilter={availabilityFilter}
-                  setAvailabilityFilter={setAvailabilityFilter}
-                  availabilityCounts={availabilityCounts.counts}
-                  availabilityTotal={availabilityCounts.total}
-                  lastTaskFilter={lastTaskFilter}
-                  setLastTaskFilter={setLastTaskFilter}
-                  lastTaskCounts={lastTaskCounts.counts}
-                  lastTaskTotal={lastTaskCounts.total}
                   visibleCount={sortedAgents.length}
                   totalCount={inScope.length}
                   archivedCount={archivedCount}
                   onShowArchived={() => setView("archived")}
+                />
+                <AvailabilityFilterRow
+                  value={availabilityFilter}
+                  onChange={setAvailabilityFilter}
+                  counts={availabilityCounts}
+                  totalCount={inScope.length}
                 />
               </>
             ) : (
@@ -465,76 +439,14 @@ export function AgentsPage() {
             )}
 
             {sortedAgents.length === 0 ? (
-              <NoMatches
-                view={view}
-                search={search}
-                hasFilter={
-                  availabilityFilter !== "all" || lastTaskFilter !== "all"
-                }
-                scope={scope}
-              />
+              <NoMatches view={view} search={search} scope={scope} />
             ) : (
-              <div
-                ref={scrollRef}
-                style={fadeStyle}
-                className="flex-1 min-h-0 overflow-y-auto"
-              >
-                {/*
-                  Layout strategy — CSS Grid + `max-content` on Status, ratio
-                  fr's elsewhere. The Status column shrinks to fit when no
-                  agent is in a high-load Working state, and only widens
-                  when the data demands it; the freed space flows into the
-                  Agent (1.6fr) primary column. See AGENT_LIST_GRID for the
-                  full breakpoint ladder. Sticky header reuses the same grid
-                  template so column edges align with rows pixel-for-pixel.
-                */}
-                <div
-                  role="row"
-                  className={`${AGENT_LIST_GRID} sticky top-0 z-10 border-b bg-muted/30 px-4 py-2 text-xs font-medium uppercase tracking-wider text-muted-foreground backdrop-blur`}
-                >
-                  {/* Avatar leading slot — empty header cell so the "Agent"
-                      label below aligns with the row's name text, not the
-                      avatar's left edge. */}
-                  <span aria-hidden />
-                  <span>Agent</span>
-                  <span>Status</span>
-                  <span className="hidden md:block">Last run</span>
-                  <span className="hidden md:block">Runtime</span>
-                  <span className="hidden lg:block">Activity (7d)</span>
-                  <span className="hidden text-right md:block">Runs</span>
-                  {/* Operations column header — kept silent; the kebab
-                      cell speaks for itself. */}
-                  <span aria-label="Actions" />
-                </div>
-                {sortedAgents.map((agent) => {
-                  const isOwner =
-                    !!currentUser?.id && agent.owner_id === currentUser.id;
-                  const canManage = isWorkspaceAdmin || isOwner;
-                  // Inline owner avatar only in All scope on a teammate's
-                  // agent — Mine scope means owner is always you, so a
-                  // self-avatar everywhere would be visual noise.
-                  const ownerIdToShow =
-                    scope === "all" &&
-                    agent.owner_id &&
-                    agent.owner_id !== currentUser?.id
-                      ? agent.owner_id
-                      : null;
-                  return (
-                    <AgentListItem
-                      key={agent.id}
-                      agent={agent}
-                      runtime={runtimesById.get(agent.runtime_id) ?? null}
-                      presence={presenceMap.get(agent.id) ?? null}
-                      activity={activityMap.get(agent.id) ?? null}
-                      runCount={runCountsById.get(agent.id) ?? 0}
-                      ownerIdToShow={ownerIdToShow}
-                      canManage={canManage}
-                      onDuplicate={handleDuplicate}
-                      href={paths.agentDetail(agent.id)}
-                    />
-                  );
-                })}
-              </div>
+              <DataTable
+                table={table}
+                onRowClick={(row) =>
+                  navigation.push(paths.agentDetail(row.original.agent.id))
+                }
+              />
             )}
           </div>
         )}
@@ -569,38 +481,71 @@ function PageHeaderBar({
   totalCount: number;
   onCreate: () => void;
 }) {
+  const { t } = useT("agents");
   return (
     <PageHeader className="justify-between px-5">
       <div className="flex items-center gap-2">
         <Bot className="h-4 w-4 text-muted-foreground" />
-        <h1 className="text-sm font-medium">Agents</h1>
+        <h1 className="text-sm font-medium">{t(($) => $.page.title)}</h1>
         {totalCount > 0 && (
           <span className="font-mono text-xs tabular-nums text-muted-foreground/70">
             {totalCount}
           </span>
         )}
-        {/* Tagline next to the title — mirrors Runtimes / Skills. Single
-            sentence + docs link, hidden below md so it never collides with
-            the title on narrow screens. The presence chip row below carries
-            the state-legend job, so the tagline only needs to anchor what
-            an agent IS, not what each colour means. */}
+        {/* Tagline next to the title — mirrors Runtimes / Skills. */}
         <p className="ml-2 hidden text-xs text-muted-foreground md:block">
-          AI teammates that pick up issues, comment, and update status.{" "}
+          {t(($) => $.page.tagline)}{" "}
           <a
             href="https://multica.ai/docs/agents"
             target="_blank"
             rel="noopener noreferrer"
             className="underline decoration-muted-foreground/30 underline-offset-4 transition-colors hover:text-foreground"
           >
-            Learn more →
+            {t(($) => $.page.learn_more)}
           </a>
         </p>
       </div>
       <Button type="button" size="sm" onClick={onCreate}>
         <Plus className="h-3 w-3" />
-        New agent
+        {t(($) => $.page.new_agent)}
       </Button>
     </PageHeader>
+  );
+}
+
+function ListError({
+  onCreate,
+  listError,
+  onRetry,
+}: {
+  onCreate: () => void;
+  listError: unknown;
+  onRetry: () => void;
+}) {
+  const { t } = useT("agents");
+  return (
+    <div className="flex flex-1 min-h-0 flex-col">
+      <PageHeaderBar totalCount={0} onCreate={onCreate} />
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+        <AlertCircle className="h-8 w-8 text-destructive" />
+        <div>
+          <p className="text-sm font-medium">{t(($) => $.page.list_load_failed)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {listError instanceof Error
+              ? listError.message
+              : t(($) => $.page.list_load_failed_default)}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onRetry}
+        >
+          {t(($) => $.page.try_again)}
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -616,6 +561,10 @@ function ActiveToolbarRow({
   setSort,
   search,
   setSearch,
+  visibleCount,
+  totalCount,
+  archivedCount,
+  onShowArchived,
 }: {
   scope: Scope;
   setScope: (v: Scope) => void;
@@ -624,24 +573,37 @@ function ActiveToolbarRow({
   setSort: (v: SortKey) => void;
   search: string;
   setSearch: (v: string) => void;
+  visibleCount: number;
+  totalCount: number;
+  archivedCount: number;
+  onShowArchived: () => void;
 }) {
-  // Layout follows Skills: [Search] [Mine|All]              [Sort ▼]
-  // Search and the scope segment cluster on the left (Skills puts its
-  // filter buttons immediately after the search the same way). Sort
-  // gets pushed to the far right via ml-auto.
+  const { t } = useT("agents");
   return (
-    <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+    <div className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
       <div className="relative">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search agents…"
+          placeholder={t(($) => $.page.search_placeholder)}
           className="h-8 w-64 pl-8 text-sm"
         />
       </div>
       <ScopeSegment scope={scope} setScope={setScope} counts={scopeCounts} />
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-3">
+        {archivedCount > 0 && (
+          <button
+            type="button"
+            onClick={onShowArchived}
+            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {t(($) => $.page.show_archived, { count: archivedCount })}
+          </button>
+        )}
+        <span className="font-mono text-xs tabular-nums text-muted-foreground/70">
+          {t(($) => $.page.of_total, { visible: visibleCount, total: totalCount })}
+        </span>
         <SortDropdown sort={sort} setSort={setSort} />
       </div>
     </div>
@@ -657,19 +619,18 @@ function ScopeSegment({
   setScope: (v: Scope) => void;
   counts: { all: number; mine: number };
 }) {
-  // Mine first — that's the more frequent scope (your own agents) and
-  // also the default selection, so it lives in the leading slot.
+  const { t } = useT("agents");
   return (
     <div className="flex items-center gap-0.5 rounded-md bg-muted p-0.5">
       <ScopeButton
         active={scope === "mine"}
-        label="Mine"
+        label={t(($) => $.scope.mine)}
         count={counts.mine}
         onClick={() => setScope("mine")}
       />
       <ScopeButton
         active={scope === "all"}
-        label="All"
+        label={t(($) => $.scope.all)}
         count={counts.all}
         onClick={() => setScope("all")}
       />
@@ -717,6 +678,7 @@ function SortDropdown({
   sort: SortKey;
   setSort: (v: SortKey) => void;
 }) {
+  const { t } = useT("agents");
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -729,7 +691,7 @@ function SortDropdown({
         }
       >
         <ArrowUpDown className="h-3 w-3" />
-        {SORT_LABEL[sort]}
+        {t(($) => $.sort[SORT_LABEL_KEY[sort]])}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-auto">
         {SORT_KEYS.map((k) => (
@@ -738,7 +700,7 @@ function SortDropdown({
             onClick={() => setSort(k)}
             className="text-xs"
           >
-            {SORT_LABEL[k]}
+            {t(($) => $.sort[SORT_LABEL_KEY[k]])}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
@@ -747,161 +709,77 @@ function SortDropdown({
 }
 
 // ---------------------------------------------------------------------------
-// Active view — Layer 2: two independent filter axes (availability + last
-// task) + visible/total count. The right edge hosts the low-frequency
-// "Show archived" link, kept out of Layer 1 so the primary toolbar stays
-// uncluttered.
-//
-// Two rows because cramming both axes into a single row makes the chip
-// labels feel ambiguous ("Online" and "Failed" side by side reads as a
-// single stack of facets, but they're on different axes). Two rows with
-// a leading label make the axis split obvious.
+// Availability chip row — All / Online / Unstable / Offline. Only shown
+// in the Active view; archived agents have no presence.
 // ---------------------------------------------------------------------------
 
-function PresenceFilterRows({
-  availabilityFilter,
-  setAvailabilityFilter,
-  availabilityCounts,
-  availabilityTotal,
-  lastTaskFilter,
-  setLastTaskFilter,
-  lastTaskCounts,
-  lastTaskTotal,
-  visibleCount,
+function AvailabilityFilterRow({
+  value,
+  onChange,
+  counts,
   totalCount,
-  archivedCount,
-  onShowArchived,
 }: {
-  availabilityFilter: AvailabilityFilter;
-  setAvailabilityFilter: (v: AvailabilityFilter) => void;
-  availabilityCounts: Record<AgentAvailability, number>;
-  availabilityTotal: number;
-  lastTaskFilter: LastTaskFilter;
-  setLastTaskFilter: (v: LastTaskFilter) => void;
-  lastTaskCounts: Record<LastTaskState, number>;
-  lastTaskTotal: number;
-  visibleCount: number;
+  value: AvailabilityFilter;
+  onChange: (v: AvailabilityFilter) => void;
+  counts: Record<AgentAvailability, number>;
   totalCount: number;
-  archivedCount: number;
-  onShowArchived: () => void;
 }) {
+  const { t } = useT("agents");
   return (
-    <div className="flex shrink-0 flex-col gap-1.5 border-b px-4 py-2.5">
-      {/* Row 1: Availability — 3 chips. */}
-      <div className="flex items-center gap-2">
-        <span className="w-16 shrink-0 text-xs text-muted-foreground">
-          Status
-        </span>
-        <PresenceChip
-          active={availabilityFilter === "all"}
-          onClick={() => setAvailabilityFilter("all")}
-          label="All"
-          count={availabilityTotal}
-          description="No availability filter"
-        />
-        {availabilityOrder.map((a) => {
-          const cfg = availabilityConfig[a];
-          return (
-            <PresenceChip
-              key={a}
-              active={availabilityFilter === a}
-              onClick={() => setAvailabilityFilter(a)}
-              label={cfg.label}
-              count={availabilityCounts[a]}
-              dotClass={cfg.dotClass}
-              description={AVAILABILITY_DESCRIPTION[a]}
-            />
-          );
-        })}
-        <div className="ml-auto flex items-center gap-3">
-          {archivedCount > 0 && (
-            <button
-              type="button"
-              onClick={onShowArchived}
-              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Show archived ({archivedCount}) →
-            </button>
-          )}
-          <span className="font-mono text-xs tabular-nums text-muted-foreground/70">
-            {visibleCount} of {totalCount}
-          </span>
-        </div>
-      </div>
-      {/* Row 2: Last task — 5 chips. */}
-      <div className="flex items-center gap-2">
-        <span className="w-16 shrink-0 text-xs text-muted-foreground">
-          Last run
-        </span>
-        <PresenceChip
-          active={lastTaskFilter === "all"}
-          onClick={() => setLastTaskFilter("all")}
-          label="All"
-          count={lastTaskTotal}
-          description="No last-run filter"
-        />
-        {lastTaskOrder.map((t) => {
-          const cfg = taskStateConfig[t];
-          return (
-            <PresenceChip
-              key={t}
-              active={lastTaskFilter === t}
-              onClick={() => setLastTaskFilter(t)}
-              label={cfg.label}
-              count={lastTaskCounts[t]}
-              description={LAST_TASK_DESCRIPTION[t]}
-            />
-          );
-        })}
-      </div>
+    <div className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
+      <AvailabilityChip
+        active={value === "all"}
+        onClick={() => onChange("all")}
+        label={t(($) => $.availability.all)}
+        count={totalCount}
+      />
+      {availabilityOrder.map((a) => {
+        const cfg = availabilityConfig[a];
+        return (
+          <AvailabilityChip
+            key={a}
+            active={value === a}
+            onClick={() => onChange(a)}
+            label={t(($) => $.availability[a])}
+            count={counts[a]}
+            dotClass={cfg.dotClass}
+          />
+        );
+      })}
     </div>
   );
 }
 
-// Same Button + Tooltip pattern Skills uses for its scope filters. Selected
-// state mirrors Skills' `bg-accent text-accent-foreground hover:bg-accent/80`,
-// so any future global tweak to that token cascades here for free.
-function PresenceChip({
+function AvailabilityChip({
   active,
   onClick,
   label,
   count,
   dotClass,
-  description,
 }: {
   active: boolean;
   onClick: () => void;
   label: string;
   count: number;
   dotClass?: string;
-  description: string;
 }) {
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onClick}
-            className={
-              active
-                ? "bg-accent text-accent-foreground hover:bg-accent/80"
-                : "text-muted-foreground"
-            }
-          >
-            {dotClass && (
-              <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} />
-            )}
-            <span>{label}</span>
-            <span className="font-mono tabular-nums text-muted-foreground/70">
-              {count}
-            </span>
-          </Button>
-        }
-      />
-      <TooltipContent side="top">{description}</TooltipContent>
-    </Tooltip>
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={onClick}
+      className={
+        active
+          ? "bg-accent text-accent-foreground hover:bg-accent/80"
+          : "text-muted-foreground"
+      }
+    >
+      {dotClass && <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} />}
+      <span>{label}</span>
+      <span className="font-mono tabular-nums text-muted-foreground/70">
+        {count}
+      </span>
+    </Button>
   );
 }
 
@@ -921,6 +799,7 @@ function ArchivedToolbarRow({
   sort: SortKey;
   setSort: (v: SortKey) => void;
 }) {
+  const { t } = useT("agents");
   return (
     <div className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
       <button
@@ -929,10 +808,10 @@ function ArchivedToolbarRow({
         className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-3 w-3" />
-        Active agents
+        {t(($) => $.archived.active_link)}
       </button>
       <span className="text-muted-foreground/40">/</span>
-      <span className="text-xs font-medium">Archived agents</span>
+      <span className="text-xs font-medium">{t(($) => $.archived.title)}</span>
       <span className="font-mono text-xs tabular-nums text-muted-foreground/70">
         {archivedCount}
       </span>
@@ -948,19 +827,19 @@ function ArchivedToolbarRow({
 // ---------------------------------------------------------------------------
 
 function EmptyState({ onCreate }: { onCreate: () => void }) {
+  const { t } = useT("agents");
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-16 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
         <Bot className="h-6 w-6 text-muted-foreground" />
       </div>
-      <h2 className="mt-4 text-base font-semibold">No agents yet</h2>
+      <h2 className="mt-4 text-base font-semibold">{t(($) => $.empty.title)}</h2>
       <p className="mt-1 max-w-md text-sm text-muted-foreground">
-        Create an agent and assign it issues, like any teammate. Local agents
-        run on your machine; cloud agents run on Multica&rsquo;s runtime.
+        {t(($) => $.empty.description)}
       </p>
       <Button type="button" onClick={onCreate} size="sm" className="mt-5">
         <Plus className="h-3 w-3" />
-        New agent
+        {t(($) => $.page.new_agent)}
       </Button>
     </div>
   );
@@ -969,32 +848,33 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
 function NoMatches({
   view,
   search,
-  hasFilter: filterActive,
   scope,
 }: {
   view: View;
   search: string;
-  hasFilter: boolean;
   scope: Scope;
 }) {
+  const { t } = useT("agents");
   const hasSearch = search.length > 0;
-  const hasFilter = filterActive || scope === "mine";
+  const hasFilter = scope === "mine";
 
   let body: string;
   if (view === "archived") {
     body = hasSearch
-      ? `No archived agents match "${search}".`
-      : "No archived agents yet.";
+      ? t(($) => $.no_matches.search_archived, { query: search })
+      : t(($) => $.no_matches.no_archived);
   } else if (hasSearch) {
-    body = `No agents match "${search}"${hasFilter ? " in this filter" : ""}.`;
+    body = hasFilter
+      ? t(($) => $.no_matches.search_active_filtered, { query: search })
+      : t(($) => $.no_matches.search_active, { query: search });
   } else {
-    body = "No agents match this filter.";
+    body = t(($) => $.no_matches.no_filter_match);
   }
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 py-16 text-center text-muted-foreground">
       <Search className="h-8 w-8 text-muted-foreground/40" />
-      <p className="text-sm">No matches</p>
+      <p className="text-sm">{t(($) => $.no_matches.title)}</p>
       <p className="max-w-xs text-xs">{body}</p>
     </div>
   );

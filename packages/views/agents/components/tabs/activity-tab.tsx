@@ -1,14 +1,16 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ArrowUpRight,
   CircleHelp,
   Hash,
   MessageSquare,
   Workflow,
+  X,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Tooltip,
   TooltipContent,
@@ -28,6 +30,7 @@ import {
   summarizeActivityWindow,
   useWorkspaceActivityMap,
 } from "@multica/core/agents";
+import { api } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { issueDetailOptions } from "@multica/core/issues/queries";
@@ -35,11 +38,17 @@ import { timeAgo } from "@multica/core/utils";
 import { AppLink } from "../../../navigation";
 import { TranscriptButton } from "../../../common/task-transcript";
 import { taskStatusConfig } from "../../config";
-import { failureReasonLabel } from "../../presence";
+import { failureReasonLabel } from "./task-failure";
 import { Sparkline } from "../sparkline";
+import { useT } from "../../../i18n";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-const RECENT_LIMIT = 5;
+// Recent work pagination: small initial cohort to keep the section
+// scannable, then "Show more" reveals 20 at a time. Tasks are already
+// fully cached client-side (one listAgentTasks for the whole agent), so
+// "more" is a pure state flip — zero extra fetches.
+const RECENT_INITIAL = 5;
+const RECENT_PAGE = 20;
 
 interface ActivityTabProps {
   agent: Agent;
@@ -66,10 +75,19 @@ export function ActivityTab({ agent }: ActivityTabProps) {
   const { byAgent: activityMap } = useWorkspaceActivityMap(wsId);
   const activity = activityMap.get(agent.id);
 
+  const [recentDisplayLimit, setRecentDisplayLimit] = useState(RECENT_INITIAL);
+
+  // Chat tasks are intentionally hidden across every Agent-scoped surface
+  // (list / detail / activity). They have their own UI in the chat
+  // experience; mixing them in here muddies "what is this agent doing
+  // for the team" with "what is this agent doing in private chat".
+  const isWorkflowTask = (t: AgentTask) => !t.chat_session_id;
+
   const activeTasks = useMemo(() => {
     return snapshot.filter(
       (t) =>
         t.agent_id === agent.id &&
+        isWorkflowTask(t) &&
         (t.status === "running" ||
           t.status === "queued" ||
           t.status === "dispatched"),
@@ -78,11 +96,12 @@ export function ActivityTab({ agent }: ActivityTabProps) {
 
   // Most recent terminal tasks. Includes cancelled — users searching
   // "what just happened" want to see cancellations alongside completions
-  // and failures.
-  const recentTasks = useMemo(() => {
+  // and failures. Chat sessions filtered out for the same reason as above.
+  const recentTasksAll = useMemo(() => {
     return [...agentTasks]
       .filter(
         (t) =>
+          isWorkflowTask(t) &&
           !!t.completed_at &&
           (t.status === "completed" ||
             t.status === "failed" ||
@@ -92,9 +111,14 @@ export function ActivityTab({ agent }: ActivityTabProps) {
         (a, b) =>
           new Date(b.completed_at!).getTime() -
           new Date(a.completed_at!).getTime(),
-      )
-      .slice(0, RECENT_LIMIT);
+      );
   }, [agentTasks]);
+
+  const recentTasks = useMemo(
+    () => recentTasksAll.slice(0, recentDisplayLimit),
+    [recentTasksAll, recentDisplayLimit],
+  );
+  const hasMoreRecent = recentTasksAll.length > recentTasks.length;
 
   const avgDurationMs = useMemo(
     () => deriveAvgDurationLast30d(agentTasks, Date.now()),
@@ -133,6 +157,11 @@ export function ActivityTab({ agent }: ActivityTabProps) {
       <Last30dSection activity={activity} avgDurationMs={avgDurationMs} />
       <RecentWorkSection
         tasks={recentTasks}
+        totalCount={recentTasksAll.length}
+        hasMore={hasMoreRecent}
+        onShowMore={() =>
+          setRecentDisplayLimit((n) => n + RECENT_PAGE)
+        }
         issueMap={issueMap}
         agent={agent}
       />
@@ -149,17 +178,18 @@ function NowSection({
   issueMap: Map<string, Issue>;
   agent: Agent;
 }) {
+  const { t } = useT("agents");
   return (
     <Section
-      title="Now"
+      title={t(($) => $.tab_body.activity.section_now)}
       subtitle={
         tasks.length === 0
-          ? "No active work"
-          : `${tasks.length} active task${tasks.length === 1 ? "" : "s"}`
+          ? t(($) => $.tab_body.activity.subtitle_no_active)
+          : t(($) => $.tab_body.activity.subtitle_active, { count: tasks.length })
       }
     >
       {tasks.length === 0 ? (
-        <EmptyText>This agent isn&apos;t running anything right now.</EmptyText>
+        <EmptyText>{t(($) => $.tab_body.activity.empty_now)}</EmptyText>
       ) : (
         <TaskList
           tasks={tasks}
@@ -179,6 +209,7 @@ function Last30dSection({
   activity: AgentActivity | undefined;
   avgDurationMs: number;
 }) {
+  const { t } = useT("agents");
   const summary = summarizeActivityWindow(activity, 30);
   const { totalRuns, totalFailed } = summary;
   const successPct =
@@ -187,17 +218,10 @@ function Last30dSection({
       : 100;
 
   return (
-    <Section title="Last 30 days" subtitle="Performance">
+    <Section title={t(($) => $.tab_body.activity.section_last_30d)} subtitle={t(($) => $.tab_body.activity.subtitle_performance)}>
       {totalRuns === 0 ? (
-        <EmptyText>No completions in the last 30 days.</EmptyText>
+        <EmptyText>{t(($) => $.tab_body.activity.empty_30d)}</EmptyText>
       ) : (
-        // Layout: number is the hero, sparkline is a garnish on the
-        // right. Reversed from "chart hero + tiny number" because at
-        // detail-page sample sizes (often <30 over the window) a wide
-        // sparkline reads as mostly-empty space, which looks broken;
-        // the headline number stays legible at any sample size and
-        // anchors the section. Stripe / Vercel / Shopify metric cards
-        // all follow this pattern for the same reason.
         <div className="flex items-end justify-between gap-5">
           <div className="flex min-w-0 flex-col gap-1">
             <div className="flex items-baseline gap-1.5">
@@ -205,22 +229,22 @@ function Last30dSection({
                 {totalRuns}
               </span>
               <span className="text-sm text-muted-foreground">
-                run{totalRuns === 1 ? "" : "s"}
+                {t(($) => $.tab_body.activity.runs, { count: totalRuns })}
               </span>
             </div>
             <div className="text-xs text-muted-foreground">
-              {successPct}% success
+              {t(($) => $.tab_body.activity.success_pct, { percent: successPct })}
               {avgDurationMs > 0 && (
                 <>
                   <Sep />
-                  <span>avg {formatDurationMs(avgDurationMs)}</span>
+                  <span>{t(($) => $.tab_body.activity.avg_duration, { value: formatDurationMs(avgDurationMs) })}</span>
                 </>
               )}
               {totalFailed > 0 && (
                 <>
                   <Sep />
                   <span className="text-destructive">
-                    {totalFailed} failed
+                    {t(($) => $.tab_body.activity.failed_count, { count: totalFailed })}
                   </span>
                 </>
               )}
@@ -244,31 +268,48 @@ function Last30dSection({
 
 function RecentWorkSection({
   tasks,
+  totalCount,
+  hasMore,
+  onShowMore,
   issueMap,
   agent,
 }: {
   tasks: AgentTask[];
+  totalCount: number;
+  hasMore: boolean;
+  onShowMore: () => void;
   issueMap: Map<string, Issue>;
   agent: Agent;
 }) {
+  const { t } = useT("agents");
+  const subtitle =
+    tasks.length === 0
+      ? t(($) => $.tab_body.activity.subtitle_no_recent)
+      : totalCount > tasks.length
+        ? t(($) => $.tab_body.activity.subtitle_recent_progress, { shown: tasks.length, total: totalCount })
+        : t(($) => $.tab_body.activity.subtitle_recent_latest, { count: tasks.length });
   return (
-    <Section
-      title="Recent work"
-      subtitle={
-        tasks.length === 0
-          ? "Nothing finished yet"
-          : `${tasks.length} latest`
-      }
-    >
+    <Section title={t(($) => $.tab_body.activity.section_recent)} subtitle={subtitle}>
       {tasks.length === 0 ? (
-        <EmptyText>This agent hasn&apos;t completed anything yet.</EmptyText>
+        <EmptyText>{t(($) => $.tab_body.activity.empty_recent)}</EmptyText>
       ) : (
-        <TaskList
-          tasks={tasks}
-          issueMap={issueMap}
-          timeMode="completed"
-          agent={agent}
-        />
+        <>
+          <TaskList
+            tasks={tasks}
+            issueMap={issueMap}
+            timeMode="completed"
+            agent={agent}
+          />
+          {hasMore && (
+            <button
+              type="button"
+              onClick={onShowMore}
+              className="mt-2 self-start rounded text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {t(($) => $.tab_body.activity.show_more)}
+            </button>
+          )}
+        </>
       )}
     </Section>
   );
@@ -311,7 +352,9 @@ function TaskRow({
   timeMode: "active" | "completed";
   agent: Agent;
 }) {
+  const { t } = useT("agents");
   const paths = useWorkspacePaths();
+  const [cancelling, setCancelling] = useState(false);
   const cfg = taskStatusConfig[task.status] ?? taskStatusConfig.queued!;
   const Icon = cfg.icon;
   const hasIssue = task.issue_id !== "";
@@ -320,19 +363,44 @@ function TaskRow({
   // Queued tasks have no messages yet — hiding the transcript button avoids
   // a guaranteed "No execution data recorded." dialog open.
   const showTranscript = task.status !== "queued";
+  // Cancel only makes sense for the three active states. Terminal rows
+  // (completed / failed / cancelled) hide the button entirely.
+  const showCancel =
+    timeMode === "active" &&
+    (task.status === "queued" ||
+      task.status === "dispatched" ||
+      task.status === "running");
 
+  const handleCancel = async () => {
+    if (cancelling) return;
+    setCancelling(true);
+    try {
+      await api.cancelTaskById(task.id);
+      // No manual invalidate needed — the task:cancelled WS event flows
+      // through useRealtimeSync's `task:` prefix path which already
+      // invalidates snapshot + per-agent + per-issue task lists.
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t(($) => $.tab_body.activity.cancel_failed_toast));
+      setCancelling(false);
+    }
+  };
+
+  const isTerminalStatus =
+    task.status === "completed" ||
+    task.status === "failed" ||
+    task.status === "cancelled";
   const sourceFallback = !hasIssue
-    ? task.chat_session_id
-      ? "Chat session"
-      : task.autopilot_run_id
-        ? "Autopilot run"
-        : "Untracked"
+    ? task.kind === "quick_create"
+      ? isTerminalStatus
+        ? t(($) => $.tab_body.activity.source_quick_create)
+        : t(($) => $.tab_body.activity.source_creating_issue)
+      : task.chat_session_id
+        ? t(($) => $.tab_body.activity.source_chat_session)
+        : task.autopilot_run_id
+          ? t(($) => $.tab_body.activity.source_autopilot_run)
+          : t(($) => $.tab_body.activity.source_untracked)
     : null;
 
-  // Origin marker — issue / chat / autopilot / untracked. The issue
-  // identifier alone is technically enough for the issue case, but
-  // pairing it with a Hash icon keeps the four sources visually aligned
-  // so the row reads at a glance instead of requiring a parse.
   const SourceIcon = hasIssue
     ? Hash
     : task.chat_session_id
@@ -341,16 +409,16 @@ function TaskRow({
         ? Workflow
         : CircleHelp;
   const sourceLabel = hasIssue
-    ? "Issue"
+    ? t(($) => $.tab_body.activity.source_issue)
     : task.chat_session_id
-      ? "Chat"
+      ? t(($) => $.tab_body.activity.source_chat)
       : task.autopilot_run_id
-        ? "Autopilot"
-        : "Untracked";
+        ? t(($) => $.tab_body.activity.source_autopilot)
+        : t(($) => $.tab_body.activity.source_untracked);
 
   const timeText =
     timeMode === "active"
-      ? activeTaskTimeText(task)
+      ? activeTaskTimeText(task, t)
       : task.completed_at
         ? timeAgo(task.completed_at)
         : "—";
@@ -375,7 +443,7 @@ function TaskRow({
   }
 
   const rowClass = `group flex items-center gap-3 rounded-md border px-3 py-2.5 ${
-    isRunning ? "border-success/40 bg-success/5" : ""
+    isRunning ? "border-brand/40 bg-brand/5" : ""
   }`;
 
   return (
@@ -396,12 +464,40 @@ function TaskRow({
               {issue.identifier}
             </span>
           )}
-          <span className="truncate text-sm">
-            {issue?.title ??
-              (hasIssue
-                ? `Issue ${task.issue_id.slice(0, 8)}…`
-                : (sourceFallback ?? "Untracked"))}
-          </span>
+          {task.trigger_summary ? (
+            // Hover surfaces "why this task ran" — the snapshot lets the
+            // agent-side row stay anchored on issue.title (the
+            // identification axis here) while still letting the user
+            // dwell to see the trigger context. Same pattern as
+            // GitHub Actions surfacing the commit message on hover.
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span className="truncate text-sm">
+                    {issue?.title ??
+                      (hasIssue
+                        ? t(($) => $.tab_body.activity.issue_short_fallback, { prefix: task.issue_id.slice(0, 8) })
+                        : (sourceFallback ?? t(($) => $.tab_body.activity.source_untracked)))}
+                  </span>
+                }
+              />
+              <TooltipContent className="max-w-md">
+                <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
+                  {t(($) => $.tab_body.activity.triggered_by)}
+                </div>
+                <div className="mt-0.5 whitespace-pre-wrap text-xs">
+                  {task.trigger_summary}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <span className="truncate text-sm">
+              {issue?.title ??
+                (hasIssue
+                  ? t(($) => $.tab_body.activity.issue_short_fallback, { prefix: task.issue_id.slice(0, 8) })
+                  : (sourceFallback ?? t(($) => $.tab_body.activity.source_untracked)))}
+            </span>
+          )}
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
           <span>{timeText}</span>
@@ -429,12 +525,12 @@ function TaskRow({
           <Tooltip>
             <TooltipTrigger
               render={<AppLink href={paths.issueDetail(task.issue_id)} />}
-              aria-label="Open issue"
+              aria-label={t(($) => $.tab_body.activity.open_issue_aria)}
               className="flex items-center justify-center rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
             >
               <ArrowUpRight className="h-3.5 w-3.5" />
             </TooltipTrigger>
-            <TooltipContent>Open issue</TooltipContent>
+            <TooltipContent>{t(($) => $.tab_body.activity.open_issue_tooltip)}</TooltipContent>
           </Tooltip>
         )}
         {showTranscript && (
@@ -442,8 +538,28 @@ function TaskRow({
             task={task}
             agentName={agent.name}
             isLive={isRunning}
-            title="View transcript"
+            title={t(($) => $.tab_body.activity.transcript_tooltip)}
           />
+        )}
+        {showCancel && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  disabled={cancelling}
+                  aria-label={t(($) => $.tab_body.activity.cancel_task_aria)}
+                />
+              }
+              className="flex items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <X className="h-3.5 w-3.5" />
+            </TooltipTrigger>
+            <TooltipContent>
+              {cancelling ? t(($) => $.tab_body.activity.cancelling_tooltip) : t(($) => $.tab_body.activity.cancel_task_tooltip)}
+            </TooltipContent>
+          </Tooltip>
         )}
       </div>
     </div>
@@ -483,14 +599,16 @@ function Sep() {
   return <span className="mx-1 text-muted-foreground/40">·</span>;
 }
 
-function activeTaskTimeText(task: AgentTask): string {
+type AgentsT = ReturnType<typeof useT<"agents">>["t"];
+
+function activeTaskTimeText(task: AgentTask, t: AgentsT): string {
   if (task.status === "running" && task.started_at) {
-    return `Started ${timeAgo(task.started_at)}`;
+    return t(($) => $.tab_body.activity.started_prefix, { when: timeAgo(task.started_at) });
   }
   if (task.status === "dispatched" && task.dispatched_at) {
-    return `Dispatched ${timeAgo(task.dispatched_at)}`;
+    return t(($) => $.tab_body.activity.dispatched_prefix, { when: timeAgo(task.dispatched_at) });
   }
-  return `Queued ${timeAgo(task.created_at)}`;
+  return t(($) => $.tab_body.activity.queued_prefix, { when: timeAgo(task.created_at) });
 }
 
 /**
