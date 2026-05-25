@@ -1,10 +1,17 @@
 import type {
+  AgentRuntime,
   RuntimeUsage,
   RuntimeUsageByAgent,
 } from "@multica/core/types";
 import { getCustomPricing } from "@multica/core/runtimes/custom-pricing-store";
 
-import { MODEL_PRICING } from "./pricing.generated";
+// A live local daemon re-registers itself within seconds of a server-side
+// delete (daemon self-heal, #2404), so deleting an online local runtime from
+// the UI has no lasting effect. Both the detail page and the list row menu
+// gate their Delete affordance on this same predicate.
+export function isSelfHealingRuntime(runtime: AgentRuntime): boolean {
+  return runtime.runtime_mode === "local" && runtime.status === "online";
+}
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -116,14 +123,119 @@ export function formatTokens(n: number): string {
 // Cost estimation
 // ---------------------------------------------------------------------------
 
-// Pricing per million tokens (USD). MODEL_PRICING is generated from
-// https://models.dev/api.json by `scripts/generate-pricing.mjs`. Each
-// entry is keyed by both `<provider>/<model>` (OpenCode / openclaw
-// form) and bare `<model>` (Claude-direct / legacy daemon form), so the
-// resolver below can stay a simple exact match with a few normalizations.
-// Regenerate the snapshot when upstream prices drift.
+// Pricing per million tokens (USD). Sources, each authoritative for the
+// rows tagged under it — keep in sync when providers release new models
+// or adjust prices.
+//
+//   Anthropic: https://platform.claude.com/docs/en/about-claude/pricing
+//   OpenAI:    https://openai.com/api/pricing
+//   Google:    https://ai.google.dev/pricing
+//   xAI:       https://x.ai/api
+//   DeepSeek:  https://api-docs.deepseek.com/quick_start/pricing
+//   Moonshot:  https://www.kimi.com/resources/kimi-k2-6-pricing
+//   Zhipu:     https://docs.z.ai/guides/overview/pricing
+//
+// Anthropic's cacheWrite reflects the 5-minute cache TTL (1.25× input); the
+// daemon reports cache_creation_input_tokens without TTL metadata, so 5m is
+// the safest / cheapest assumption (matches the API default). OpenAI,
+// DeepSeek, Moonshot and Zhipu do not bill cache writes separately (cached
+// input is just discounted on subsequent reads), so cacheWrite mirrors
+// input there.
+//
+// The resolver matches exact keys after stripping a trailing date snapshot
+// (see `resolvePricing` below). It deliberately does NOT do startsWith
+// fallbacks: every catalog SKU needs its own row. That keeps unfamiliar
+// variants (`gpt-5.5-mini`, hypothetical `gpt-5.4-foo`) from silently
+// inheriting the price of a near-named relative; they surface in the
+// unmapped diagnostic instead. Mirror new entries in
+// `server/pkg/agent/models.go` so the catalog and pricing stay in sync.
+const MODEL_PRICING: Record<
+  string,
+  { input: number; output: number; cacheRead: number; cacheWrite: number }
+> = {
+  // -- Anthropic: current generation (4.5+ — Opus dropped from 15/75 to 5/25 here) --
+  "claude-haiku-4-5":   { input: 1,    output: 5,    cacheRead: 0.10, cacheWrite: 1.25 },
+  "claude-sonnet-4-5":  { input: 3,    output: 15,   cacheRead: 0.30, cacheWrite: 3.75 },
+  "claude-sonnet-4-6":  { input: 3,    output: 15,   cacheRead: 0.30, cacheWrite: 3.75 },
+  "claude-opus-4-5":    { input: 5,    output: 25,   cacheRead: 0.50, cacheWrite: 6.25 },
+  "claude-opus-4-6":    { input: 5,    output: 25,   cacheRead: 0.50, cacheWrite: 6.25 },
+  "claude-opus-4-7":    { input: 5,    output: 25,   cacheRead: 0.50, cacheWrite: 6.25 },
 
-// Resolve a model string to its pricing tier. Exact match, with three
+  // -- Anthropic: pre-4.5 Opus (legacy, still served at original price tier) --
+  "claude-opus-4-1":    { input: 15,   output: 75,   cacheRead: 1.50, cacheWrite: 18.75 },
+  "claude-opus-4":      { input: 15,   output: 75,   cacheRead: 1.50, cacheWrite: 18.75 },
+
+  // -- Anthropic: Sonnet 4.0 (deprecated; same price as the 4.x family) --
+  "claude-sonnet-4":    { input: 3,    output: 15,   cacheRead: 0.30, cacheWrite: 3.75 },
+
+  // -- Anthropic: older Haiku tier (defensive entry for the rare runtime still on it) --
+  "claude-haiku-3-5":   { input: 0.80, output: 4,    cacheRead: 0.08, cacheWrite: 1.00 },
+
+  // -- OpenAI: dotted-minor Codex catalog SKUs. Each generation is priced
+  //    independently — no fallback to `gpt-5`. Entries track
+  //    `server/pkg/agent/models.go` (Codex provider list).
+  "gpt-5.5":            { input: 5,    output: 30,   cacheRead: 0.50,  cacheWrite: 5 },
+  "gpt-5.4-mini":       { input: 0.75, output: 4.50, cacheRead: 0.075, cacheWrite: 0.75 },
+  "gpt-5.4":            { input: 2.50, output: 15,   cacheRead: 0.25,  cacheWrite: 2.50 },
+  "gpt-5.3-codex":      { input: 1.75, output: 14,   cacheRead: 0.175, cacheWrite: 1.75 },
+
+  // -- OpenAI: GPT-5 family (Codex CLI's default is gpt-5-codex; -codex/-mini/-nano variants priced per OpenAI tiers) --
+  "gpt-5-codex":        { input: 1.25, output: 10,   cacheRead: 0.125, cacheWrite: 1.25 },
+  "gpt-5-mini":         { input: 0.25, output: 2,    cacheRead: 0.025, cacheWrite: 0.25 },
+  "gpt-5-nano":         { input: 0.05, output: 0.40, cacheRead: 0.005, cacheWrite: 0.05 },
+  "gpt-5":              { input: 1.25, output: 10,   cacheRead: 0.125, cacheWrite: 1.25 },
+
+  // -- OpenAI: o-series reasoning models --
+  "o3-mini":            { input: 1.10, output: 4.40, cacheRead: 0.55,  cacheWrite: 1.10 },
+  "o3":                 { input: 2,    output: 8,    cacheRead: 0.50,  cacheWrite: 2 },
+  "o4-mini":            { input: 1.10, output: 4.40, cacheRead: 0.275, cacheWrite: 1.10 },
+
+  // -- OpenAI: GPT-4o family (legacy, kept for runtimes still configured against it) --
+  "gpt-4o-mini":        { input: 0.15, output: 0.60, cacheRead: 0.075, cacheWrite: 0.15 },
+  "gpt-4o":             { input: 2.50, output: 10,   cacheRead: 1.25,  cacheWrite: 2.50 },
+
+  // -- Google Gemini (ai.google.dev/pricing) --
+  "gemini-2.5-pro":     { input: 1.25, output: 10,   cacheRead: 0.3125, cacheWrite: 1.25 },
+
+  // -- xAI Grok (x.ai/api) --
+  "grok-4":             { input: 1.25, output: 2.50, cacheRead: 0.3125, cacheWrite: 1.25 },
+
+  // -- DeepSeek (api-docs.deepseek.com/quick_start/pricing).
+  //    The official catalog lists exactly two current SKUs; `deepseek-chat`
+  //    and `deepseek-reasoner` are aliases that route to `deepseek-v4-flash`
+  //    (non-thinking and thinking mode respectively) per the same page.
+  //    `deepseek-v4-pro` is currently under a 75%-off promo that ends
+  //    2026-05-31 15:59 UTC; we price at the post-promo standard rate
+  //    ($1.74/$3.48) so the dashboard does not jump 4× on June 1 — accept
+  //    a brief over-estimate during the promo over a sudden cliff after it. --
+  "deepseek-v4-flash":  { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
+  "deepseek-v4-pro":    { input: 1.74, output: 3.48, cacheRead: 0.0145, cacheWrite: 1.74 },
+  "deepseek-chat":      { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
+  "deepseek-reasoner":  { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
+
+  // -- Moonshot Kimi (kimi.com/resources/kimi-k2-6-pricing).
+  //    Only K2.6 is on the official price sheet today; earlier K2 variants
+  //    are intentionally omitted until Moonshot publishes their rates. --
+  "kimi-k2.6":          { input: 0.95, output: 4.00, cacheRead: 0.16,   cacheWrite: 0.95 },
+
+  // -- Zhipu z.ai (docs.z.ai/guides/overview/pricing). Free flash tiers
+  //    are priced at 0 so they resolve cleanly instead of falling through
+  //    to the "unmapped" diagnostic. --
+  "glm-5.1":            { input: 1.4,  output: 4.4,  cacheRead: 0.26,   cacheWrite: 1.4 },
+  "glm-5":              { input: 1.0,  output: 3.2,  cacheRead: 0.2,    cacheWrite: 1.0 },
+  "glm-5-turbo":        { input: 1.2,  output: 4.0,  cacheRead: 0.24,   cacheWrite: 1.2 },
+  "glm-4.7":            { input: 0.6,  output: 2.2,  cacheRead: 0.11,   cacheWrite: 0.6 },
+  "glm-4.7-flashx":     { input: 0.07, output: 0.4,  cacheRead: 0.01,   cacheWrite: 0.07 },
+  "glm-4.7-flash":      { input: 0,    output: 0,    cacheRead: 0,      cacheWrite: 0 },
+  "glm-4.6":            { input: 0.6,  output: 2.2,  cacheRead: 0.11,   cacheWrite: 0.6 },
+  "glm-4.5":            { input: 0.6,  output: 2.2,  cacheRead: 0.11,   cacheWrite: 0.6 },
+  "glm-4.5-x":          { input: 2.2,  output: 8.9,  cacheRead: 0.45,   cacheWrite: 2.2 },
+  "glm-4.5-air":        { input: 0.2,  output: 1.1,  cacheRead: 0.03,   cacheWrite: 0.2 },
+  "glm-4.5-airx":       { input: 1.1,  output: 4.5,  cacheRead: 0.22,   cacheWrite: 1.1 },
+  "glm-4.5-flash":      { input: 0,    output: 0,    cacheRead: 0,      cacheWrite: 0 },
+};
+
+// Resolve a model string to its pricing tier. Exact match, with four
 // tolerances applied in order:
 //
 //  1. Provider-prefixed IDs (`anthropic/claude-opus-4.7` from openclaw /
@@ -137,6 +249,12 @@ export function formatTokens(n: number): string {
 //  3. Trailing dated snapshots (`claude-sonnet-4-5-20250929`,
 //     `gpt-5-2025-08-07`) — the family is what we price, the date is
 //     volatile, so we strip a trailing date / "latest" tag.
+//  4. Trailing context-window tag (`claude-opus-4-7[1m]`) — Anthropic's
+//     1M-context beta is the same SKU at standard rates for prompts
+//     ≤200K input tokens, with a 2× surcharge above that. Aggregated
+//     usage rows don't carry per-request prompt sizes, so we price the
+//     bracketed variant at the standard tier. Slight under-estimate
+//     beats the previous behaviour of dropping the row entirely.
 //
 // Anything still unmapped falls back to the user-supplied custom pricing
 // store. No startsWith fallback: variants like `gpt-5.5-mini` must have
@@ -177,17 +295,24 @@ function canonicalCandidates(model: string): string[] {
   // semantic, so we leave `gpt-5.4` etc. alone.
   const canonAnthropic = (s: string) =>
     s.startsWith("claude-") ? s.replace(/\./g, "-") : s;
+  // Trailing context-window tag (`claude-opus-4-7[1m]`). Same family,
+  // same price tier — see resolver comment above for the 1M-context
+  // pricing trade-off.
+  const stripContextTag = (s: string) => s.replace(/\[[^\]]+\]$/, "");
 
   const raw = model;
   const noProvider = stripProvider(raw);
   const dashed = canonAnthropic(noProvider);
+  const noTag = stripContextTag(dashed);
 
   push(raw);
   push(noProvider);
   push(dashed);
+  push(noTag);
   push(stripDate(raw));
   push(stripDate(noProvider));
   push(stripDate(dashed));
+  push(stripDate(noTag));
   return out;
 }
 
