@@ -104,6 +104,28 @@
   animation: chat-impulse 1.6s ease-in-out infinite;
 }
 
+/* Status icon: brand-colored ring pulse around the issue state icon when
+ * an agent is actively working on the issue. 15%-50% opacity over 1.6s. */
+@keyframes status-agent-ring {
+  0%, 100% {
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--brand) 15%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--brand) 50%, transparent);
+  }
+}
+
+.animate-status-agent-ring {
+  animation: status-agent-ring 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-status-agent-ring {
+    animation: none;
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--brand) 30%, transparent);
+  }
+}
+
 /* ChatGPT-style "thinking" shimmer for inline text — a soft light sweep
  * runs across the glyphs, signalling "the agent is doing something" without
  * a separate spinner. Pure CSS: linear-gradient clipped to the text shape,

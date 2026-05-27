@@ -7,3 +7,4 @@ export * from "./use-workspace-presence-prefetch";
 export * from "./constants";
 export * from "./visibility-label";
 export * from "./use-workspace-agent-availability";
+export * from "./use-is-agent-running-for-issue";
