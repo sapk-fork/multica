@@ -9,6 +9,7 @@ import {
   useSearchStore,
 } from "@multica/core/command-bar";
 import { createShortcutChord } from "@multica/core/shortcuts";
+
 import {
   Dialog,
   DialogContent,
