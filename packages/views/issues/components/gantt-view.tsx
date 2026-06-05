@@ -303,6 +303,7 @@ const STATUS_BAR_BG: Record<IssueStatusCategory, string> = {
   done: "bg-info",
   blocked: "bg-destructive",
   cancelled: "bg-muted-foreground/40",
+  archived: "bg-muted-foreground/40",
 };
 
 // ---------------------------------------------------------------------------
