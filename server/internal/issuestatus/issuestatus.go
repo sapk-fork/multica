@@ -47,6 +47,13 @@ const (
 	Cancelled  = "cancelled"
 )
 
+// Archived is the fork's M-11 terminal status (migration 119). It is an
+// accepted issue.status value but deliberately not one of the canonical
+// categories above: it has no issue_status catalog row, so ExpandCategories
+// cannot reach it. Terminal-status consumers must append it explicitly —
+// see ExpandTerminalCategories.
+const Archived = "archived"
+
 // canonicalOrder is the historical STATUS_ORDER from the frontend's static
 // status config. Category ranking copies it verbatim so a workspace with no
 // custom statuses sees a board and picker identical to before this feature.
@@ -566,6 +573,26 @@ func ExpandCategories(ctx context.Context, q Querier, workspaceID pgtype.UUID, c
 		}
 	}
 	return out, nil
+}
+
+// ExpandTerminalCategories returns the workspace's terminal status keys: the
+// done and cancelled categories expanded through the catalog, plus the fork's
+// Archived key, which shares their semantics but is not a category.
+//
+// Every consumer of a `terminal_status_keys` query parameter must use this
+// rather than calling ExpandCategories directly, or archived issues silently
+// count as active.
+func ExpandTerminalCategories(ctx context.Context, q Querier, workspaceID pgtype.UUID) ([]string, error) {
+	keys, err := ExpandCategories(ctx, q, workspaceID, []string{Done, Cancelled})
+	if err != nil {
+		return nil, err
+	}
+	for _, k := range keys {
+		if k == Archived {
+			return keys, nil
+		}
+	}
+	return append(keys, Archived), nil
 }
 
 // CustomKeyCategories returns the workspace's CUSTOM status keys mapped to the
