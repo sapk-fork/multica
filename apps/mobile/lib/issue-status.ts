@@ -66,6 +66,7 @@ export const STATUS_LABEL: Record<IssueStatusCategory, string> = {
   done: "Done",
   blocked: "Blocked",
   cancelled: "Cancelled",
+  archived: "Archived",
 };
 
 export const PRIORITY_LABEL: Record<IssuePriority, string> = {
