@@ -12,7 +12,7 @@ import { useAuthStore } from "@multica/core/auth";
 import { api } from "@multica/core/api";
 import { resolvePublicFileUrl } from "@multica/core/workspace/avatar-url";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
-import { getGravatarUrl } from "@multica/core/gravatar";
+import { resolveAvatarUrl } from "@multica/core/gravatar";
 import { useGravatarSettings } from "@multica/core/gravatar/use-gravatar-settings";
 import { useT } from "../../i18n";
 
@@ -49,6 +49,14 @@ export function AccountTab() {
     .join("")
     .toUpperCase()
     .slice(0, 2);
+
+  const displayAvatarUrl = resolveAvatarUrl({
+    avatarUrl: user?.avatar_url,
+    email: user?.email,
+    gravatarEnabled,
+    size: 64,
+    resolvePublicFileUrl,
+  });
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -98,16 +106,10 @@ export function AccountTab() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
               >
-                {user?.avatar_url ? (
+                {displayAvatarUrl ? (
                   <img
-                    src={resolvePublicFileUrl(user.avatar_url) ?? undefined}
-                    alt={user.name}
-                    className="h-full w-full object-cover"
-                  />
-                ) : gravatarEnabled && user?.email && getGravatarUrl(user.email, 64) ? (
-                  <img
-                    src={getGravatarUrl(user.email, 64)!}
-                    alt={user.name}
+                    src={displayAvatarUrl}
+                    alt={user?.name ?? ""}
                     className="h-full w-full object-cover"
                   />
                 ) : (

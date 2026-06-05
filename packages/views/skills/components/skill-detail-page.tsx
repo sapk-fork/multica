@@ -39,7 +39,7 @@ import {
 import { resolvePublicFileUrl } from "@multica/core/workspace/avatar-url";
 import { runtimeListOptions } from "@multica/core/runtimes";
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
-import { getGravatarUrl } from "@multica/core/gravatar";
+import { resolveAvatarUrl } from "@multica/core/gravatar";
 import { deriveGravatarSettings } from "@multica/core/gravatar/settings";
 import { Button, buttonVariants } from "@multica/ui/components/ui/button";
 import {
@@ -729,7 +729,12 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
                     <ActorAvatar
                       name={creator.name}
                       initials={creator.name.slice(0, 2).toUpperCase()}
-                      avatarUrl={resolvePublicFileUrl(creator.avatar_url) ?? (gravatarEnabled ? getGravatarUrl(creator.email) : null)}
+                      avatarUrl={resolveAvatarUrl({
+                        avatarUrl: creator.avatar_url,
+                        email: creator.email,
+                        gravatarEnabled,
+                        resolvePublicFileUrl,
+                      })}
                       size={14}
                     />
                     {t(($) => $.detail.subline.by_creator, { name: creator.name })}

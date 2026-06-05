@@ -17,7 +17,7 @@ import type {
 } from "@multica/core/types";
 import { useTimeAgo } from "../../i18n";
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
-import { getGravatarUrl } from "@multica/core/gravatar";
+import { resolveAvatarUrl } from "@multica/core/gravatar";
 import { deriveGravatarSettings } from "@multica/core/gravatar/settings";
 import { useCurrentWorkspace } from "@multica/core/paths";
 import {
@@ -228,7 +228,12 @@ function SourceCell({
           <ActorAvatar
             name={creator.name}
             initials={creator.name.slice(0, 2).toUpperCase()}
-            avatarUrl={resolvePublicFileUrl(creator.avatar_url) ?? (gravatarEnabled ? getGravatarUrl(creator.email) : null)}
+            avatarUrl={resolveAvatarUrl({
+              avatarUrl: creator.avatar_url,
+              email: creator.email,
+              gravatarEnabled,
+              resolvePublicFileUrl,
+            })}
             size={14}
           />
           <span className="truncate">{t(($) => $.table.by_creator, { name: creator.name })}</span>
