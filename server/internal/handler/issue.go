@@ -2590,10 +2590,10 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		h.dispatchIssueRun(r.Context(), issue, trigger, actorType, actorID, req.HandoffNote)
 	}
 
-	// Cancel active tasks when the issue is cancelled by a user.
-	// This is distinct from agent-managed status transitions — cancellation
-	// is a user-initiated terminal action that should stop execution.
-	if statusChanged && issue.Status == "cancelled" {
+	// Cancel active tasks when the issue is cancelled or archived by a user.
+	// This is distinct from agent-managed status transitions — these are
+	// user-initiated terminal actions that should stop execution.
+	if statusChanged && (issue.Status == "cancelled" || issue.Status == "archived") {
 		h.TaskService.CancelTasksForIssue(r.Context(), issue.ID)
 	}
 
@@ -3087,8 +3087,8 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 			h.dispatchIssueRun(r.Context(), issue, trigger, actorType, actorID, req.Updates.HandoffNote)
 		}
 
-		// Cancel active tasks when the issue is cancelled by a user.
-		if statusChanged && issue.Status == "cancelled" {
+		// Cancel active tasks when the issue is cancelled or archived by a user.
+		if statusChanged && (issue.Status == "cancelled" || issue.Status == "archived") {
 			h.TaskService.CancelTasksForIssue(r.Context(), issue.ID)
 		}
 
