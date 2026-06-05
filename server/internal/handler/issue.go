@@ -2579,7 +2579,7 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	// issue assigned to A) must still fire — that is the documented serial
 	// chain.
 	if statusChanged && !assigneeChanged &&
-		prevIssue.Status == "backlog" && issue.Status != "done" && issue.Status != "cancelled" &&
+		prevIssue.Status == "backlog" && issue.Status != "done" && issue.Status != "cancelled" && issue.Status != "archived" &&
 		!h.isAgentRunningOnIssue(r, actorType, issue) {
 		if h.isAgentAssigneeReady(r.Context(), issue) {
 			h.TaskService.EnqueueTaskForIssue(r.Context(), issue)
@@ -2589,10 +2589,10 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Cancel active tasks when the issue is cancelled by a user.
-	// This is distinct from agent-managed status transitions — cancellation
-	// is a user-initiated terminal action that should stop execution.
-	if statusChanged && issue.Status == "cancelled" {
+	// Cancel active tasks when the issue is cancelled or archived by a user.
+	// This is distinct from agent-managed status transitions — these are
+	// user-initiated terminal actions that should stop execution.
+	if statusChanged && (issue.Status == "cancelled" || issue.Status == "archived") {
 		h.TaskService.CancelTasksForIssue(r.Context(), issue.ID)
 	}
 
@@ -3081,7 +3081,7 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 		// sub-task chains work, and the same task-issue self-loop guard
 		// prevents an agent from re-triggering itself on the same issue.
 		if statusChanged && !assigneeChanged &&
-			prevIssue.Status == "backlog" && issue.Status != "done" && issue.Status != "cancelled" &&
+			prevIssue.Status == "backlog" && issue.Status != "done" && issue.Status != "cancelled" && issue.Status != "archived" &&
 			!h.isAgentRunningOnIssue(r, actorType, issue) {
 			if h.isAgentAssigneeReady(r.Context(), issue) {
 				h.TaskService.EnqueueTaskForIssue(r.Context(), issue)
@@ -3091,8 +3091,8 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Cancel active tasks when the issue is cancelled by a user.
-		if statusChanged && issue.Status == "cancelled" {
+		// Cancel active tasks when the issue is cancelled or archived by a user.
+		if statusChanged && (issue.Status == "cancelled" || issue.Status == "archived") {
 			h.TaskService.CancelTasksForIssue(r.Context(), issue.ID)
 		}
 
