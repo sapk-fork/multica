@@ -38,6 +38,7 @@ import {
 import { WorkspaceAvatar } from "../workspace/workspace-avatar";
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
 import { getGravatarUrl } from "@multica/core/gravatar";
+import { deriveGravatarSettings } from "@multica/core/gravatar/settings";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@multica/ui/components/ui/tooltip";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@multica/ui/components/ui/collapsible";
 import { StatusIcon } from "../issues/components/status-icon";
@@ -349,6 +350,7 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
   const userId = useAuthStore((s) => s.user?.id);
   const logout = useLogout();
   const workspace = useCurrentWorkspace();
+  const gravatarEnabled = deriveGravatarSettings(workspace).enabled;
   const p = useWorkspacePaths();
   const { data: workspaces = EMPTY_WORKSPACES } = useQuery(workspaceListOptions());
   const { data: myInvitations = EMPTY_INVITATIONS } = useQuery(myInvitationListOptions());
@@ -502,7 +504,7 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
                     <ActorAvatar
                       name={user?.name ?? ""}
                       initials={(user?.name ?? "U").charAt(0).toUpperCase()}
-                      avatarUrl={resolvePublicFileUrl(user?.avatar_url) ?? (user?.email ? getGravatarUrl(user.email) : null)}
+                      avatarUrl={resolvePublicFileUrl(user?.avatar_url) ?? (gravatarEnabled && user?.email ? getGravatarUrl(user.email) : null)}
                       size={32}
                     />
                     <div className="min-w-0 flex-1">

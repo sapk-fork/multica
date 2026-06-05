@@ -27,6 +27,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@multica/core/api";
 import { useTimeAgo } from "../../i18n";
 import { useWorkspaceId } from "@multica/core/hooks";
+import { useCurrentWorkspace } from "@multica/core/paths";
 import { useWorkspacePaths } from "@multica/core/paths";
 import {
   agentListOptions,
@@ -39,6 +40,7 @@ import { resolvePublicFileUrl } from "@multica/core/workspace/avatar-url";
 import { runtimeListOptions } from "@multica/core/runtimes";
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
 import { getGravatarUrl } from "@multica/core/gravatar";
+import { deriveGravatarSettings } from "@multica/core/gravatar/settings";
 import { Button, buttonVariants } from "@multica/ui/components/ui/button";
 import {
   Dialog,
@@ -247,6 +249,8 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
   const { t } = useT("skills");
   const timeAgo = useTimeAgo();
   const wsId = useWorkspaceId();
+  const workspace = useCurrentWorkspace();
+  const gravatarEnabled = deriveGravatarSettings(workspace).enabled;
   const qc = useQueryClient();
   const paths = useWorkspacePaths();
   const navigation = useNavigation();
@@ -725,7 +729,7 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
                     <ActorAvatar
                       name={creator.name}
                       initials={creator.name.slice(0, 2).toUpperCase()}
-                      avatarUrl={resolvePublicFileUrl(creator.avatar_url) ?? getGravatarUrl(creator.email)}
+                      avatarUrl={resolvePublicFileUrl(creator.avatar_url) ?? (gravatarEnabled ? getGravatarUrl(creator.email) : null)}
                       size={14}
                     />
                     {t(($) => $.detail.subline.by_creator, { name: creator.name })}
