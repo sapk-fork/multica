@@ -61,10 +61,7 @@ func LockAndFindActiveDuplicate(
 	if allowDuplicate {
 		return db.Issue{}, false, nil
 	}
-	terminalStatusKeys, err := issuestatus.ExpandCategories(ctx, q, workspaceID, []string{
-		issuestatus.Done,
-		issuestatus.Cancelled,
-	})
+	terminalStatusKeys, err := issuestatus.ExpandTerminalCategories(ctx, q, workspaceID)
 	if err != nil {
 		return db.Issue{}, false, err
 	}
@@ -101,10 +98,7 @@ func LockAndFindRecentAutopilotDuplicate(
 	if err := q.LockIssueDuplicateKey(ctx, recentAutopilotLockKey(workspaceID, autopilotID, projectID, normalizedTitle)); err != nil {
 		return db.Issue{}, false, err
 	}
-	terminalStatusKeys, err := issuestatus.ExpandCategories(ctx, q, workspaceID, []string{
-		issuestatus.Done,
-		issuestatus.Cancelled,
-	})
+	terminalStatusKeys, err := issuestatus.ExpandTerminalCategories(ctx, q, workspaceID)
 	if err != nil {
 		return db.Issue{}, false, err
 	}
