@@ -139,6 +139,20 @@ function CancelledIcon() {
   );
 }
 
+function ArchivedIcon() {
+  return (
+    <ProgressCircle progress={0}>
+      <path
+        d="M5 7 L9 7 M7 5 L7 9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+      />
+    </ProgressCircle>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Renderer map
 // ---------------------------------------------------------------------------
@@ -151,6 +165,7 @@ const STATUS_RENDERERS: Record<IssueStatus, () => React.ReactNode> = {
   done: DoneIcon,
   blocked: BlockedIcon,
   cancelled: CancelledIcon,
+  archived: ArchivedIcon,
 };
 
 // ---------------------------------------------------------------------------
