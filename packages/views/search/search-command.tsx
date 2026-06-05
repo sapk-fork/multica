@@ -39,6 +39,7 @@ import {
 } from "@multica/core/issues/stores";
 import { issueDetailOptions } from "@multica/core/issues/queries";
 import { useWorkspaceId } from "@multica/core";
+import { useCurrentWorkspace } from "@multica/core/paths";
 import { useWorkspacePaths } from "@multica/core/paths";
 import type { WorkspacePaths } from "@multica/core/paths";
 import { useModalStore } from "@multica/core/modals";
@@ -51,6 +52,7 @@ import { PROJECT_STATUS_CONFIG } from "@multica/core/projects/config";
 import type { ProjectStatus } from "@multica/core/types";
 import { ActorAvatar as ActorAvatarBase } from "@multica/ui/components/common/actor-avatar";
 import { getGravatarUrl } from "@multica/core/gravatar";
+import { deriveGravatarSettings } from "@multica/core/gravatar/settings";
 import {
   Dialog,
   DialogContent,
@@ -136,6 +138,8 @@ export function SearchCommand() {
   const open = useSearchStore((s) => s.open);
   const setOpen = useSearchStore((s) => s.setOpen);
   const wsId = useWorkspaceId();
+  const workspace = useCurrentWorkspace();
+  const gravatarEnabled = deriveGravatarSettings(workspace).enabled;
   const recentItems = useRecentIssuesStore(selectRecentIssues(wsId));
   const p: WorkspacePaths = useWorkspacePaths();
   const { theme, setTheme } = useTheme();
@@ -532,7 +536,7 @@ export function SearchCommand() {
                     <ActorAvatarBase
                       name={member.name}
                       initials={memberInitials(member.name)}
-                      avatarUrl={resolvePublicFileUrl(member.avatar_url) ?? getGravatarUrl(member.email)}
+                      avatarUrl={resolvePublicFileUrl(member.avatar_url) ?? (gravatarEnabled ? getGravatarUrl(member.email) : null)}
                       size={22}
                     />
                     <div className="min-w-0 flex-1">

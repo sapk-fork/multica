@@ -6,9 +6,13 @@ import { useWorkspaceId } from "../hooks";
 import { memberListOptions, agentListOptions, squadListOptions } from "./queries";
 import { resolvePublicFileUrl } from "./avatar-url";
 import { getGravatarUrl } from "../gravatar";
+import { deriveGravatarSettings } from "../gravatar/settings";
+import { useCurrentWorkspace } from "../paths";
 
 export function useActorName() {
   const wsId = useWorkspaceId();
+  const workspace = useCurrentWorkspace();
+  const gravatarEnabled = deriveGravatarSettings(workspace).enabled;
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
   const { data: squads = [] } = useQuery(squadListOptions(wsId));
@@ -49,12 +53,12 @@ export function useActorName() {
   const getActorAvatarUrl = useCallback((type: string, id: string): string | null => {
     if (type === "member") {
       const m = members.find((m) => m.user_id === id);
-      return resolvePublicFileUrl(m?.avatar_url) ?? (m?.email ? getGravatarUrl(m.email) : null);
+      return resolvePublicFileUrl(m?.avatar_url) ?? (gravatarEnabled && m?.email ? getGravatarUrl(m.email) : null);
     }
     if (type === "agent") return resolvePublicFileUrl(agents.find((a) => a.id === id)?.avatar_url);
     if (type === "squad") return resolvePublicFileUrl(squads.find((s) => s.id === id)?.avatar_url);
     return null;
-  }, [agents, members, squads]);
+  }, [agents, members, squads, gravatarEnabled]);
 
   return useMemo(
     () => ({

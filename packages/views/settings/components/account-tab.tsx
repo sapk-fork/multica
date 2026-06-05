@@ -13,6 +13,7 @@ import { api } from "@multica/core/api";
 import { resolvePublicFileUrl } from "@multica/core/workspace/avatar-url";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
 import { getGravatarUrl } from "@multica/core/gravatar";
+import { useGravatarSettings } from "@multica/core/gravatar/use-gravatar-settings";
 import { useT } from "../../i18n";
 
 // Mirror server/internal/handler/auth.go:MaxProfileDescriptionLen. Counted in
@@ -25,6 +26,7 @@ export function AccountTab() {
   const { t } = useT("settings");
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
+  const { enabled: gravatarEnabled } = useGravatarSettings();
 
   const [profileName, setProfileName] = useState(user?.name ?? "");
   const [profileDescription, setProfileDescription] = useState(
@@ -102,7 +104,7 @@ export function AccountTab() {
                     alt={user.name}
                     className="h-full w-full object-cover"
                   />
-                ) : user?.email ? (
+                ) : gravatarEnabled && user?.email ? (
                   <img
                     src={getGravatarUrl(user.email, 64)}
                     alt={user.name}

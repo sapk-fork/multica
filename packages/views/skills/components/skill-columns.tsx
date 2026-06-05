@@ -18,6 +18,8 @@ import type {
 import { useTimeAgo } from "../../i18n";
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
 import { getGravatarUrl } from "@multica/core/gravatar";
+import { deriveGravatarSettings } from "@multica/core/gravatar/settings";
+import { useCurrentWorkspace } from "@multica/core/paths";
 import {
   Tooltip,
   TooltipContent,
@@ -191,6 +193,8 @@ function SourceCell({
   runtime: AgentRuntime | null;
 }) {
   const { t } = useT("skills");
+  const workspace = useCurrentWorkspace();
+  const gravatarEnabled = deriveGravatarSettings(workspace).enabled;
   const origin = readOrigin(skill);
 
   let icon = <Pencil className="h-3 w-3 shrink-0" />;
@@ -224,7 +228,7 @@ function SourceCell({
           <ActorAvatar
             name={creator.name}
             initials={creator.name.slice(0, 2).toUpperCase()}
-            avatarUrl={resolvePublicFileUrl(creator.avatar_url) ?? getGravatarUrl(creator.email)}
+            avatarUrl={resolvePublicFileUrl(creator.avatar_url) ?? (gravatarEnabled ? getGravatarUrl(creator.email) : null)}
             size={14}
           />
           <span className="truncate">{t(($) => $.table.by_creator, { name: creator.name })}</span>

@@ -10,6 +10,7 @@ import { resolvePublicFileUrl } from "@multica/core/workspace/avatar-url";
 import { ActorAvatar as ActorAvatarBase } from "@multica/ui/components/common/actor-avatar";
 import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import { getGravatarUrl } from "@multica/core/gravatar";
+import { deriveGravatarSettings } from "@multica/core/gravatar/settings";
 import { PageHeader } from "../layout/page-header";
 import { WorkspaceAvatar } from "../workspace/workspace-avatar";
 import { ActorIssuesPanel } from "../common/actor-issues-panel";
@@ -19,6 +20,7 @@ export function MemberDetailPage({ userId }: { userId: string }) {
   const { t } = useT("members");
   const wsId = useWorkspaceId();
   const workspace = useCurrentWorkspace();
+  const gravatarEnabled = deriveGravatarSettings(workspace).enabled;
   const { data: members = [], isLoading } = useQuery(memberListOptions(wsId));
   const member = members.find((m) => m.user_id === userId) ?? null;
 
@@ -58,7 +60,7 @@ export function MemberDetailPage({ userId }: { userId: string }) {
         <ActorAvatarBase
           name={member.name}
           initials={initials}
-          avatarUrl={resolvePublicFileUrl(member.avatar_url) ?? getGravatarUrl(member.email)}
+          avatarUrl={resolvePublicFileUrl(member.avatar_url) ?? (gravatarEnabled ? getGravatarUrl(member.email) : null)}
           size={44}
           className="rounded-full"
         />
