@@ -12,6 +12,7 @@ import { useAuthStore } from "@multica/core/auth";
 import { api } from "@multica/core/api";
 import { resolvePublicFileUrl } from "@multica/core/workspace/avatar-url";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
+import { getGravatarUrl } from "@multica/core/gravatar";
 import { useT } from "../../i18n";
 
 // Mirror server/internal/handler/auth.go:MaxProfileDescriptionLen. Counted in
@@ -98,6 +99,12 @@ export function AccountTab() {
                 {user?.avatar_url ? (
                   <img
                     src={resolvePublicFileUrl(user.avatar_url) ?? undefined}
+                    alt={user.name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : user?.email ? (
+                  <img
+                    src={getGravatarUrl(user.email, 64)}
                     alt={user.name}
                     className="h-full w-full object-cover"
                   />
