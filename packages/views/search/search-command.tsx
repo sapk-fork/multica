@@ -97,6 +97,7 @@ function PaletteBody({
     return intent;
   }, []);
 
+
   const push = useCallback((entry: PaletteStackEntry) => {
     setStack((prev) => [...prev, entry]);
     setPageQuery("");
