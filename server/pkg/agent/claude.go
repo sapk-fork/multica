@@ -160,7 +160,7 @@ func (b *claudeBackend) Execute(ctx context.Context, prompt string, opts ExecOpt
 
 			switch msg.Type {
 			case "assistant":
-				b.handleAssistant(msg, msgCh, &output, usage)
+				b.handleAssistant(msg, msgCh, &output, usage, opts.Model)
 			case "user":
 				b.handleUser(msg, msgCh)
 			case "system":
@@ -255,20 +255,35 @@ func (b *claudeBackend) Execute(ctx context.Context, prompt string, opts ExecOpt
 	return &Session{Messages: msgCh, Result: resCh}, nil
 }
 
-func (b *claudeBackend) handleAssistant(msg claudeSDKMessage, ch chan<- Message, output *strings.Builder, usage map[string]TokenUsage) {
+func (b *claudeBackend) handleAssistant(msg claudeSDKMessage, ch chan<- Message, output *strings.Builder, usage map[string]TokenUsage, fallbackModel string) {
 	var content claudeMessageContent
 	if err := json.Unmarshal(msg.Message, &content); err != nil {
 		return
 	}
 
-	// Accumulate token usage per model.
-	if content.Usage != nil && content.Model != "" {
-		u := usage[content.Model]
+	// Accumulate token usage per model. Use content.Model when present;
+	// fall back to the configured model (or "unknown") so usage is never
+	// silently dropped when the CLI omits the model field from assistant
+	// messages.
+	if content.Usage != nil && claudeUsageHasTokens(
+		content.Usage.InputTokens,
+		content.Usage.OutputTokens,
+		content.Usage.CacheReadInputTokens,
+		content.Usage.CacheCreationInputTokens,
+	) {
+		model := content.Model
+		if model == "" {
+			model = fallbackModel
+		}
+		if model == "" {
+			model = "unknown"
+		}
+		u := usage[model]
 		u.InputTokens += content.Usage.InputTokens
 		u.OutputTokens += content.Usage.OutputTokens
 		u.CacheReadTokens += content.Usage.CacheReadInputTokens
 		u.CacheWriteTokens += content.Usage.CacheCreationInputTokens
-		usage[content.Model] = u
+		usage[model] = u
 	}
 
 	for _, block := range content.Content {
