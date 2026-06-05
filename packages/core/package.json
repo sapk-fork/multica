@@ -148,6 +148,7 @@
     "./provider": "./provider.tsx",
     "./logger": "./logger.ts",
     "./utils": "./utils.ts",
+    "./gravatar": "./gravatar.ts",
     "./constants/*": "./constants/*.ts",
     "./feature-flags": "./feature-flags/index.ts",
     "./platform": "./platform/index.ts",

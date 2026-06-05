@@ -55,6 +55,7 @@ import type { ProjectStatus } from "@multica/core/types";
 import { ActorAvatar } from "../common/actor-avatar";
 import { ShortcutKeycaps } from "../common/shortcut-keycaps";
 import { ActorAvatar as ActorAvatarBase } from "@multica/ui/components/common/actor-avatar";
+import { getGravatarUrl } from "@multica/core/gravatar";
 import {
   Dialog,
   DialogContent,
@@ -823,7 +824,7 @@ export function SearchCommand() {
                     <ActorAvatarBase
                       name={member.name}
                       initials={memberInitials(member.name)}
-                      avatarUrl={resolvePublicFileUrl(member.avatar_url)}
+                      avatarUrl={resolvePublicFileUrl(member.avatar_url) ?? getGravatarUrl(member.email)}
                       size="md"
                     />
                     <div className="min-w-0 flex-1">
