@@ -33,6 +33,7 @@ import { api } from "@multica/core/api";
 import { useAuthStore } from "@multica/core/auth";
 import { useTimeAgo } from "../../i18n";
 import { useWorkspaceId } from "@multica/core/hooks";
+import { useCurrentWorkspace } from "@multica/core/paths";
 import { useWorkspacePaths } from "@multica/core/paths";
 import {
   agentListOptions,
@@ -763,6 +764,8 @@ function FilesTab({
 export function SkillDetailPage({ skillId }: { skillId: string }) {
   const { t } = useT("skills");
   const wsId = useWorkspaceId();
+  const workspace = useCurrentWorkspace();
+  const gravatarEnabled = deriveGravatarSettings(workspace).enabled;
   const qc = useQueryClient();
   const paths = useWorkspacePaths();
   const navigation = useNavigation();
