@@ -11,8 +11,7 @@ import { useCurrentWorkspace } from "../paths";
 
 export function useActorName() {
   const wsId = useWorkspaceId();
-  const workspace = useCurrentWorkspace();
-  const gravatarEnabled = deriveGravatarSettings(workspace).enabled;
+  const gravatarEnabled = deriveGravatarSettings(useCurrentWorkspace()).enabled;
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
   const { data: squads = [] } = useQuery(squadListOptions(wsId));
