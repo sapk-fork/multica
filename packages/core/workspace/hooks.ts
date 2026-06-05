@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useWorkspaceId } from "../hooks";
 import { memberListOptions, agentListOptions, squadListOptions } from "./queries";
 import { resolvePublicFileUrl } from "./avatar-url";
+import { getGravatarUrl } from "../gravatar";
 
 export function useActorName() {
   const wsId = useWorkspaceId();
@@ -46,7 +47,10 @@ export function useActorName() {
   }, [getActorName]);
 
   const getActorAvatarUrl = useCallback((type: string, id: string): string | null => {
-    if (type === "member") return resolvePublicFileUrl(members.find((m) => m.user_id === id)?.avatar_url);
+    if (type === "member") {
+      const m = members.find((m) => m.user_id === id);
+      return resolvePublicFileUrl(m?.avatar_url) ?? (m?.email ? getGravatarUrl(m.email) : null);
+    }
     if (type === "agent") return resolvePublicFileUrl(agents.find((a) => a.id === id)?.avatar_url);
     if (type === "squad") return resolvePublicFileUrl(squads.find((s) => s.id === id)?.avatar_url);
     return null;
