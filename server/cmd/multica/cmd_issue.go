@@ -221,7 +221,7 @@ var issueStatusCmd = &cobra.Command{
 	Use:   "status <id> <status>",
 	Short: "Change issue status",
 	Long: "Change an issue's status. Valid statuses: " +
-		"backlog, todo, in_progress, in_review, done, blocked, cancelled.",
+		"backlog, todo, in_progress, in_review, done, blocked, cancelled, archived.",
 	Args: exactArgs(2),
 	RunE: runIssueStatus,
 }
@@ -377,7 +377,7 @@ var issueSearchCmd = &cobra.Command{
 // so this is the list shown in help text and error messages, not the set of
 // accepted values — see validateIssueStatus.
 var validIssueStatuses = []string{
-	"backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled",
+	"backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled", "archived",
 }
 
 var validIssuePriorities = []string{
