@@ -104,9 +104,9 @@ export function AccountTab() {
                     alt={user.name}
                     className="h-full w-full object-cover"
                   />
-                ) : gravatarEnabled && user?.email ? (
+                ) : gravatarEnabled && user?.email && getGravatarUrl(user.email, 64) ? (
                   <img
-                    src={getGravatarUrl(user.email, 64)}
+                    src={getGravatarUrl(user.email, 64)!}
                     alt={user.name}
                     className="h-full w-full object-cover"
                   />
