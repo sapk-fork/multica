@@ -29,6 +29,7 @@ import { Layers,
 } from "lucide-react";
 import { WorkspaceAvatar } from "../workspace/workspace-avatar";
 import { ActorAvatar } from "@multica/ui/components/common/actor-avatar";
+import { getGravatarUrl } from "@multica/core/gravatar";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@multica/ui/components/ui/tooltip";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@multica/ui/components/ui/collapsible";
 import { CappedNumberFlow } from "@multica/ui/components/ui/number-flow";
@@ -647,7 +648,7 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
                     <ActorAvatar
                       name={user?.name ?? ""}
                       initials={(user?.name ?? "U").charAt(0).toUpperCase()}
-                      avatarUrl={resolvePublicFileUrl(user?.avatar_url)}
+                      avatarUrl={resolvePublicFileUrl(user?.avatar_url) ?? (user?.email ? getGravatarUrl(user.email) : null)}
                       size="lg"
                     />
                     <div className="min-w-0 flex-1">
