@@ -32,6 +32,7 @@ import {
 import { runtimeDisplayLabel, runtimeListOptions } from "@multica/core/runtimes";
 import { resolvePublicFileUrl } from "@multica/core/workspace/avatar-url";
 import { getGravatarUrl } from "@multica/core/gravatar";
+import { useGravatarSettings } from "@multica/core/gravatar/use-gravatar-settings";
 import { Button } from "@multica/ui/components/ui/button";
 import { Checkbox } from "@multica/ui/components/ui/checkbox";
 import {
@@ -379,6 +380,7 @@ function SourceCell({
 }
 
 function CreatorCell({ creator }: { creator: MemberWithUser | null }) {
+  const { enabled: gravatarEnabled } = useGravatarSettings();
   return (
     <ListGridCell className="hidden gap-1.5 @2xl:flex">
       {creator && (
@@ -386,7 +388,7 @@ function CreatorCell({ creator }: { creator: MemberWithUser | null }) {
           <ActorAvatar
             name={creator.name}
             initials={creator.name.slice(0, 2).toUpperCase()}
-            avatarUrl={resolvePublicFileUrl(creator.avatar_url) ?? getGravatarUrl(creator.email)}
+            avatarUrl={resolvePublicFileUrl(creator.avatar_url) ?? (gravatarEnabled ? getGravatarUrl(creator.email) : null)}
             size="md"
           />
           <span className="min-w-0 truncate text-caption text-muted-foreground">
