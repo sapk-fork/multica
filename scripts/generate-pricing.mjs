@@ -171,8 +171,11 @@ async function loadModelsDev() {
   // Critically, canonAnthropic only applies to claude-* IDs — OpenAI
   // dot/dash (gpt-5.4 ≠ gpt-5-4) are NOT normalized and must both stay.
   //
-  // github-copilot/claude-* entries share this redundancy via cross-provider
-  // stripProvider resolution; they are handled separately in Commit 2.
+  // github-copilot/* entries with real pricing land here too: their dashed
+  // provider counterpart does not exist in models.dev, but stripProvider
+  // reaches the identical bare-model entry (e.g. github-copilot/claude-opus-4.7
+  // → claude-opus-4-7 — same $5/$25 rate). Safe to drop: the resolver's
+  // stripProvider step finds the bare key without the vendor row.
   const fullyCanonical = (key) => {
     const i = key.indexOf("/");
     let s =
@@ -191,7 +194,6 @@ async function loadModelsDev() {
     const fc = fullyCanonical(key);
     if (
       fc !== key &&
-      !key.startsWith("github-copilot/") && // handled separately — see Commit 2
       effective.has(fc) &&
       pricingId(effective.get(fc)) === pricingId(effective.get(key))
     ) {
