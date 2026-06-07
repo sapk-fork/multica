@@ -2,7 +2,7 @@
 //
 // Source: https://models.dev/api.json (MIT, community-maintained,
 // the same dataset OpenCode uses internally).
-// Snapshot: 2026-06-05
+// Snapshot: 2026-06-07
 //
 // Regenerate with: node scripts/generate-pricing.mjs
 
@@ -50,7 +50,6 @@ export const MODEL_PRICING: Readonly<Record<string, {
   "claude-3-sonnet-20240229": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3 },
   "claude-haiku-4-5": { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
   "claude-haiku-4-5-20251001": { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
-  "claude-haiku-4.5": { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
   "claude-opus-4-0": { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
   "claude-opus-4-1": { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
   "claude-opus-4-1-20250805": { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
@@ -60,24 +59,18 @@ export const MODEL_PRICING: Readonly<Record<string, {
   "claude-opus-4-6": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   "claude-opus-4-7": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   "claude-opus-4-8": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
-  "claude-opus-4.5": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
-  "claude-opus-4.6": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
-  "claude-opus-4.7": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
-  "claude-opus-4.8": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   "claude-sonnet-4": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
   "claude-sonnet-4-0": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
   "claude-sonnet-4-20250514": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
   "claude-sonnet-4-5": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
   "claude-sonnet-4-5-20250929": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
   "claude-sonnet-4-6": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
-  "claude-sonnet-4.5": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
-  "claude-sonnet-4.6": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
-  "deepseek-chat": { input: 0.14, output: 0.28, cacheRead: 0.028, cacheWrite: 0.14 },
-  "deepseek-reasoner": { input: 0.14, output: 0.28, cacheRead: 0.028, cacheWrite: 0.14 },
+  "deepseek-chat": { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
+  "deepseek-reasoner": { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
   "deepseek-v4-flash": { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
   "deepseek-v4-pro": { input: 0.435, output: 0.87, cacheRead: 0.003625, cacheWrite: 0.435 },
-  "deepseek/deepseek-chat": { input: 0.14, output: 0.28, cacheRead: 0.028, cacheWrite: 0.14 },
-  "deepseek/deepseek-reasoner": { input: 0.14, output: 0.28, cacheRead: 0.028, cacheWrite: 0.14 },
+  "deepseek/deepseek-chat": { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
+  "deepseek/deepseek-reasoner": { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
   "deepseek/deepseek-v4-flash": { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
   "deepseek/deepseek-v4-pro": { input: 0.435, output: 0.87, cacheRead: 0.003625, cacheWrite: 0.435 },
   "gemini-2.0-flash": { input: 0.1, output: 0.4, cacheRead: 0.025, cacheWrite: 0.1 },
@@ -86,7 +79,6 @@ export const MODEL_PRICING: Readonly<Record<string, {
   "gemini-2.5-flash-image": { input: 0.3, output: 30, cacheRead: 0.075, cacheWrite: 0.3 },
   "gemini-2.5-flash-lite": { input: 0.1, output: 0.4, cacheRead: 0.01, cacheWrite: 0.1 },
   "gemini-2.5-flash-preview-tts": { input: 0.5, output: 10, cacheRead: 0.5, cacheWrite: 0.5 },
-  "gemini-2.5-flash-tts": { input: 0.5, output: 10, cacheRead: 0.5, cacheWrite: 0.5 },
   "gemini-2.5-pro": { input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 1.25 },
   "gemini-2.5-pro-preview-tts": { input: 1, output: 20, cacheRead: 1, cacheWrite: 1 },
   "gemini-3-flash": { input: 0.5, output: 3, cacheRead: 0.05, cacheWrite: 0.5 },
@@ -136,7 +128,6 @@ export const MODEL_PRICING: Readonly<Record<string, {
   "google/gemini-2.5-flash-image": { input: 0.3, output: 30, cacheRead: 0.075, cacheWrite: 0.3 },
   "google/gemini-2.5-flash-lite": { input: 0.1, output: 0.4, cacheRead: 0.01, cacheWrite: 0.1 },
   "google/gemini-2.5-flash-preview-tts": { input: 0.5, output: 10, cacheRead: 0.5, cacheWrite: 0.5 },
-  "google/gemini-2.5-flash-tts": { input: 0.5, output: 10, cacheRead: 0.5, cacheWrite: 0.5 },
   "google/gemini-2.5-pro": { input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 1.25 },
   "google/gemini-2.5-pro-preview-tts": { input: 1, output: 20, cacheRead: 1, cacheWrite: 1 },
   "google/gemini-3-flash-preview": { input: 0.5, output: 3, cacheRead: 0.05, cacheWrite: 0.5 },

@@ -139,7 +139,24 @@ async function loadModelsDev() {
   ];
 
   const sortedKeys = [...rows.keys()].sort();
+
+  // For bare claude-* keys, dots and dashes are interchangeable in the
+  // resolver (canonicalCandidates normalizes dots→dashes, utils.ts:280-317).
+  // Skip dotted aliases whose dashed form already exists in the map — e.g.
+  // "claude-sonnet-4.5" is redundant when "claude-sonnet-4-5" is present.
+  // Provider-prefixed forms (e.g. "github-copilot/claude-sonnet-4.5") have
+  // the same redundancy but are left untouched pending explicit confirmation.
+  let skippedDottedAliases = 0;
+  const isDottedClaudeAlias = (key) =>
+    key.startsWith("claude-") &&
+    key.includes(".") &&
+    rows.has(key.replace(/\./g, "-"));
+
   for (const key of sortedKeys) {
+    if (isDottedClaudeAlias(key)) {
+      skippedDottedAliases++;
+      continue;
+    }
     const c = rows.get(key);
     // Clamp cacheRead to input so estimateCacheSavings never goes negative.
     // models.dev has a few upstream-quirky rows (e.g. gpt-3.5-turbo) where
@@ -164,6 +181,7 @@ async function loadModelsDev() {
   console.log(`  Providers included: ${ALLOWED_PROVIDERS.length - skippedProviders.length}`);
   console.log(`  Models with pricing: ${pricedCount}`);
   console.log(`  Models skipped (no cost data): ${skippedNoCost}`);
+  console.log(`  Dotted claude-* aliases skipped: ${skippedDottedAliases}`);
 })().catch((err) => {
   console.error(err);
   process.exit(1);
