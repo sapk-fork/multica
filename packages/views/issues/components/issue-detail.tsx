@@ -693,7 +693,8 @@ function SubIssueRow({
   const toggleSelected = useIssueSelectionStore((s) => s.toggle);
   // Category, not key: a custom status in the done/cancelled categories is
   // finished work and has to strike through like any other. (MUL-6243)
-  const isDone = issueBehavesAsAny(child, ["done", "cancelled"]);
+  // "archived" is the fork's 8th terminal category (M-11) — include it.
+  const isDone = issueBehavesAsAny(child, ["done", "cancelled", "archived"]);
   const labels = rowProps.labels ? (child.labels ?? []) : [];
   const customPropsWithValue = customProperties.filter(
     (p) => child.properties?.[p.id] !== undefined,
@@ -2789,7 +2790,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                 onOpenChange={handleThreadNavOpenChange}
               />
             )}
-            {onDone && !issueBehavesAsAny(issue, ["done", "cancelled"]) && (
+            {onDone && !issueBehavesAsAny(issue, ["done", "cancelled", "archived"]) && (
               <Tooltip>
                 <TooltipTrigger
                   render={
