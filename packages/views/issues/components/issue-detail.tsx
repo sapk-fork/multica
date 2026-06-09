@@ -649,7 +649,10 @@ function SubIssueRow({
   const updateIssue = useUpdateIssue();
   const selected = useIssueSelectionStore((s) => s.selectedIds.has(child.id));
   const toggleSelected = useIssueSelectionStore((s) => s.toggle);
-  const isDone = child.status === "done" || child.status === "cancelled";
+  const isDone =
+    child.status === "done" ||
+    child.status === "cancelled" ||
+    child.status === "archived";
   const labels = rowProps.labels ? (child.labels ?? []) : [];
   const customPropsWithValue = customProperties.filter(
     (p) => child.properties?.[p.id] !== undefined,
@@ -2533,7 +2536,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                 onOpenChange={handleThreadNavOpenChange}
               />
             )}
-            {onDone && issue.status !== "done" && issue.status !== "cancelled" && (
+            {onDone && issue.status !== "done" && issue.status !== "cancelled" && issue.status !== "archived" && (
               <Tooltip>
                 <TooltipTrigger
                   render={
