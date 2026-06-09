@@ -19,11 +19,8 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 	archived := time.Date(2026, 6, 8, 9, 0, 0, 0, time.UTC)
 	original := &BackupFile{
 		Metadata: BackupMetadata{
-			Version:             FormatVersion,
-			ExportedAt:          ts,
-			SourceWorkspaceID:   "ws-1",
-			SourceWorkspaceName: "Acme",
-			SourceWorkspaceSlug: "acme",
+			Version:    FormatVersion,
+			ExportedAt: ts,
 		},
 		Workspace: &BackupWorkspace{
 			ID:           "ws-1",
@@ -196,14 +193,11 @@ func TestUnmarshalVersionValidation(t *testing.T) {
 
 func TestNew(t *testing.T) {
 	before := time.Now().UTC()
-	bf := New("ws-1", "Acme", "acme")
+	bf := New()
 	after := time.Now().UTC()
 
 	if bf.Metadata.Version != FormatVersion {
 		t.Errorf("Version = %q, want %q", bf.Metadata.Version, FormatVersion)
-	}
-	if bf.Metadata.SourceWorkspaceID != "ws-1" {
-		t.Errorf("SourceWorkspaceID = %q, want %q", bf.Metadata.SourceWorkspaceID, "ws-1")
 	}
 	if bf.Metadata.ExportedAt.Before(before) || bf.Metadata.ExportedAt.After(after) {
 		t.Errorf("ExportedAt = %v, want within [%v, %v]", bf.Metadata.ExportedAt, before, after)
