@@ -207,6 +207,7 @@ type BackupSquad struct {
 	Instructions string              `json:"instructions,omitempty"`
 	AvatarURL    string              `json:"avatar_url,omitempty"`
 	Members      []BackupSquadMember `json:"members,omitempty"`
+	ArchivedAt   *time.Time          `json:"archived_at,omitempty"`
 	CreatedAt    time.Time           `json:"created_at"`
 }
 
