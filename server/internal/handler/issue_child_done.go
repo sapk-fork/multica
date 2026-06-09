@@ -87,7 +87,7 @@ func (h *Handler) notifyParentOfChildDone(ctx context.Context, prev, issue db.Is
 			"parent_id", uuidToString(issue.ParentIssueID))
 		return
 	}
-	if parent.Status == "done" || parent.Status == "cancelled" {
+	if parent.Status == "done" || parent.Status == "cancelled" || parent.Status == "archived" {
 		return
 	}
 	// A parent parked in backlog is deliberately held for later. Posting the
