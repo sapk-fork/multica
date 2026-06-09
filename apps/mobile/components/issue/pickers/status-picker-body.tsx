@@ -17,7 +17,7 @@ import { StatusIcon } from "@/components/ui/status-icon";
 import { BOARD_STATUSES, STATUS_LABEL } from "@/lib/issue-status";
 import { THEME } from "@/lib/theme";
 
-const ALL_STATUSES: IssueStatus[] = [...BOARD_STATUSES, "cancelled"];
+const ALL_STATUSES: IssueStatus[] = [...BOARD_STATUSES, "cancelled", "archived"];
 
 interface Props {
   value: IssueStatus;
