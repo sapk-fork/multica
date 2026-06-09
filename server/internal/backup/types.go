@@ -74,11 +74,14 @@ type BackupWorkspace struct {
 // identity key used to remap member references on restore (see the package
 // doc); ID is the source-instance UUID, meaningful only within the source.
 type BackupMember struct {
-	ID        string `json:"id"`
-	Name      string `json:"name,omitempty"`
-	Email     string `json:"email"`
-	AvatarURL string `json:"avatar_url,omitempty"`
-	Role      string `json:"role,omitempty"`
+	ID                 string `json:"id"`
+	Name               string `json:"name,omitempty"`
+	Email              string `json:"email"`
+	AvatarURL          string `json:"avatar_url,omitempty"`
+	Role               string `json:"role,omitempty"`
+	Language           string `json:"language,omitempty"`
+	Timezone           string `json:"timezone,omitempty"`
+	ProfileDescription string `json:"profile_description,omitempty"`
 }
 
 // BackupSkill is a skill definition together with its attached files.
@@ -101,22 +104,24 @@ type BackupSkillFile struct {
 // BackupAgent is an agent definition. Skills are referenced by ID; the
 // referenced skills are expected to be present in BackupFile.Skills.
 type BackupAgent struct {
-	ID            string          `json:"id"`
-	Name          string          `json:"name"`
-	Description   string          `json:"description,omitempty"`
-	Instructions  string          `json:"instructions,omitempty"`
-	RuntimeMode   string          `json:"runtime_mode"`
-	RuntimeConfig json.RawMessage `json:"runtime_config,omitempty"`
-	Visibility    string          `json:"visibility,omitempty"`
-	SkillIDs      []string        `json:"skill_ids,omitempty"`
-	CustomEnv     json.RawMessage `json:"custom_env,omitempty"`
-	CustomArgs    json.RawMessage `json:"custom_args,omitempty"`
-	McpConfig     json.RawMessage `json:"mcp_config,omitempty"`
-	Model         string          `json:"model,omitempty"`
-	ThinkingLevel string          `json:"thinking_level,omitempty"`
-	AvatarURL     string          `json:"avatar_url,omitempty"`
-	ArchivedAt    *time.Time      `json:"archived_at,omitempty"`
-	CreatedAt     time.Time       `json:"created_at"`
+	ID                 string          `json:"id"`
+	Name               string          `json:"name"`
+	Description        string          `json:"description,omitempty"`
+	Instructions       string          `json:"instructions,omitempty"`
+	RuntimeMode        string          `json:"runtime_mode"`
+	RuntimeConfig      json.RawMessage `json:"runtime_config,omitempty"`
+	Visibility         string          `json:"visibility,omitempty"`
+	SkillIDs           []string        `json:"skill_ids,omitempty"`
+	CustomEnv          json.RawMessage `json:"custom_env,omitempty"`
+	CustomArgs         json.RawMessage `json:"custom_args,omitempty"`
+	McpConfig          json.RawMessage `json:"mcp_config,omitempty"`
+	Model              string          `json:"model,omitempty"`
+	ThinkingLevel      string          `json:"thinking_level,omitempty"`
+	AvatarURL          string          `json:"avatar_url,omitempty"`
+	OwnerID            string          `json:"owner_id,omitempty"`
+	MaxConcurrentTasks int32           `json:"max_concurrent_tasks,omitempty"`
+	ArchivedAt         *time.Time      `json:"archived_at,omitempty"`
+	CreatedAt          time.Time       `json:"created_at"`
 }
 
 // BackupLabel is an issue label.
@@ -134,6 +139,7 @@ type BackupProject struct {
 	Description string                  `json:"description,omitempty"`
 	Icon        string                  `json:"icon,omitempty"`
 	Status      string                  `json:"status,omitempty"`
+	Priority    string                  `json:"priority,omitempty"`
 	LeadType    string                  `json:"lead_type,omitempty"`
 	LeadID      string                  `json:"lead_id,omitempty"`
 	Resources   []BackupProjectResource `json:"resources,omitempty"`
@@ -176,20 +182,26 @@ type BackupIssue struct {
 	Reactions          []BackupReaction `json:"reactions,omitempty"`
 	Position           float64          `json:"position,omitempty"`
 	DueDate            *time.Time       `json:"due_date,omitempty"`
+	StartDate          *time.Time       `json:"start_date,omitempty"`
 	AcceptanceCriteria json.RawMessage  `json:"acceptance_criteria,omitempty"`
 	ContextRefs        json.RawMessage  `json:"context_refs,omitempty"`
+	OriginType         string           `json:"origin_type,omitempty"`
+	OriginID           string           `json:"origin_id,omitempty"`
 	CreatedAt          time.Time        `json:"created_at"`
 }
 
 // BackupComment is a comment on an issue. Threading is preserved via ParentID.
 type BackupComment struct {
-	ID        string           `json:"id"`
-	Author    BackupActor      `json:"author"`
-	Content   string           `json:"content"`
-	Type      string           `json:"type,omitempty"`
-	ParentID  string           `json:"parent_id,omitempty"`
-	CreatedAt time.Time        `json:"created_at"`
-	Reactions []BackupReaction `json:"reactions,omitempty"`
+	ID             string           `json:"id"`
+	Author         BackupActor      `json:"author"`
+	Content        string           `json:"content"`
+	Type           string           `json:"type,omitempty"`
+	ParentID       string           `json:"parent_id,omitempty"`
+	CreatedAt      time.Time        `json:"created_at"`
+	Reactions      []BackupReaction `json:"reactions,omitempty"`
+	ResolvedAt     *time.Time       `json:"resolved_at,omitempty"`
+	ResolvedByType string           `json:"resolved_by_type,omitempty"`
+	ResolvedByID   string           `json:"resolved_by_id,omitempty"`
 }
 
 // BackupReaction is an emoji reaction on an issue or a comment.
@@ -222,10 +234,16 @@ type BackupSquadMember struct {
 // settings as an opaque JSON blob; Schedule is the cron expression (if any)
 // of its scheduled trigger.
 type BackupAutopilot struct {
-	ID        string          `json:"id"`
-	Name      string          `json:"name"`
-	Config    json.RawMessage `json:"config,omitempty"`
-	Schedule  string          `json:"schedule,omitempty"`
-	Enabled   bool            `json:"enabled"`
-	CreatedAt time.Time       `json:"created_at"`
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	Config        json.RawMessage `json:"config,omitempty"`
+	Schedule      string          `json:"schedule,omitempty"`
+	Enabled       bool            `json:"enabled"`
+	Assignee      BackupActor     `json:"assignee,omitempty"`
+	Status        string          `json:"status,omitempty"`
+	ExecutionMode string          `json:"execution_mode,omitempty"`
+	ProjectID     string          `json:"project_id,omitempty"`
+	TriggerKind   string          `json:"trigger_kind,omitempty"`
+	TriggerTZ     string          `json:"trigger_tz,omitempty"`
+	CreatedAt     time.Time       `json:"created_at"`
 }
