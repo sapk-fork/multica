@@ -12,17 +12,13 @@ import (
 // errors.Is.
 var ErrUnsupportedVersion = errors.New("backup: unsupported format version")
 
-// New returns a BackupFile with its metadata initialised for the given source
-// workspace. The format version is set to FormatVersion and ExportedAt is set
-// to the current UTC time.
-func New(workspaceID, workspaceName, workspaceSlug string) *BackupFile {
+// New returns a BackupFile with its metadata initialised. The format version
+// is set to FormatVersion and ExportedAt is set to the current UTC time.
+func New() *BackupFile {
 	return &BackupFile{
 		Metadata: BackupMetadata{
-			Version:             FormatVersion,
-			ExportedAt:          time.Now().UTC(),
-			SourceWorkspaceID:   workspaceID,
-			SourceWorkspaceName: workspaceName,
-			SourceWorkspaceSlug: workspaceSlug,
+			Version:    FormatVersion,
+			ExportedAt: time.Now().UTC(),
 		},
 	}
 }
