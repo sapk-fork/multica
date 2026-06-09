@@ -1670,7 +1670,9 @@ func (h *Handler) mirrorPullRequestForWorkspace(ctx context.Context, wsID pgtype
 		if state == "merged" || state == "closed" {
 			for _, issue := range reevalIssues {
 				// A custom terminal status counts as terminal here. (MUL-6243)
-				if s := issuestatus.Effective(ctx, h.Queries, issue.WorkspaceID, issue.Status); s == "done" || s == "cancelled" {
+				// "archived" (fork M-11) is not a server-side built-in, so
+				// Effective returns it unchanged — compare it explicitly.
+				if s := issuestatus.Effective(ctx, h.Queries, issue.WorkspaceID, issue.Status); s == "done" || s == "cancelled" || s == "archived" {
 					continue
 				}
 				// Combined across providers: an issue may also carry a still-open
