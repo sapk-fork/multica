@@ -108,12 +108,14 @@ func (h *Handler) notifyParentOfChildDone(ctx context.Context, prev, issue db.Is
 	// Custom statuses inherit the canonical status they name, so a custom
 	// terminal status closes this out and a custom backlog status parks it,
 	// exactly like Done/Cancelled and Backlog do. (MUL-6243)
+	// "archived" (fork M-11) is not a server-side built-in; childStatusResolver
+	// passes it through unchanged, so compare it explicitly.
 	parentStatus, err := effective(parent)
 	if err != nil {
 		slog.Warn("child done: failed to resolve parent status", "error", err, "parent_id", uuidToString(parent.ID))
 		return
 	}
-	if parentStatus == "done" || parentStatus == "cancelled" {
+	if parentStatus == "done" || parentStatus == "cancelled" || parentStatus == "archived" {
 		return
 	}
 	// A parent parked in backlog is deliberately held for later. Posting the
@@ -403,6 +405,14 @@ func (h *Handler) childStatusResolver(ctx context.Context) func(db.Issue) (strin
 	resolvers := make(map[pgtype.UUID]*issuestatus.Resolver)
 	return func(c db.Issue) (string, error) {
 		if issuestatus.IsBuiltIn(c.Status) {
+			return c.Status, nil
+		}
+		// "archived" (fork M-11) is an accepted issue.status value with no
+		// issue_status catalog row, so the category check below would reject
+		// it as unresolved and abort the whole notification pass. Pass it
+		// through unchanged, as the package-level Effective does, and let the
+		// explicit == "archived" guards decide what it means.
+		if c.Status == issuestatus.Archived {
 			return c.Status, nil
 		}
 		resolver := resolvers[c.WorkspaceID]

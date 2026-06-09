@@ -1673,7 +1673,9 @@ func (h *Handler) mirrorPullRequestForWorkspace(ctx context.Context, wsID pgtype
 			resolver := issuestatus.NewResolver(wsID)
 			for _, issue := range reevalIssues {
 				// A custom terminal status counts as terminal here. (MUL-6243)
-				if s := resolver.Effective(ctx, h.issueStatusCatalog(), issue.Status); s == "done" || s == "cancelled" {
+				// "archived" (fork M-11) is not a server-side built-in, so
+				// Resolver.Effective returns it unchanged — compare it explicitly.
+				if s := resolver.Effective(ctx, h.issueStatusCatalog(), issue.Status); s == "done" || s == "cancelled" || s == "archived" {
 					continue
 				}
 				// Combined across providers: an issue may also carry a still-open
