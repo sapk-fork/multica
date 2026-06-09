@@ -166,7 +166,6 @@
       "note": "メモを追加 — エージェントをトリガーしません"
     }
   },
-<<<<<<< HEAD
   "table": {
     "reset_widths": "列幅をリセット",
     "expand": "表を展開",
@@ -179,12 +178,11 @@
     "clear_filter": "絞り込みを解除",
     "no_matches": "一致する行がありません",
     "close": "閉じる"
-=======
+  },
   "details_block": {
     "summary_default": "詳細",
     "summary_aria_label": "概要",
     "body_placeholder": "本文 (Markdown)",
     "body_aria_label": "詳細の本文 (Markdown)"
->>>>>>> fc9add4756 (fix(editor): route details block labels through the editor i18n namespace)
   }
 }
