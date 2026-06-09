@@ -22,6 +22,7 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 	commentResolved := time.Date(2026, 6, 9, 16, 0, 0, 0, time.UTC)
 	issueCounter := int32(42)
 	maxTasks := int32(3)
+	resPosition := int32(1)
 	original := &BackupFile{
 		Metadata: BackupMetadata{
 			Version:    FormatVersion,
@@ -89,7 +90,7 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 				ResourceType: "github_repo",
 				ResourceRef:  json.RawMessage(`{"url":"https://example.com"}`),
 				Label:        "repo",
-				Position:     1,
+				Position:     &resPosition,
 			}},
 			CreatedAt: ts,
 		}},
