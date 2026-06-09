@@ -161,7 +161,7 @@ type BackupProjectResource struct {
 	ResourceType string          `json:"resource_type"`
 	ResourceRef  json.RawMessage `json:"resource_ref,omitempty"`
 	Label        string          `json:"label,omitempty"`
-	Position     int32           `json:"position,omitempty"`
+	Position     *int32          `json:"position,omitempty"`
 }
 
 // BackupActor identifies a polymorphic actor (a member or an agent) by type
