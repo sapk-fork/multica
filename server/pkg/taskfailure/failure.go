@@ -18,10 +18,9 @@
 //
 // The canonical values fall into two groups:
 //
-//   - Platform-side values (no `agent_error.` prefix) emitted by the
-//     server-side sweepers and daemon classifiers when the failure is
-//     attributable to the platform/scheduler/runtime layer rather than
-//     anything the agent process did:
+//   - Platform-side values (no `agent_error.` prefix) attributable to
+//     the platform/scheduler/runtime layer rather than anything the agent
+//     process did:
 //
 //     queued_expired, runtime_offline, runtime_reconnect_timeout,
 //     runtime_recovery, timeout, iteration_limit, agent_blocked,
@@ -29,9 +28,16 @@
 //     runtime_cli_timeout, environment_prepare_failed,
 //     invalid_task_identity, session_limit
 //
+//     Most are emitted by the server-side sweepers and daemon classifiers.
+//     session_limit is the exception: it is platform-side (the runtime is
+//     placed on hold rather than the agent process having erred) but is
+//     produced by Classify(rawError) when it detects a session-limit
+//     message — so Classify's output is NOT exclusively agent-side.
+//
 //   - 14 agent-side values (with `agent_error.` prefix) produced by
 //     Classify(rawError) when the agent process surfaced an error string.
-//     IsAgentError reports membership in this set.
+//     IsAgentError reports membership in this set (and returns false for
+//     session_limit, which carries no `agent_error.` prefix).
 //
 // Wire stability: the string forms of these constants are persisted into
 // the database and surfaced as Prometheus labels. Renaming a value is a
