@@ -387,7 +387,7 @@ function MentionRow({
   if (item.type === "issue") {
     // Visually dim closed issues (done/cancelled) so they're distinguishable
     // from active ones in the suggestion list — they're still selectable.
-    const isClosed = item.status === "done" || item.status === "cancelled";
+    const isClosed = item.status === "done" || item.status === "cancelled" || item.status === "archived";
     return (
       <button
         type="button"
