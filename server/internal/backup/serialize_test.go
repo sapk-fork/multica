@@ -111,6 +111,7 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 			Instructions: "ship it",
 			AvatarURL:    "https://example.com/squad.png",
 			Members:      []BackupSquadMember{{MemberType: "agent", MemberID: "agent-1", Role: "leader"}},
+			ArchivedAt:   &archived,
 			CreatedAt:    ts,
 		}},
 		Autopilots: []BackupAutopilot{{
@@ -157,17 +158,17 @@ func TestUnmarshalVersionValidation(t *testing.T) {
 	}{
 		{
 			name:    "valid current version",
-			input:   `{"metadata":{"version":"1.0","exported_at":"2026-06-09T00:00:00Z","source_workspace_id":"ws"}}`,
+			input:   `{"metadata":{"version":"1.0","exported_at":"2026-06-09T00:00:00Z"}}`,
 			wantErr: false,
 		},
 		{
 			name:    "missing version",
-			input:   `{"metadata":{"exported_at":"2026-06-09T00:00:00Z","source_workspace_id":"ws"}}`,
+			input:   `{"metadata":{"exported_at":"2026-06-09T00:00:00Z"}}`,
 			wantErr: true,
 		},
 		{
 			name:    "unsupported version",
-			input:   `{"metadata":{"version":"2.0","source_workspace_id":"ws"}}`,
+			input:   `{"metadata":{"version":"2.0"}}`,
 			wantErr: true,
 			isUnsup: true,
 		},
