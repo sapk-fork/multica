@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -36,8 +37,9 @@ func Marshal(backup *BackupFile) ([]byte, error) {
 }
 
 // Unmarshal deserialises a backup file from JSON and validates its format
-// version. A missing version, or one that does not match FormatVersion, is
-// rejected; the version mismatch case wraps ErrUnsupportedVersion.
+// version. A missing version is rejected. The major version must match
+// FormatVersion; minor version differences are accepted (forward compatible).
+// The version mismatch case wraps ErrUnsupportedVersion.
 func Unmarshal(data []byte) (*BackupFile, error) {
 	var backup BackupFile
 	if err := json.Unmarshal(data, &backup); err != nil {
@@ -46,9 +48,22 @@ func Unmarshal(data []byte) (*BackupFile, error) {
 	if backup.Metadata.Version == "" {
 		return nil, fmt.Errorf("backup: missing format version")
 	}
-	if backup.Metadata.Version != FormatVersion {
-		return nil, fmt.Errorf("backup: %q (expected %q): %w",
+	if !compatibleVersion(backup.Metadata.Version) {
+		return nil, fmt.Errorf("backup: %q (expected major version matching %q): %w",
 			backup.Metadata.Version, FormatVersion, ErrUnsupportedVersion)
 	}
 	return &backup, nil
+}
+
+// compatibleVersion checks if a version string is compatible with FormatVersion.
+// Compatible means the major version matches; minor version can be equal or lower.
+func compatibleVersion(version string) bool {
+	fileParts := strings.Split(version, ".")
+	currentParts := strings.Split(FormatVersion, ".")
+
+	if len(fileParts) != 2 || len(currentParts) != 2 {
+		return false
+	}
+
+	return fileParts[0] == currentParts[0]
 }

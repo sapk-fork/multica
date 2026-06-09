@@ -16,7 +16,12 @@ func TestMarshalNil(t *testing.T) {
 func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 	ts := time.Date(2026, 6, 9, 12, 0, 0, 0, time.UTC)
 	due := time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC)
-	archived := time.Date(2026, 6, 8, 9, 0, 0, 0, time.UTC)
+	start := time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC)
+	agentArchived := time.Date(2026, 6, 8, 9, 0, 0, 0, time.UTC)
+	squadArchived := time.Date(2026, 6, 7, 10, 0, 0, 0, time.UTC)
+	commentResolved := time.Date(2026, 6, 9, 16, 0, 0, 0, time.UTC)
+	issueCounter := int32(42)
+	maxTasks := int32(3)
 	original := &BackupFile{
 		Metadata: BackupMetadata{
 			Version:    FormatVersion,
@@ -31,7 +36,7 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 			Settings:     json.RawMessage(`{"theme":"dark"}`),
 			Repos:        json.RawMessage(`["https://example.com/repo"]`),
 			IssuePrefix:  "ACME",
-			IssueCounter: 42,
+			IssueCounter: &issueCounter,
 			AvatarURL:    "https://example.com/ws.png",
 			CreatedAt:    ts,
 		},
@@ -52,6 +57,7 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 			Content:     "# Lint\n",
 			Config:      json.RawMessage(`{"auto_fix":true}`),
 			Files:       []BackupSkillFile{{Path: "scripts/run.sh", Content: "echo hi"}},
+			CreatedBy:   BackupActor{Type: "member", ID: "user-1"},
 			CreatedAt:   ts,
 		}},
 		Agents: []BackupAgent{{
@@ -68,8 +74,8 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 			ThinkingLevel:      "high",
 			AvatarURL:          "https://example.com/agent.png",
 			OwnerID:            "user-1",
-			MaxConcurrentTasks: 3,
-			ArchivedAt:         &archived,
+			MaxConcurrentTasks: &maxTasks,
+			ArchivedAt:         &agentArchived,
 			CreatedAt:          ts,
 		}},
 		Labels: []BackupLabel{{ID: "label-1", Name: "bug", Color: "#f00", CreatedAt: ts}},
@@ -77,6 +83,7 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 			ID:       "proj-1",
 			Title:    "Backup feature",
 			Priority: "high",
+			Lead:     BackupActor{Type: "member", ID: "user-1"},
 			Resources: []BackupProjectResource{{
 				ID:           "res-1",
 				ResourceType: "github_repo",
@@ -96,20 +103,19 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 			Creator:  BackupActor{Type: "agent", ID: "agent-2"},
 			LabelIDs: []string{"label-1"},
 			Comments: []BackupComment{{
-				ID:             "comment-1",
-				Author:         BackupActor{Type: "agent", ID: "agent-2"},
-				Content:        "please do this",
-				CreatedAt:      time.Date(2026, 6, 9, 15, 15, 0, 0, time.UTC),
-				Reactions:      []BackupReaction{{Actor: BackupActor{Type: "agent", ID: "agent-1"}, Emoji: "👍"}},
-				ResolvedAt:     &archived,
-				ResolvedByType: "member",
-				ResolvedByID:   "user-1",
+				ID:         "comment-1",
+				Author:     BackupActor{Type: "agent", ID: "agent-2"},
+				Content:    "please do this",
+				CreatedAt:  time.Date(2026, 6, 9, 15, 15, 0, 0, time.UTC),
+				Reactions:  []BackupReaction{{Actor: BackupActor{Type: "agent", ID: "agent-1"}, Emoji: "👍"}},
+				ResolvedAt: &commentResolved,
+				ResolvedBy: BackupActor{Type: "member", ID: "user-1"},
 			}},
 			Metadata:           json.RawMessage(`{"pr_url":"https://example.com/pr/1"}`),
 			Reactions:          []BackupReaction{{Actor: BackupActor{Type: "member", ID: "user-1"}, Emoji: "🚀"}},
 			Position:           -5,
 			DueDate:            &due,
-			StartDate:          &ts,
+			StartDate:          &start,
 			AcceptanceCriteria: json.RawMessage(`["builds","tests pass"]`),
 			ContextRefs:        json.RawMessage(`[{"kind":"issue","id":"issue-0"}]`),
 			OriginType:         "autopilot",
@@ -119,17 +125,16 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 		Squads: []BackupSquad{{
 			ID:           "squad-1",
 			Name:         "Core",
-			LeaderID:     "agent-1",
+			Leader:       BackupActor{Type: "agent", ID: "agent-1"},
 			Instructions: "ship it",
 			AvatarURL:    "https://example.com/squad.png",
 			Members:      []BackupSquadMember{{MemberType: "agent", MemberID: "agent-1", Role: "leader"}},
-			ArchivedAt:   &archived,
+			ArchivedAt:   &squadArchived,
 			CreatedAt:    ts,
 		}},
 		Autopilots: []BackupAutopilot{{
 			ID:            "ap-1",
 			Name:          "nightly",
-			Config:        json.RawMessage(`{"mode":"auto"}`),
 			Schedule:      "0 0 * * *",
 			Enabled:       true,
 			Assignee:      BackupActor{Type: "agent", ID: "agent-1"},
@@ -180,12 +185,17 @@ func TestUnmarshalVersionValidation(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "valid minor version ahead",
+			input:   `{"metadata":{"version":"1.5","exported_at":"2026-06-09T00:00:00Z"}}`,
+			wantErr: false,
+		},
+		{
 			name:    "missing version",
 			input:   `{"metadata":{"exported_at":"2026-06-09T00:00:00Z"}}`,
 			wantErr: true,
 		},
 		{
-			name:    "unsupported version",
+			name:    "unsupported major version",
 			input:   `{"metadata":{"version":"2.0"}}`,
 			wantErr: true,
 			isUnsup: true,
