@@ -97,8 +97,10 @@ func (h *Handler) notifyParentOfChildDone(ctx context.Context, prev, issue db.Is
 	// Custom statuses inherit the canonical status they name, so a custom
 	// terminal status closes this out and a custom backlog status parks it,
 	// exactly like Done/Cancelled and Backlog do. (MUL-6243)
+	// "archived" (fork M-11) is not a server-side built-in, so Effective
+	// returns it unchanged — compare it explicitly.
 	parentStatus := issuestatus.Effective(ctx, h.Queries, parent.WorkspaceID, parent.Status)
-	if parentStatus == "done" || parentStatus == "cancelled" {
+	if parentStatus == "done" || parentStatus == "cancelled" || parentStatus == "archived" {
 		return
 	}
 	// A parent parked in backlog is deliberately held for later. Posting the
