@@ -14,14 +14,34 @@ func TestMarshalNil(t *testing.T) {
 }
 
 func TestMarshalUnmarshalRoundTrip(t *testing.T) {
+	ts := time.Date(2026, 6, 9, 12, 0, 0, 0, time.UTC)
+	due := time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC)
+	archived := time.Date(2026, 6, 8, 9, 0, 0, 0, time.UTC)
 	original := &BackupFile{
 		Metadata: BackupMetadata{
 			Version:             FormatVersion,
-			ExportedAt:          time.Date(2026, 6, 9, 12, 0, 0, 0, time.UTC),
+			ExportedAt:          ts,
 			SourceWorkspaceID:   "ws-1",
 			SourceWorkspaceName: "Acme",
 			SourceWorkspaceSlug: "acme",
 		},
+		Workspace: &BackupWorkspace{
+			ID:          "ws-1",
+			Name:        "Acme",
+			Slug:        "acme",
+			Description: "the workspace",
+			Context:     "be helpful",
+			Settings:    json.RawMessage(`{"theme":"dark"}`),
+			Repos:       json.RawMessage(`["https://example.com/repo"]`),
+			IssuePrefix: "ACME",
+		},
+		Members: []BackupMember{{
+			ID:        "user-1",
+			Name:      "Alice",
+			Email:     "alice@example.com",
+			AvatarURL: "https://example.com/a.png",
+			Role:      "admin",
+		}},
 		Skills: []BackupSkill{{
 			ID:          "skill-1",
 			Name:        "lint",
@@ -29,6 +49,7 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 			Content:     "# Lint\n",
 			Config:      json.RawMessage(`{"auto_fix":true}`),
 			Files:       []BackupSkillFile{{Path: "scripts/run.sh", Content: "echo hi"}},
+			CreatedAt:   ts,
 		}},
 		Agents: []BackupAgent{{
 			ID:            "agent-1",
@@ -37,9 +58,16 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 			RuntimeConfig: json.RawMessage(`{"image":"go"}`),
 			Visibility:    "workspace",
 			SkillIDs:      []string{"skill-1"},
+			CustomEnv:     json.RawMessage(`{"GOFLAGS":"-mod=mod"}`),
+			CustomArgs:    json.RawMessage(`["--verbose"]`),
+			McpConfig:     json.RawMessage(`{"servers":[]}`),
 			Model:         "claude-opus-4-8",
+			ThinkingLevel: "high",
+			AvatarURL:     "https://example.com/agent.png",
+			ArchivedAt:    &archived,
+			CreatedAt:     ts,
 		}},
-		Labels: []BackupLabel{{ID: "label-1", Name: "bug", Color: "#f00"}},
+		Labels: []BackupLabel{{ID: "label-1", Name: "bug", Color: "#f00", CreatedAt: ts}},
 		Projects: []BackupProject{{
 			ID:    "proj-1",
 			Title: "Backup feature",
@@ -50,6 +78,7 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 				Label:        "repo",
 				Position:     1,
 			}},
+			CreatedAt: ts,
 		}},
 		Issues: []BackupIssue{{
 			ID:       "issue-1",
@@ -67,22 +96,30 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 				CreatedAt: time.Date(2026, 6, 9, 15, 15, 0, 0, time.UTC),
 				Reactions: []BackupReaction{{Actor: BackupActor{Type: "agent", ID: "agent-1"}, Emoji: "👍"}},
 			}},
-			Metadata:  json.RawMessage(`{"pr_url":"https://example.com/pr/1"}`),
-			Reactions: []BackupReaction{{Actor: BackupActor{Type: "member", ID: "user-1"}, Emoji: "🚀"}},
+			Metadata:           json.RawMessage(`{"pr_url":"https://example.com/pr/1"}`),
+			Reactions:          []BackupReaction{{Actor: BackupActor{Type: "member", ID: "user-1"}, Emoji: "🚀"}},
+			Position:           -5,
+			DueDate:            &due,
+			AcceptanceCriteria: json.RawMessage(`["builds","tests pass"]`),
+			ContextRefs:        json.RawMessage(`[{"kind":"issue","id":"issue-0"}]`),
+			CreatedAt:          ts,
 		}},
 		Squads: []BackupSquad{{
 			ID:           "squad-1",
 			Name:         "Core",
 			LeaderID:     "agent-1",
 			Instructions: "ship it",
+			AvatarURL:    "https://example.com/squad.png",
 			Members:      []BackupSquadMember{{MemberType: "agent", MemberID: "agent-1", Role: "leader"}},
+			CreatedAt:    ts,
 		}},
 		Autopilots: []BackupAutopilot{{
-			ID:       "ap-1",
-			Name:     "nightly",
-			Config:   json.RawMessage(`{"mode":"auto"}`),
-			Schedule: "0 0 * * *",
-			Enabled:  true,
+			ID:        "ap-1",
+			Name:      "nightly",
+			Config:    json.RawMessage(`{"mode":"auto"}`),
+			Schedule:  "0 0 * * *",
+			Enabled:   true,
+			CreatedAt: ts,
 		}},
 	}
 
