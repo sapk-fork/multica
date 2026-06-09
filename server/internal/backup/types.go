@@ -44,8 +44,13 @@ type BackupFile struct {
 	Autopilots []BackupAutopilot `json:"autopilots,omitempty"`
 }
 
-// BackupMetadata describes the backup itself and the workspace it was
-// exported from.
+// BackupMetadata describes the backup itself and records its provenance: the
+// version of the format and which workspace the data was exported *from*. The
+// Source* fields are origin tracking only — they identify where the backup
+// came from for auditing and are not the configuration to restore. The
+// workspace configuration that a restore should apply lives in
+// BackupFile.Workspace (see BackupWorkspace). Keeping the two separate lets a
+// backup be restored into a workspace whose identity differs from the source.
 type BackupMetadata struct {
 	// Version is the backup format version; always FormatVersion on export.
 	Version string `json:"version"`
@@ -60,17 +65,23 @@ type BackupMetadata struct {
 }
 
 // BackupWorkspace captures workspace-level settings so a restore can recreate
-// the workspace configuration, not just its contents. It is optional: an
-// export that only snapshots entities may omit it.
+// the workspace configuration, not just its contents. Unlike the Source*
+// fields on BackupMetadata — which only record where the backup came from —
+// these are the restorable settings a restore applies to the target
+// workspace. It is optional: an export that only snapshots entities may omit
+// it.
 type BackupWorkspace struct {
-	ID          string          `json:"id"`
-	Name        string          `json:"name"`
-	Slug        string          `json:"slug"`
-	Description string          `json:"description,omitempty"`
-	Context     string          `json:"context,omitempty"`
-	Settings    json.RawMessage `json:"settings,omitempty"`
-	Repos       json.RawMessage `json:"repos,omitempty"`
-	IssuePrefix string          `json:"issue_prefix,omitempty"`
+	ID           string          `json:"id"`
+	Name         string          `json:"name"`
+	Slug         string          `json:"slug"`
+	Description  string          `json:"description,omitempty"`
+	Context      string          `json:"context,omitempty"`
+	Settings     json.RawMessage `json:"settings,omitempty"`
+	Repos        json.RawMessage `json:"repos,omitempty"`
+	IssuePrefix  string          `json:"issue_prefix,omitempty"`
+	IssueCounter int32           `json:"issue_counter,omitempty"`
+	AvatarURL    string          `json:"avatar_url,omitempty"`
+	CreatedAt    time.Time       `json:"created_at"`
 }
 
 // BackupMember is a human workspace member. Email is the cross-instance
