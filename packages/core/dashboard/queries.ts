@@ -15,6 +15,12 @@ export const dashboardKeys = {
     projectId: string | null,
     tz: string,
   ) => [...dashboardKeys.all(wsId), "by-agent", days, projectId, tz] as const,
+  byModel: (
+    wsId: string,
+    days: number,
+    projectId: string | null,
+    tz: string,
+  ) => [...dashboardKeys.all(wsId), "by-model", days, projectId, tz] as const,
   agentRuntime: (
     wsId: string,
     days: number,
@@ -40,6 +46,12 @@ export const dashboardKeys = {
     tz: string,
   ) =>
     [...dashboardKeys.all(wsId), "failures-by-agent", days, projectId, tz] as const,
+  runtimeRunTime: (
+    wsId: string,
+    days: number,
+    projectId: string | null,
+    tz: string,
+  ) => [...dashboardKeys.all(wsId), "runtime-runtime", days, projectId, tz] as const,
 };
 
 // 5-min rollup cadence on the server, 60s background refetch on the client.
@@ -194,6 +206,54 @@ export function dashboardFailuresByAgentOptions(
     queryKey,
     queryFn: () =>
       api.getDashboardFailuresByAgent({
+        days,
+        project_id: projectId ?? undefined,
+        tz,
+      }),
+    enabled: !!wsId,
+    staleTime: STALE_TIME,
+    placeholderData: (previousData, previousQuery) =>
+      isSameDashboardScope(previousQuery?.queryKey, queryKey)
+        ? keepPreviousData(previousData)
+        : undefined,
+  });
+}
+
+export function dashboardUsageByModelOptions(
+  wsId: string,
+  days: number,
+  projectId: string | null,
+  tz: string,
+) {
+  const queryKey = dashboardKeys.byModel(wsId, days, projectId, tz);
+  return queryOptions({
+    queryKey,
+    queryFn: () =>
+      api.getDashboardUsageByModel({
+        days,
+        project_id: projectId ?? undefined,
+        tz,
+      }),
+    enabled: !!wsId,
+    staleTime: STALE_TIME,
+    placeholderData: (previousData, previousQuery) =>
+      isSameDashboardScope(previousQuery?.queryKey, queryKey)
+        ? keepPreviousData(previousData)
+        : undefined,
+  });
+}
+
+export function dashboardRuntimeRunTimeOptions(
+  wsId: string,
+  days: number,
+  projectId: string | null,
+  tz: string,
+) {
+  const queryKey = dashboardKeys.runtimeRunTime(wsId, days, projectId, tz);
+  return queryOptions({
+    queryKey,
+    queryFn: () =>
+      api.getDashboardRuntimeRunTime({
         days,
         project_id: projectId ?? undefined,
         tz,
