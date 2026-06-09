@@ -529,10 +529,14 @@ function MentionRow({
   const { t } = useT("editor");
   const { t: issuesT } = useT("issues");
   if (item.type === "issue") {
-    // Visually dim closed issues (done/cancelled) so they're distinguishable
+    // Visually dim closed issues (done/cancelled/archived) so they're distinguishable
     // from active ones in the suggestion list — they're still selectable.
+    // "archived" is the fork's 8th terminal category (M-11); compare on the
+    // category, not the raw key, so custom statuses in those categories dim too.
     const isClosed =
-      item.statusCategory === "done" || item.statusCategory === "cancelled";
+      item.statusCategory === "done" ||
+      item.statusCategory === "cancelled" ||
+      item.statusCategory === "archived";
     return (
       <button
         type="button"
