@@ -44,32 +44,18 @@ type BackupFile struct {
 	Autopilots []BackupAutopilot `json:"autopilots,omitempty"`
 }
 
-// BackupMetadata describes the backup itself and records its provenance: the
-// version of the format and which workspace the data was exported *from*. The
-// Source* fields are origin tracking only — they identify where the backup
-// came from for auditing and are not the configuration to restore. The
-// workspace configuration that a restore should apply lives in
-// BackupFile.Workspace (see BackupWorkspace). Keeping the two separate lets a
-// backup be restored into a workspace whose identity differs from the source.
+// BackupMetadata describes the backup itself: the format version and when the
+// backup was produced.
 type BackupMetadata struct {
 	// Version is the backup format version; always FormatVersion on export.
 	Version string `json:"version"`
 	// ExportedAt is the UTC time the backup was produced.
 	ExportedAt time.Time `json:"exported_at"`
-	// SourceWorkspaceID is the UUID of the workspace the data came from.
-	SourceWorkspaceID string `json:"source_workspace_id"`
-	// SourceWorkspaceName is the human-readable workspace name, for context.
-	SourceWorkspaceName string `json:"source_workspace_name,omitempty"`
-	// SourceWorkspaceSlug is the workspace slug, for context.
-	SourceWorkspaceSlug string `json:"source_workspace_slug,omitempty"`
 }
 
 // BackupWorkspace captures workspace-level settings so a restore can recreate
-// the workspace configuration, not just its contents. Unlike the Source*
-// fields on BackupMetadata — which only record where the backup came from —
-// these are the restorable settings a restore applies to the target
-// workspace. It is optional: an export that only snapshots entities may omit
-// it.
+// the workspace configuration, not just its contents. It is optional: an
+// export that only snapshots entities may omit it.
 type BackupWorkspace struct {
 	ID           string          `json:"id"`
 	Name         string          `json:"name"`
