@@ -536,7 +536,7 @@ function SubIssueRow({ child }: { child: Issue }) {
   const updateIssue = useUpdateIssue();
   const selected = useIssueSelectionStore((s) => s.selectedIds.has(child.id));
   const toggleSelected = useIssueSelectionStore((s) => s.toggle);
-  const isDone = child.status === "done" || child.status === "cancelled";
+  const isDone = child.status === "done" || child.status === "cancelled" || child.status === "archived";
 
   const handleUpdate = useCallback(
     (updates: Partial<UpdateIssueRequest>) => {
@@ -1715,7 +1715,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                 it never overlaps the title (which truncates to make room).
                 It self-hides when no agent is active. */}
             <IssueAgentHeaderChip issueId={id} />
-            {onDone && issue.status !== "done" && issue.status !== "cancelled" && (
+            {onDone && issue.status !== "done" && issue.status !== "cancelled" && issue.status !== "archived" && (
               <Tooltip>
                 <TooltipTrigger
                   render={
