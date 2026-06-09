@@ -461,7 +461,7 @@ export function GanttView({ issues }: { issues: Issue[] }) {
     const dated = issues.filter((i) => i.start_date || i.due_date);
     const filtered = showCompleted
       ? dated
-      : dated.filter((i) => i.status !== "done" && i.status !== "cancelled");
+      : dated.filter((i) => i.status !== "done" && i.status !== "cancelled" && i.status !== "archived");
     // "position" makes no sense on a gantt — default to start_date asc when
     // the user hasn't picked a more specific sort.
     const sortField = sortBy === "position" ? "start_date" : sortBy;
