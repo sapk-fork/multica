@@ -63,7 +63,7 @@ func (h *Handler) notifyParentOfChildDone(ctx context.Context, prev, issue db.Is
 			"parent_id", uuidToString(issue.ParentIssueID))
 		return
 	}
-	if parent.Status == "done" || parent.Status == "cancelled" {
+	if parent.Status == "done" || parent.Status == "cancelled" || parent.Status == "archived" {
 		return
 	}
 	// Human-assigned parents read their own timeline; an automated system
