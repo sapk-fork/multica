@@ -558,8 +558,9 @@ func (d *Daemon) gcDecisionIssueResult(taskDir string, meta *execenv.GCMeta, res
 
 	// result.Status is a CATEGORY, normalized server-side, so this literal
 	// comparison covers custom statuses too — an issue on a `done`-category
-	// custom status is terminal here. (MUL-6243)
-	if (result.Status == "done" || result.Status == "cancelled") &&
+	// custom status is terminal here. (MUL-6243) The fork's built-in
+	// `archived` terminal status is also GC-eligible.
+	if (result.Status == "done" || result.Status == "cancelled" || result.Status == "archived") &&
 		time.Since(result.UpdatedAt) > d.cfg.GCTTL {
 		d.logger.Info("gc: eligible for cleanup",
 			"dir", filepath.Base(taskDir),
