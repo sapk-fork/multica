@@ -57,6 +57,9 @@ func Unmarshal(data []byte) (*BackupFile, error) {
 
 // compatibleVersion checks if a version string is compatible with FormatVersion.
 // Compatible means the major version matches; minor version can be equal or lower.
+// compatibleVersion checks if a version string is compatible with FormatVersion.
+// Compatible means the major version matches; minor version differences are
+// accepted (forward compatible).
 func compatibleVersion(version string) bool {
 	fileParts := strings.Split(version, ".")
 	currentParts := strings.Split(FormatVersion, ".")
