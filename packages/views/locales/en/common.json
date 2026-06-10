@@ -44,7 +44,6 @@
   "more_actions": "More actions",
   "loading": "Loading...",
   "time": {
-    "never": "never",
     "just_now": "just now",
     "minutes_ago": "{{count}}m ago",
     "hours_ago": "{{count}}h ago",
