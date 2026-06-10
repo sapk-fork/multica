@@ -60,6 +60,8 @@ export type {
   DashboardFailureDaily,
   DashboardFailureByAgent,
   DashboardRuntimeRunTime,
+  DashboardModelRunTime,
+  DashboardRuntimeUsage,
   RuntimeUpdate,
   RuntimeUpdateStatus,
   RuntimeModel,
