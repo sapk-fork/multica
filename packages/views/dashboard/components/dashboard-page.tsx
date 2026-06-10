@@ -31,6 +31,8 @@ import {
   dashboardUsageByModelOptions,
   dashboardRuntimeRunTimeOptions,
   type FailureClass,
+  dashboardModelRunTimeOptions,
+  dashboardRuntimeUsageOptions,
 } from "@multica/core/dashboard";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { runtimeListOptions } from "@multica/core/runtimes/queries";
@@ -292,6 +294,12 @@ export function DashboardPage() {
   const runtimeRunTimeQuery = useQuery(
     dashboardRuntimeRunTimeOptions(wsId, days, projectId, viewTZ),
   );
+  const modelRunTimeQuery = useQuery(
+    dashboardModelRunTimeOptions(wsId, days, projectId, viewTZ),
+  );
+  const runtimeUsageQuery = useQuery(
+    dashboardRuntimeUsageOptions(wsId, days, projectId, viewTZ),
+  );
 
   const dailyUsage = dailyQuery.data ?? EMPTY_DAILY;
   const byAgentUsage = byAgentQuery.data ?? EMPTY_BY_AGENT;
@@ -301,6 +309,8 @@ export function DashboardPage() {
   const failureDailyRows = failuresDailyQuery.data ?? EMPTY_FAILURE_DAILY;
   const failureByAgentRows = failuresByAgentQuery.data ?? EMPTY_FAILURE_BY_AGENT;
   const runtimeRunTime = runtimeRunTimeQuery.data ?? EMPTY_RUNTIME_RUNTIME;
+  const modelRunTime = modelRunTimeQuery.data ?? [];
+  const runtimeUsage = runtimeUsageQuery.data ?? [];
 
   // Daily-aggregation surfaces (cost/tokens/time/tasks KPIs and the Daily
   // trend chart) re-scope to the user-selected `days` even when we
@@ -334,7 +344,9 @@ export function DashboardPage() {
     runTimeDailyQuery.isLoading ||
     failuresDailyQuery.isLoading ||
     failuresByAgentQuery.isLoading ||
-    runtimeRunTimeQuery.isLoading;
+    runtimeRunTimeQuery.isLoading ||
+    modelRunTimeQuery.isLoading ||
+    runtimeUsageQuery.isLoading;
 
   // Six independent rollups, but the empty-state is one decision — only
   // show "no data yet" when ALL came back empty so a project with tokens
@@ -624,7 +636,9 @@ export function DashboardPage() {
                 agents={agents}
                 deletedAgentCount={deletedAgentCount}
                 byModelUsage={byModelUsage}
+                modelRunTime={modelRunTime}
                 runtimeRunTime={runtimeRunTime}
+                runtimeUsage={runtimeUsage}
                 runtimes={runtimes}
                 lessThanMinuteLabel={t(($) => $.duration.less_than_minute)}
               />
@@ -1197,12 +1211,12 @@ const SCOPE_SORT_METRIC: Record<
   model: {
     tokens: (r) => (r as ModelDashboardRow).tokens,
     cost: (r) => (r as ModelDashboardRow).cost,
-    time: () => 0,
+    time: (r) => (r as ModelDashboardRow).seconds,
     tasks: (r) => (r as ModelDashboardRow).taskCount,
   },
   runtime: {
-    tokens: () => 0,
-    cost: () => 0,
+    tokens: (r) => (r as RuntimeDashboardRow).tokens,
+    cost: (r) => (r as RuntimeDashboardRow).cost,
     time: (r) => (r as RuntimeDashboardRow).seconds,
     tasks: (r) => (r as RuntimeDashboardRow).taskCount,
   },
@@ -1213,7 +1227,9 @@ function Leaderboard({
   agents,
   deletedAgentCount,
   byModelUsage,
+  modelRunTime,
   runtimeRunTime,
+  runtimeUsage,
   runtimes,
   lessThanMinuteLabel,
 }: {
@@ -1221,7 +1237,9 @@ function Leaderboard({
   agents: { id: string; name: string }[];
   deletedAgentCount: number;
   byModelUsage: import("@multica/core/types").DashboardUsageByModel[];
+  modelRunTime: import("@multica/core/types").DashboardModelRunTime[];
   runtimeRunTime: import("@multica/core/types").DashboardRuntimeRunTime[];
+  runtimeUsage: import("@multica/core/types").DashboardRuntimeUsage[];
   runtimes: { id: string; name: string }[];
   lessThanMinuteLabel: string;
 }) {
@@ -1229,8 +1247,14 @@ function Leaderboard({
   const [scope, setScope] = useState<LeaderboardScope>("agent");
   const [sortBy, setSortBy] = useState<LeaderboardSort>("tokens");
 
-  const modelRows = useMemo(() => aggregateModelRows(byModelUsage), [byModelUsage]);
-  const runtimeRows = useMemo(() => aggregateRuntimeRows(runtimeRunTime), [runtimeRunTime]);
+  const modelRows = useMemo(
+    () => aggregateModelRows(byModelUsage, modelRunTime),
+    [byModelUsage, modelRunTime],
+  );
+  const runtimeRows = useMemo(
+    () => aggregateRuntimeRows(runtimeRunTime, runtimeUsage),
+    [runtimeRunTime, runtimeUsage],
+  );
 
   const activeRows: (AgentDashboardRow | ModelDashboardRow | RuntimeDashboardRow)[] = useMemo(() => {
     const metric = SCOPE_SORT_METRIC[scope][sortBy];
@@ -1290,9 +1314,11 @@ function Leaderboard({
   return (
     <div className="rounded-lg border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 pt-4 pb-3">
-        <h4 className="text-sm font-semibold">{t(($) => $.leaderboard.title)}</h4>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-3">
+          <h4 className="text-sm font-semibold">{t(($) => $.leaderboard.title)}</h4>
           <Segmented value={scope} onChange={setScope} options={scopeOptions} />
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
           <Segmented value={sortBy} onChange={setSortBy} options={sortOptions} />
           <span className="text-xs text-muted-foreground">{caption}</span>
         </div>
@@ -1417,7 +1443,7 @@ function ModelLeaderboardRow({
   row,
   pct,
   sortBy,
-  lessThanMinuteLabel: _,
+  lessThanMinuteLabel,
 }: {
   row: ModelDashboardRow;
   pct: number;
@@ -1430,7 +1456,7 @@ function ModelLeaderboardRow({
       <ProgressBar pct={pct} />
       <MetricCell active={sortBy === "tokens"}>{formatTokens(row.tokens)}</MetricCell>
       <MetricCell active={sortBy === "cost"} size="sm">${row.cost.toFixed(2)}</MetricCell>
-      <MetricCell active={false}>—</MetricCell>
+      <MetricCell active={sortBy === "time"}>{formatDuration(row.seconds, lessThanMinuteLabel)}</MetricCell>
       <MetricCell active={sortBy === "tasks"}>{row.taskCount}</MetricCell>
     </div>
   );
@@ -1453,8 +1479,8 @@ function RuntimeLeaderboardRow({
     <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_5rem_5rem_5rem_4rem] items-center gap-3 px-4 py-2">
       <span className="truncate text-sm font-medium">{runtimeName}</span>
       <ProgressBar pct={pct} />
-      <MetricCell active={false}>—</MetricCell>
-      <MetricCell active={false}>—</MetricCell>
+      <MetricCell active={sortBy === "tokens"}>{row.tokens > 0 ? formatTokens(row.tokens) : "—"}</MetricCell>
+      <MetricCell active={sortBy === "cost"} size="sm">{row.cost > 0 ? `$${row.cost.toFixed(2)}` : "—"}</MetricCell>
       <MetricCell active={sortBy === "time"}>{formatDuration(row.seconds, lessThanMinuteLabel)}</MetricCell>
       <MetricCell active={sortBy === "tasks"}>{row.taskCount}</MetricCell>
     </div>
