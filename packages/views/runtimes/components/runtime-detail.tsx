@@ -41,7 +41,7 @@ import { ActorAvatar } from "../../common/actor-avatar";
 import { BreadcrumbHeader } from "../../layout/breadcrumb-header";
 import { AppLink, useNavigation } from "../../navigation";
 import { availabilityConfig, workloadConfig } from "../../agents/presence";
-import { formatHoldUntil, formatLastSeen, isSelfHealingRuntime } from "../utils";
+import { formatHoldUntil, isSelfHealingRuntime } from "../utils";
 import { HealthBadge } from "./shared";
 import { ProviderLogo } from "./provider-logo";
 import { UpdateSection } from "./update-section";
@@ -277,7 +277,7 @@ function HeroCard({
   cliVersion: string | null;
   daemonShort: string | null;
 }) {
-  const { t } = useT("runtimes");
+  const { t, i18n } = useT("runtimes");
   const [showDetails, setShowDetails] = useState(false);
   const device = runtime.device_info ? parseDeviceInfo(runtime.device_info) : null;
   const hasTechDetails = !!cliVersion || !!daemonShort;
@@ -305,7 +305,12 @@ function HeroCard({
               <span>
                 {t(($) => $.health.on_hold.label)} —{" "}
                 {t(($) => $.health.on_hold.resumes_in, {
-                  time: formatHoldUntil(runtime.hold_until)!,
+                  time: formatHoldUntil(
+                    runtime.hold_until,
+                    Date.now(),
+                    i18n.language,
+                    t(($) => $.health.on_hold.soon),
+                  )!,
                 })}
               </span>
             </div>
