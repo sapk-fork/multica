@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Globe, MoreHorizontal, Trash2 } from "lucide-react";
+import { Globe, MoreHorizontal, PauseCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
@@ -31,6 +31,7 @@ import { HealthIcon, useHealthLabel } from "./shared";
 import { DeleteRuntimeDialog } from "./delete-runtime-dialog";
 import {
   computeCostInWindow,
+  formatHoldUntil,
   formatLastSeen,
   isSelfHealingRuntime,
   pctChange,
@@ -236,18 +237,38 @@ function HealthCell({
   runtime: AgentRuntime;
   now: number;
 }) {
+  const { t } = useT("runtimes");
   const labelOf = useHealthLabel();
   const health = deriveRuntimeHealth(runtime, now);
   const lastSeen = formatLastSeen(runtime.last_seen_at);
+  const holdTime = formatHoldUntil(runtime.hold_until);
   return (
-    <div className="flex min-w-0 items-center gap-1.5">
-      <HealthIcon health={health} />
-      <span className="block min-w-0 truncate text-sm">
-        {labelOf(health)}
-        {health !== "online" && runtime.last_seen_at && (
-          <span className="text-muted-foreground"> · {lastSeen}</span>
-        )}
-      </span>
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <HealthIcon health={health} />
+        <span className="block min-w-0 truncate text-sm">
+          {labelOf(health)}
+          {health !== "online" && runtime.last_seen_at && (
+            <span className="text-muted-foreground"> · {lastSeen}</span>
+          )}
+        </span>
+      </div>
+      {holdTime && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <div className="flex min-w-0 items-center gap-1">
+                <PauseCircle className="h-3 w-3 shrink-0 text-warning" />
+                <span className="truncate text-xs text-warning">
+                  {t(($) => $.health.on_hold.label)} ·{" "}
+                  {t(($) => $.health.on_hold.resumes_in, { time: holdTime })}
+                </span>
+              </div>
+            }
+          />
+          <TooltipContent>{t(($) => $.health.on_hold.tooltip)}</TooltipContent>
+        </Tooltip>
+      )}
     </div>
   );
 }
