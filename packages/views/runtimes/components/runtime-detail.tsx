@@ -267,7 +267,7 @@ function HeroCard({
   cliVersion: string | null;
   daemonShort: string | null;
 }) {
-  const { t, i18n } = useT("runtimes");
+  const { t } = useT("runtimes");
   const [showDetails, setShowDetails] = useState(false);
   const device = runtime.device_info ? parseDeviceInfo(runtime.device_info) : null;
   const hasTechDetails = !!cliVersion || !!daemonShort;
@@ -295,12 +295,7 @@ function HeroCard({
               <span>
                 {t(($) => $.health.on_hold.label)} —{" "}
                 {t(($) => $.health.on_hold.resumes_in, {
-                  time: formatHoldUntil(
-                    runtime.hold_until,
-                    Date.now(),
-                    i18n.language,
-                    t(($) => $.health.on_hold.soon),
-                  )!,
+                  time: formatHoldUntil(runtime.hold_until)!,
                 })}
               </span>
             </div>
