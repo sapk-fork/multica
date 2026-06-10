@@ -46,6 +46,8 @@ export type {
   DashboardAgentRunTime,
   DashboardRunTimeDaily,
   DashboardRuntimeRunTime,
+  DashboardModelRunTime,
+  DashboardRuntimeUsage,
   RuntimeUpdate,
   RuntimeUpdateStatus,
   RuntimeModel,
