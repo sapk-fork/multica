@@ -1490,7 +1490,7 @@ func (s *TaskService) FailTask(ctx context.Context, taskID pgtype.UUID, errMsg, 
 	// Session limit: place the runtime on hold before auto-retry so the
 	// retried task won't be claimed until the hold lifts.
 	if failureReason == "session_limit" && task.RuntimeID.Valid {
-		s.HoldRuntimeIfSessionLimit(ctx, task.RuntimeID, errMsg)
+		s.HoldRuntimeIfSessionLimit(ctx, task.RuntimeID, task.ID, errMsg)
 	}
 
 	// Auto-retry eligible failures (orphan, timeout, runtime_offline,
