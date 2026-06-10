@@ -237,20 +237,11 @@ function HealthCell({
   runtime: AgentRuntime;
   now: number;
 }) {
-  const { t, i18n } = useT("runtimes");
-  const { t: tCommon } = useT("common");
+  const { t } = useT("runtimes");
   const labelOf = useHealthLabel();
   const health = deriveRuntimeHealth(runtime, now);
-  const lastSeen = formatLastSeen(runtime.last_seen_at, i18n.language, {
-    never: tCommon(($) => $.time.never),
-    justNow: tCommon(($) => $.time.just_now),
-  });
-  const holdTime = formatHoldUntil(
-    runtime.hold_until,
-    now,
-    i18n.language,
-    t(($) => $.health.on_hold.soon),
-  );
+  const lastSeen = formatLastSeen(runtime.last_seen_at);
+  const holdTime = formatHoldUntil(runtime.hold_until);
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       <div className="flex min-w-0 items-center gap-1.5">
