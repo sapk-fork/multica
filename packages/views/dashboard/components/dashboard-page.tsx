@@ -25,6 +25,8 @@ import {
   dashboardFailuresByAgentOptions,
   dashboardUsageByModelOptions,
   dashboardRuntimeRunTimeOptions,
+  dashboardModelRunTimeOptions,
+  dashboardRuntimeUsageOptions,
 } from "@multica/core/dashboard";
 import { runtimeListOptions } from "@multica/core/runtimes/queries";
 import { useCustomPricingStore } from "@multica/core/runtimes/custom-pricing-store";
@@ -240,6 +242,12 @@ export function DashboardPage() {
   const runtimeRunTimeQuery = useQuery(
     dashboardRuntimeRunTimeOptions(wsId, days, projectId, viewTZ),
   );
+  const modelRunTimeQuery = useQuery(
+    dashboardModelRunTimeOptions(wsId, days, projectId, viewTZ),
+  );
+  const runtimeUsageQuery = useQuery(
+    dashboardRuntimeUsageOptions(wsId, days, projectId, viewTZ),
+  );
 
   const dailyUsage = dailyQuery.data ?? EMPTY_DAILY;
   const byAgentUsage = byAgentQuery.data ?? EMPTY_BY_AGENT;
@@ -249,6 +257,8 @@ export function DashboardPage() {
   const failureDailyRows = failuresDailyQuery.data ?? EMPTY_FAILURE_DAILY;
   const failureByAgentRows = failuresByAgentQuery.data ?? EMPTY_FAILURE_BY_AGENT;
   const runtimeRunTime = runtimeRunTimeQuery.data ?? EMPTY_RUNTIME_RUNTIME;
+  const modelRunTime = modelRunTimeQuery.data ?? [];
+  const runtimeUsage = runtimeUsageQuery.data ?? [];
 
   const queryClient = useQueryClient();
   // "Refreshing" covers any of the six rollups being in flight, whichever
@@ -310,7 +320,9 @@ export function DashboardPage() {
     byModelQuery.isLoading ||
     runTimeQuery.isLoading ||
     runTimeDailyQuery.isLoading ||
-    runtimeRunTimeQuery.isLoading;
+    runtimeRunTimeQuery.isLoading ||
+    modelRunTimeQuery.isLoading ||
+    runtimeUsageQuery.isLoading;
   const errorsLoading =
     failuresDailyQuery.isLoading || failuresByAgentQuery.isLoading;
 
@@ -627,7 +639,9 @@ export function DashboardPage() {
                   agents={agents}
                   deletedAgentCount={deletedAgentCount}
                   byModelUsage={byModelUsage}
+                  modelRunTime={modelRunTime}
                   runtimeRunTime={runtimeRunTime}
+                  runtimeUsage={runtimeUsage}
                   runtimes={runtimes}
                   lessThanMinuteLabel={lessThanMinuteLabel}
                 />
