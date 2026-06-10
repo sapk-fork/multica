@@ -93,7 +93,8 @@ function useNowTick(intervalMs = 30_000): number {
 }
 
 export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
-  const { t } = useT("runtimes");
+  const { t, i18n } = useT("runtimes");
+  const { t: tCommon } = useT("common");
   const cliVersion =
     runtime.runtime_mode === "local" ? getCliVersion(runtime.metadata) : null;
   const launchedBy =
@@ -151,7 +152,10 @@ export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
   };
 
   const daemonShort = shortDaemonId(runtime.daemon_id);
-  const lastSeen = formatLastSeen(runtime.last_seen_at);
+  const lastSeen = formatLastSeen(runtime.last_seen_at, i18n.language, {
+    never: tCommon(($) => $.time.never),
+    justNow: tCommon(($) => $.time.just_now),
+  });
 
   return (
     <div className="flex h-full flex-col">
@@ -260,7 +264,7 @@ function HeroCard({
   cliVersion: string | null;
   daemonShort: string | null;
 }) {
-  const { t } = useT("runtimes");
+  const { t, i18n } = useT("runtimes");
   const [showDetails, setShowDetails] = useState(false);
   const device = runtime.device_info ? parseDeviceInfo(runtime.device_info) : null;
   const hasTechDetails = !!cliVersion || !!daemonShort;
@@ -288,7 +292,12 @@ function HeroCard({
               <span>
                 {t(($) => $.health.on_hold.label)} —{" "}
                 {t(($) => $.health.on_hold.resumes_in, {
-                  time: formatHoldUntil(runtime.hold_until)!,
+                  time: formatHoldUntil(
+                    runtime.hold_until,
+                    Date.now(),
+                    i18n.language,
+                    t(($) => $.health.on_hold.soon),
+                  )!,
                 })}
               </span>
             </div>
