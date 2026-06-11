@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Globe, MoreHorizontal, PauseCircle, Trash2 } from "lucide-react";
+import { Globe, MoreHorizontal, PauseCircle, PlayCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
@@ -10,6 +10,7 @@ import { deriveWorkload } from "@multica/core/agents";
 import {
   deriveRuntimeHealth,
   runtimeUsageOptions,
+  useResumeRuntime,
 } from "@multica/core/runtimes";
 import { Button } from "@multica/ui/components/ui/button";
 import {
@@ -453,13 +454,11 @@ function RowMenu({
 }) {
   const { t } = useT("runtimes");
   const [deleteOpen, setDeleteOpen] = useState(false);
-  // Delete is currently the only row action; if the row can't run it, drop
-  // the kebab entirely so the column doesn't render an empty popover. The
-  // self-healing case (local + online) is the runtime-detail parity fix —
-  // see isSelfHealingRuntime for the rationale.
+  const resumeMutation = useResumeRuntime(wsId);
   const selfHealing = isSelfHealingRuntime(runtime);
+  const onHold = !!runtime.hold_until;
 
-  if (!canDelete || selfHealing) {
+  if (!canDelete || (!onHold && selfHealing)) {
     return <span aria-hidden />;
   }
 
@@ -484,14 +483,31 @@ function RowMenu({
           className="w-40"
           onClick={(e) => e.stopPropagation()}
         >
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={() => setDeleteOpen(true)}
-            title={t(($) => $.list.delete_permission_hint)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            {t(($) => $.list.delete_action)}
-          </DropdownMenuItem>
+          {onHold && (
+            <DropdownMenuItem
+              onClick={() =>
+                resumeMutation.mutate(runtime.id, {
+                  onSuccess: () =>
+                    toast.success(t(($) => $.health.on_hold.resume_toast)),
+                  onError: () =>
+                    toast.error(t(($) => $.health.on_hold.resume_failed)),
+                })
+              }
+            >
+              <PlayCircle className="h-3.5 w-3.5" />
+              {t(($) => $.health.on_hold.resume_button)}
+            </DropdownMenuItem>
+          )}
+          {!selfHealing && (
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => setDeleteOpen(true)}
+              title={t(($) => $.list.delete_permission_hint)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {t(($) => $.list.delete_action)}
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
       <DeleteRuntimeDialog
