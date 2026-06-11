@@ -7,6 +7,7 @@ import {
   Loader2,
   MoreHorizontal,
   PauseCircle,
+  PlayCircle,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -27,6 +28,7 @@ import { agentTaskSnapshotOptions } from "@multica/core/agents";
 import {
   deriveRuntimeHealth,
   runtimeUsageOptions,
+  useResumeRuntime,
 } from "@multica/core/runtimes";
 import { useWorkspacePaths } from "@multica/core/paths";
 import {
@@ -57,6 +59,7 @@ import {
   computeCostInWindow,
   formatHoldUntil,
   formatLastSeen,
+  isSelfHealingRuntime,
   pctChange,
 } from "../utils";
 import { splitRuntimeName } from "./runtime-machines";
@@ -483,15 +486,11 @@ export function RuntimeRowMenu({
 }) {
   const { t } = useT("runtimes");
   const [deleteOpen, setDeleteOpen] = useState(false);
-  // Delete is currently the only row action; if the row can't run it, drop
-  // the kebab entirely so the column doesn't render an empty popover. We
-  // used to also hide it for self-healing runtimes (live local daemon
-  // re-registers within seconds), but MUL-3352 surfaced that owners read
-  // a missing kebab as "I lost my permission" rather than "the daemon
-  // would undo this". The dialog now carries the self-heal warning and
-  // the user gets to decide.
+  const resumeMutation = useResumeRuntime(wsId);
+  const selfHealing = isSelfHealingRuntime(runtime);
+  const onHold = !!runtime.hold_until;
 
-  if (!canDelete) {
+  if (!canDelete || (!onHold && selfHealing)) {
     return <span aria-hidden />;
   }
 
@@ -510,14 +509,31 @@ export function RuntimeRowMenu({
           }
         />
         <DropdownMenuContent align="end" className="w-40">
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={() => setDeleteOpen(true)}
-            title={t(($) => $.list.delete_permission_hint)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            {t(($) => $.list.delete_action)}
-          </DropdownMenuItem>
+          {onHold && (
+            <DropdownMenuItem
+              onClick={() =>
+                resumeMutation.mutate(runtime.id, {
+                  onSuccess: () =>
+                    toast.success(t(($) => $.health.on_hold.resume_toast)),
+                  onError: () =>
+                    toast.error(t(($) => $.health.on_hold.resume_failed)),
+                })
+              }
+            >
+              <PlayCircle className="h-3.5 w-3.5" />
+              {t(($) => $.health.on_hold.resume_button)}
+            </DropdownMenuItem>
+          )}
+          {!selfHealing && (
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => setDeleteOpen(true)}
+              title={t(($) => $.list.delete_permission_hint)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {t(($) => $.list.delete_action)}
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
       <DeleteRuntimeDialog
@@ -608,7 +624,11 @@ export function RuntimeList({
 
   // Mirrors RuntimeRowMenu's render guard: the kebab track only earns its
   // width when at least one row will actually show the menu.
-  const showActions = rows.some((row) => row.canDelete);
+  const showActions = rows.some(
+    (row) =>
+      row.canDelete &&
+      (!isSelfHealingRuntime(row.runtime) || !!row.runtime.hold_until),
+  );
 
   return (
     <div className="overflow-x-auto overflow-y-hidden @container">
