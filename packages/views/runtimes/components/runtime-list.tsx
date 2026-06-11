@@ -8,6 +8,7 @@ import {
   MoreHorizontal,
   PauseCircle,
   Pencil,
+  PlayCircle,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -31,6 +32,7 @@ import {
   deriveRuntimeHealth,
   runtimeProfileListOptions,
   runtimeUsageOptions,
+  useResumeRuntime,
 } from "@multica/core/runtimes";
 import { useWorkspacePaths } from "@multica/core/paths";
 import {
@@ -550,14 +552,15 @@ export function RuntimeRowMenu({
   const { t } = useT("runtimes");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const resumeMutation = useResumeRuntime(wsId);
   const isCustomRuntime = !!runtime.profile_id;
-  // Delete is currently the only row action; if the row can't run it, drop
-  // the kebab entirely so the column doesn't render an empty popover. We
-  // used to also hide it for self-healing runtimes (live local daemon
-  // re-registers within seconds), but MUL-3352 surfaced that owners read
-  // a missing kebab as "I lost my permission" rather than "the daemon
-  // would undo this". The dialog now carries the self-heal warning and
-  // the user gets to decide.
+  const onHold = !!runtime.hold_until;
+  // The kebab is dropped entirely when the row can't be deleted, so the
+  // column doesn't render an empty popover. We used to also hide it for
+  // self-healing runtimes (live local daemon re-registers within seconds),
+  // but MUL-3352 surfaced that owners read a missing kebab as "I lost my
+  // permission" rather than "the daemon would undo this". The delete dialog
+  // now carries the self-heal warning and the user gets to decide.
 
   if (!canDelete) {
     return <span aria-hidden />;
@@ -578,6 +581,21 @@ export function RuntimeRowMenu({
           }
         />
         <DropdownMenuContent align="end" className="w-40">
+          {onHold && (
+            <DropdownMenuItem
+              onClick={() =>
+                resumeMutation.mutate(runtime.id, {
+                  onSuccess: () =>
+                    toast.success(t(($) => $.health.on_hold.resume_toast)),
+                  onError: () =>
+                    toast.error(t(($) => $.health.on_hold.resume_failed)),
+                })
+              }
+            >
+              <PlayCircle className="h-3.5 w-3.5" />
+              {t(($) => $.health.on_hold.resume_button)}
+            </DropdownMenuItem>
+          )}
           {isCustomRuntime && profile && (
             <DropdownMenuItem onClick={() => setEditOpen(true)}>
               <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
