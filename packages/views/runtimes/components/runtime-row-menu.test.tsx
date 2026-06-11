@@ -34,11 +34,13 @@ vi.mock("@multica/core/runtimes/mutations", () => ({
     isPending: false,
     mutateAsync: vi.fn(),
   }),
+  useResumeRuntime: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@multica/core/runtimes", () => ({
   deriveRuntimeHealth: () => "online",
   runtimeUsageOptions: () => ({ kind: "usage" }),
+  useResumeRuntime: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@multica/core/agents", () => ({
