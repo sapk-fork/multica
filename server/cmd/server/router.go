@@ -1005,6 +1005,18 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Get("/", h.GetNotificationPreferences)
 				r.Put("/", h.UpdateNotificationPreferences)
 			})
+
+			// Backup restore. Both endpoints are owner/admin only —
+			// the auth check is enforced inside the handler via
+			// requireWorkspaceRole so the same gate is applied to
+			// preview (so non-admins cannot enumerate what an
+			// import would touch) and execute. The body is capped
+			// at 32 MiB inside the handler. preview is read-only;
+			// restore writes inside one transaction.
+			r.Route("/api/backup", func(r chi.Router) {
+				r.Post("/restore/preview", h.BackupRestorePreview)
+				r.Post("/restore", h.BackupRestore)
+			})
 		})
 	})
 
