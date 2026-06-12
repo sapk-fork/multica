@@ -437,27 +437,32 @@ func (h *Handler) backupLabelIDsByIssue(ctx context.Context, wsUUID pgtype.UUID,
 }
 
 func (h *Handler) exportComments(ctx context.Context, wsUUID, issueID pgtype.UUID, refs memberRefs) ([]backup.BackupComment, error) {
-	comments, err := h.Queries.ListCommentsForIssue(ctx, db.ListCommentsForIssueParams{
+	// Fetch one row past the cap so we can distinguish "exactly at cap" (no
+	// truncation) from "over cap" (real truncation). The query orders ASC,
+	// so hitting the cap silently drops the *newest* comments — the headroom
+	// is large (p99 ~30 per issue) but a truncated backup is the kind of
+	// data loss that must be visible.
+	fetched, err := h.Queries.ListCommentsForIssue(ctx, db.ListCommentsForIssueParams{
 		IssueID:     issueID,
 		WorkspaceID: wsUUID,
-		Limit:       backupCommentCap,
+		Limit:       backupCommentCap + 1,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list comments for issue %s: %w", uuidToString(issueID), err)
 	}
-	if len(comments) == 0 {
+	if len(fetched) == 0 {
 		return nil, nil
 	}
-	// The cap orders by created_at ASC, so hitting it silently drops the
-	// *newest* comments. The headroom is large (p99 ~30 per issue) but a
-	// truncated backup is the kind of data loss that must be visible.
-	if len(comments) == backupCommentCap {
+	truncated := len(fetched) > backupCommentCap
+	if truncated {
+		fetched = fetched[:backupCommentCap]
 		slog.Warn("backup export: comment cap reached, newest comments may be truncated",
 			"issue_id", uuidToString(issueID),
 			"workspace_id", uuidToString(wsUUID),
 			"cap", backupCommentCap,
 		)
 	}
+	comments := fetched
 	commentIDs := make([]pgtype.UUID, len(comments))
 	for i, c := range comments {
 		commentIDs[i] = c.ID
