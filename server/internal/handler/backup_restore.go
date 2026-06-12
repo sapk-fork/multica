@@ -941,10 +941,12 @@ func (h *Handler) planProjectsSection(ctx context.Context, q *db.Queries, parsed
 
 		// Lead resolution: a polymorphic actor; if the source pointed
 		// at an agent, look it up in the agents remap; otherwise
-		// leave lead unset.
+		// leave lead unset. p.Lead is a *BackupActor after the
+		// M-24 format change (omitempty drops unset actors), so guard
+		// for nil before dereferencing.
 		var leadType pgtype.Text
 		var leadID pgtype.UUID
-		if p.Lead.Type == "agent" {
+		if p.Lead != nil && p.Lead.Type == "agent" {
 			if remapped := idx.remapKey(restoreKindAgents, p.Lead.ID); remapped != "" {
 				leadType = pgtype.Text{String: "agent", Valid: true}
 				leadID = parseUUID(remapped)
@@ -1201,11 +1203,17 @@ func (h *Handler) planSquadsSection(ctx context.Context, q *db.Queries, parsed *
 		// the restore selection — we skip the squad entirely to
 		// avoid a transaction-killing FK violation. On preview,
 		// no agents have been created yet, so the remap is
-		// always empty; defer the check to execute.
+		// always empty; defer the check to execute. sq.Leader is
+		// a *BackupActor after the M-24 format change, so guard
+		// for nil before dereferencing.
 		var leaderID pgtype.UUID
-		if sq.Leader.Type == "agent" {
-			if remapped := idx.remapKey(restoreKindAgents, sq.Leader.ID); remapped != "" {
-				leaderID = parseUUID(remapped)
+		var leaderSourceID string
+		if sq.Leader != nil {
+			leaderSourceID = sq.Leader.ID
+			if sq.Leader.Type == "agent" {
+				if remapped := idx.remapKey(restoreKindAgents, sq.Leader.ID); remapped != "" {
+					leaderID = parseUUID(remapped)
+				}
 			}
 		}
 
@@ -1221,7 +1229,7 @@ func (h *Handler) planSquadsSection(ctx context.Context, q *db.Queries, parsed *
 		if !leaderID.Valid {
 			item.Action = "skip"
 			item.Status = "skipped"
-			item.Reason = fmt.Sprintf("squad %q requires leader agent %q which is not in the restore set", sq.Name, sq.Leader.ID)
+			item.Reason = fmt.Sprintf("squad %q requires leader agent %q which is not in the restore set", sq.Name, leaderSourceID)
 			plan.Sections[string(kind)] = append(plan.Sections[string(kind)], item)
 			continue
 		}
@@ -1304,16 +1312,21 @@ func (h *Handler) planAutopilotsSection(ctx context.Context, q *db.Queries, pars
 		}
 
 		// Assignee resolution: agent or squad. Remap through the
-		// appropriate table.
+		// appropriate table. ap.Assignee is a *BackupActor after the
+		// M-24 format change (omitempty drops unset actors), so guard
+		// for nil before dereferencing.
 		var assigneeID pgtype.UUID
-		assigneeType := ap.Assignee.Type
-		if assigneeType == "agent" {
-			if remapped := idx.remapKey(restoreKindAgents, ap.Assignee.ID); remapped != "" {
-				assigneeID = parseUUID(remapped)
-			}
-		} else if assigneeType == "squad" {
-			if remapped := idx.remapKey(restoreKindSquads, ap.Assignee.ID); remapped != "" {
-				assigneeID = parseUUID(remapped)
+		var assigneeType string
+		if ap.Assignee != nil {
+			assigneeType = ap.Assignee.Type
+			if assigneeType == "agent" {
+				if remapped := idx.remapKey(restoreKindAgents, ap.Assignee.ID); remapped != "" {
+					assigneeID = parseUUID(remapped)
+				}
+			} else if assigneeType == "squad" {
+				if remapped := idx.remapKey(restoreKindSquads, ap.Assignee.ID); remapped != "" {
+					assigneeID = parseUUID(remapped)
+				}
 			}
 		}
 
@@ -1356,16 +1369,27 @@ func (h *Handler) planAutopilotsSection(ctx context.Context, q *db.Queries, pars
 		item.TargetID = newID
 		idx.remap[kind] = setRemap(idx.remap[kind], ap.ID, newID)
 
-		// Schedule → cron trigger. Webhook triggers are out of scope
-		// for M-25: a webhook URL is a runtime secret that does not
-		// round-trip through a backup.
-		if ap.Schedule != "" {
+		// Triggers: iterate over the M-24 Triggers[] array. Schedule
+		// triggers are restored; webhook/manual triggers are skipped
+		// to preserve the M-25 restore scope (a webhook URL is a
+		// runtime secret and round-tripping it is a separate design
+		// question — tracked by the M-24 follow-ups). The backup now
+		// faithfully captures every trigger, so widening the restore
+		// to webhook is purely a server-side change with no format
+		// implications.
+		for _, tr := range ap.Triggers {
+			if tr.Kind != "schedule" {
+				continue
+			}
+			if tr.Cron == "" {
+				continue
+			}
 			if _, err := q.CreateAutopilotTrigger(ctx, db.CreateAutopilotTriggerParams{
 				AutopilotID:    created.ID,
-				Kind:           "schedule",
-				Enabled:        ap.Enabled,
-				CronExpression: strToText(ap.Schedule),
-				Timezone:       strToText(ap.TriggerTZ),
+				Kind:           tr.Kind,
+				Enabled:        tr.Enabled,
+				CronExpression: strToText(tr.Cron),
+				Timezone:       strToText(tr.Timezone),
 			}); err != nil {
 				// Don't fail the autopilot for a missing
 				// trigger — the autopilot is still useful
