@@ -2,7 +2,7 @@
 //
 // Source: https://models.dev/api.json (MIT, community-maintained,
 // the same dataset OpenCode uses internally).
-// Snapshot: 2026-06-10
+// Snapshot: 2026-06-12
 //
 // Regenerate with: node scripts/generate-pricing.mjs
 
@@ -128,6 +128,7 @@ export const MODEL_PRICING: Readonly<Record<string, {
   "kimi-k2-turbo-preview": { input: 2.4, output: 10, cacheRead: 0.6, cacheWrite: 2.4 },
   "kimi-k2.5": { input: 0.6, output: 3, cacheRead: 0.1, cacheWrite: 0.6 },
   "kimi-k2.6": { input: 0.95, output: 4, cacheRead: 0.16, cacheWrite: 0.95 },
+  "kimi-k2.7-code": { input: 0.95, output: 4, cacheRead: 0.19, cacheWrite: 0.95 },
   "mimo-v2-omni": { input: 0.4, output: 2, cacheRead: 0.08, cacheWrite: 0.4 },
   "mimo-v2-pro": { input: 1, output: 3, cacheRead: 0.2, cacheWrite: 1 },
   "mimo-v2.5": { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
@@ -135,7 +136,7 @@ export const MODEL_PRICING: Readonly<Record<string, {
   "minimax-m2.1": { input: 0.3, output: 1.2, cacheRead: 0.1, cacheWrite: 0.3 },
   "minimax-m2.5": { input: 0.3, output: 1.2, cacheRead: 0.06, cacheWrite: 0.3 },
   "minimax-m2.7": { input: 0.3, output: 1.2, cacheRead: 0.06, cacheWrite: 0.3 },
-  "minimax-m3": { input: 0.3, output: 1.2, cacheRead: 0.06, cacheWrite: 0.3 },
+  "minimax-m3": { input: 0.1, output: 0.4, cacheRead: 0.02, cacheWrite: 0.1 },
   "o1": { input: 15, output: 60, cacheRead: 7.5, cacheWrite: 15 },
   "o1-pro": { input: 150, output: 600, cacheRead: 150, cacheWrite: 150 },
   "o3": { input: 2, output: 8, cacheRead: 0.5, cacheWrite: 2 },
