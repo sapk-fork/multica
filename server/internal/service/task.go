@@ -985,7 +985,10 @@ func (s *TaskService) ClaimTask(ctx context.Context, agentID pgtype.UUID) (*db.A
 	}
 
 	t0 = time.Now()
-	task, err := s.Queries.ClaimAgentTask(ctx, agentID)
+	task, err := s.Queries.ClaimAgentTask(ctx, db.ClaimAgentTaskParams{
+		AgentID:                 agentID,
+		HoldExpiryMarginSeconds: HoldExpiryMargin.Seconds(),
+	})
 	claimAgentMs = time.Since(t0).Milliseconds()
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -1086,7 +1089,10 @@ func (s *TaskService) ClaimTaskForRuntime(ctx context.Context, runtimeID pgtype.
 	preSelectVersion := s.EmptyClaim.CurrentVersion(ctx, runtimeKey)
 
 	t0 := time.Now()
-	tasks, err := s.Queries.ListQueuedClaimCandidatesByRuntime(ctx, runtimeID)
+	tasks, err := s.Queries.ListQueuedClaimCandidatesByRuntime(ctx, db.ListQueuedClaimCandidatesByRuntimeParams{
+		RuntimeID:               runtimeID,
+		HoldExpiryMarginSeconds: HoldExpiryMargin.Seconds(),
+	})
 	listMs = time.Since(t0).Milliseconds()
 	listCount = len(tasks)
 	if err != nil {
