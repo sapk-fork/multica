@@ -314,3 +314,14 @@ UPDATE issue
 SET first_executed_at = now()
 WHERE id = $1 AND first_executed_at IS NULL
 RETURNING id, workspace_id, creator_type, creator_id, first_executed_at;
+
+-- name: ListAllIssuesForBackup :many
+-- Returns every issue in a workspace with the full column set. Backups need
+-- fields that ListIssues omits (acceptance_criteria, context_refs, origin_*,
+-- metadata, first_executed_at) and must never silently drop a column when the
+-- schema grows, so this uses `SELECT *` to let sqlc track the column set.
+SELECT *
+FROM issue
+WHERE workspace_id = $1
+ORDER BY number ASC;
+
