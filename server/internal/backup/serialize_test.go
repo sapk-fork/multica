@@ -58,7 +58,7 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 			Content:     "# Lint\n",
 			Config:      json.RawMessage(`{"auto_fix":true}`),
 			Files:       []BackupSkillFile{{Path: "scripts/run.sh", Content: "echo hi"}},
-			CreatedBy:   BackupActor{Type: "member", ID: "user-1"},
+			CreatedBy:   &BackupActor{Type: "member", ID: "user-1"},
 			CreatedAt:   ts,
 		}},
 		Agents: []BackupAgent{{
@@ -84,7 +84,7 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 			ID:       "proj-1",
 			Title:    "Backup feature",
 			Priority: "high",
-			Lead:     BackupActor{Type: "member", ID: "user-1"},
+			Lead:     &BackupActor{Type: "member", ID: "user-1"},
 			Resources: []BackupProjectResource{{
 				ID:           "res-1",
 				ResourceType: "github_repo",
@@ -100,8 +100,8 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 			Title:    "Define backup format",
 			Status:   "in_progress",
 			Priority: "medium",
-			Assignee: BackupActor{Type: "agent", ID: "agent-1"},
-			Creator:  BackupActor{Type: "agent", ID: "agent-2"},
+			Assignee: &BackupActor{Type: "agent", ID: "agent-1"},
+			Creator:  &BackupActor{Type: "agent", ID: "agent-2"},
 			LabelIDs: []string{"label-1"},
 			Comments: []BackupComment{{
 				ID:         "comment-1",
@@ -110,7 +110,7 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 				CreatedAt:  time.Date(2026, 6, 9, 15, 15, 0, 0, time.UTC),
 				Reactions:  []BackupReaction{{Actor: BackupActor{Type: "agent", ID: "agent-1"}, Emoji: "👍"}},
 				ResolvedAt: &commentResolved,
-				ResolvedBy: BackupActor{Type: "member", ID: "user-1"},
+				ResolvedBy: &BackupActor{Type: "member", ID: "user-1"},
 			}},
 			Metadata:           json.RawMessage(`{"pr_url":"https://example.com/pr/1"}`),
 			Reactions:          []BackupReaction{{Actor: BackupActor{Type: "member", ID: "user-1"}, Emoji: "🚀"}},
@@ -126,7 +126,7 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 		Squads: []BackupSquad{{
 			ID:           "squad-1",
 			Name:         "Core",
-			Leader:       BackupActor{Type: "agent", ID: "agent-1"},
+			Leader:       &BackupActor{Type: "agent", ID: "agent-1"},
 			Instructions: "ship it",
 			AvatarURL:    "https://example.com/squad.png",
 			Members:      []BackupSquadMember{{MemberType: "agent", MemberID: "agent-1", Role: "leader"}},
@@ -136,15 +136,27 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 		Autopilots: []BackupAutopilot{{
 			ID:            "ap-1",
 			Name:          "nightly",
-			Schedule:      "0 0 * * *",
-			Enabled:       true,
-			Assignee:      BackupActor{Type: "agent", ID: "agent-1"},
+			Assignee:      &BackupActor{Type: "agent", ID: "agent-1"},
 			Status:        "active",
 			ExecutionMode: "sequential",
 			ProjectID:     "proj-1",
-			TriggerKind:   "schedule",
-			TriggerTZ:     "UTC",
-			CreatedAt:     ts,
+			Triggers: []BackupAutopilotTrigger{
+				{
+					Kind:     "schedule",
+					Enabled:  true,
+					Cron:     "0 0 * * *",
+					Timezone: "UTC",
+					Label:    "nightly run",
+					Provider: "generic",
+				},
+				{
+					Kind:     "webhook",
+					Enabled:  true,
+					Provider: "github",
+					Payload:  json.RawMessage(`{"webhook_token":"tok","event_filters":["push"]}`),
+				},
+			},
+			CreatedAt: ts,
 		}},
 	}
 
