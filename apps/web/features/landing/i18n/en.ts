@@ -293,6 +293,58 @@ export function createEnDict(allowSignup: boolean): LandingDict {
     },
     entries: [
       {
+        version: "0.3.19",
+        date: "2026-06-09",
+        title: "More Reliable Agents, Attachments, and Issue Threads",
+        changes: [],
+        features: [
+          "Issue conversations can now resolve a specific reply, making long threads easier to close while keeping the final answer visible",
+          "Lark and Feishu conversations now show a typing reaction while Multica is preparing a reply, then clear it before the answer is sent",
+          "Agent runs now know who started each task, making handoffs, audit trails, and privacy-aware behavior more accurate",
+          "OpenClaw users can point Multica at a custom app location and data folder from their local configuration",
+        ],
+        improvements: [
+          "The active agent indicator in an Issue header is easier to read, with motion only while work is running and clearer queued wording otherwise",
+          "The CLI now gives clearer guidance around common errors, sign-in problems, and project setup values",
+        ],
+        fixes: [
+          "Newly posted attachments now use stable private download links, so images and files stay visible after temporary upload links expire",
+          "Autopilot runs started from newly created Issues now fail cleanly when the assigned task cannot complete, instead of staying stuck",
+          "Inbox deep links now scroll inside the Issue timeline without pushing the desktop window out of place",
+          "Cursor and Codex sessions now end more cleanly after terminal results, preserving completion state and final telemetry",
+          "Self-host setup now respects configured server URLs, and project creation returns clear validation errors instead of a generic failure",
+          "A previous upload hardening change was rolled back after it conflicted with attachment behavior",
+        ],
+      },
+      {
+        version: "0.3.18",
+        date: "2026-06-08",
+        title: "Web Notifications and /note Command",
+        changes: [],
+        features: [
+          "The web app can now show native browser notification banners, making workspace activity easier to catch while Multica is in the background",
+          "Comments that start with /note can record context without waking the assigned agent, so teams can leave coordination notes without triggering a run",
+          "Antigravity is now available as a per-agent model choice for daemon-run agents",
+          "The CLI now explains common request failures in plain language and points to the next action",
+        ],
+        improvements: [
+          "The Issue header now shows the live agent signal in a tighter, easier-to-scan place",
+          "Runtime screens are quieter and more accurate, with fewer unnecessary wakeups, clearer task names, and the right CLI version on each row",
+          "Self-hosted installs now generate a random Postgres password by default and carry version details into Docker builds",
+          "Command search now shows assignee avatars, and reply inputs use the same submit behavior as comments",
+          "Built-in skills with longer descriptions now load more reliably",
+        ],
+        fixes: [
+          "Swimlane filters now apply correctly",
+          "Mobile workspace switching now shows workspace logos reliably and uses clearer English copy",
+          "Desktop update and transcript dialogs no longer act on windows or pages that have already closed",
+          "Runtime deletion now cleans archived squads and pauses autopilots as part of the same teardown",
+          "Daemon runs now surface self-restart failures, stop local agents when terminal tasks are ended from the server, and clean stale branches during repository maintenance",
+          "Self-hosted WebSocket connections work correctly behind proxies that set X-Forwarded-Host",
+          "Project list headers keep their compact blurred styling",
+        ],
+      },
+      {
         version: "0.3.17",
         date: "2026-06-05",
         title: "Feishu Bot Group Chat, Usage Scheduling, and CLI Updates",
