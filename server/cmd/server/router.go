@@ -866,6 +866,17 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Get("/{slug}", h.GetAgentTemplate)
 			})
 
+			// Backup restore (M-25). Two endpoints:
+			//   POST /api/backup/restore/preview — read-only plan
+			//   POST /api/backup/restore        — execute the plan
+			// Both require owner/admin on the target workspace;
+			// the preview never writes, the execute wraps all
+			// section writes in a single transaction.
+			r.Route("/api/backup/restore", func(r chi.Router) {
+				r.Post("/preview", h.RestoreBackupPreview)
+				r.Post("/", h.RestoreBackup)
+			})
+
 			// Skills
 			r.Route("/api/skills", func(r chi.Router) {
 				r.Get("/", h.ListSkills)
