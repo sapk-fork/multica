@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -445,5 +448,120 @@ func TestBackupExportPreservesAllAutopilotTriggers(t *testing.T) {
 	}
 	if !kinds["schedule"] || !kinds["webhook"] {
 		t.Errorf("expected both schedule and webhook triggers, got kinds=%v", kinds)
+	}
+}
+
+// captureSlog swaps the default slog logger for one writing to a buffer for
+// the duration of the test, returning the buffer and a cleanup that restores
+// the previous default. Used to assert that the comment-cap warning fires
+// (or doesn't) on the right inputs.
+func captureSlog(t *testing.T) (*bytes.Buffer, func()) {
+	t.Helper()
+	buf := &bytes.Buffer{}
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	return buf, func() { slog.SetDefault(prev) }
+}
+
+// seedIssueWithComments creates an issue with the requested number of
+// comments authored by testUserID (so author refs resolve cleanly) and
+// registers a t.Cleanup to delete the issue. Uses a single INSERT ...
+// generate_series for speed — seeding one row at a time would dominate
+// the test runtime.
+func seedIssueWithComments(t *testing.T, ctx context.Context, title string, commentCount int) string {
+	t.Helper()
+	var issueID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO issue (
+			workspace_id, title, description, status, priority,
+			creator_type, creator_id
+		)
+		VALUES ($1, $2, '', 'todo', 'medium', 'member', $3)
+		RETURNING id
+	`, testWorkspaceID, title, testUserID).Scan(&issueID); err != nil {
+		t.Fatalf("create issue: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM issue WHERE id = $1`, issueID)
+	})
+
+	if commentCount > 0 {
+		if _, err := testPool.Exec(ctx, `
+			INSERT INTO comment (workspace_id, issue_id, author_type, author_id, content, created_at)
+			SELECT $1, $2, 'member', $3, 'seeded comment ' || g::text,
+			       now() + (g * interval '1 microsecond')
+			FROM generate_series(1, $4) g
+		`, testWorkspaceID, issueID, testUserID, commentCount); err != nil {
+			t.Fatalf("seed comments: %v", err)
+		}
+	}
+	return issueID
+}
+
+// TestBackupExportCommentCapNoFalsePositive pins the false-positive fix:
+// an issue with exactly backupCommentCap comments must NOT trigger the
+// truncation warning. The previous `len == cap` check would warn on this
+// input even though nothing was truncated.
+func TestBackupExportCommentCapNoFalsePositive(t *testing.T) {
+	if testHandler == nil {
+		t.Skip("no database configured")
+	}
+	ctx := context.Background()
+	issueID := seedIssueWithComments(t, ctx, "Comment cap exact", backupCommentCap)
+
+	logBuf, restore := captureSlog(t)
+	defer restore()
+
+	file := decodeBackup(t, "include_types=issues")
+
+	var got *backup.BackupIssue
+	for i := range file.Issues {
+		if file.Issues[i].ID == issueID {
+			got = &file.Issues[i]
+			break
+		}
+	}
+	if got == nil {
+		t.Fatalf("issue %s not in export", issueID)
+	}
+	if len(got.Comments) != backupCommentCap {
+		t.Errorf("comments = %d, want %d (no truncation expected)", len(got.Comments), backupCommentCap)
+	}
+	if strings.Contains(logBuf.String(), "comment cap reached") {
+		t.Errorf("truncation warning fired for an issue with exactly cap comments (no truncation):\n%s", logBuf.String())
+	}
+}
+
+// TestBackupExportCommentCapTruncatesWarns pins the real-truncation path:
+// an issue with cap+1 comments must be truncated to cap rows in the export
+// AND must emit the truncation warning. Without the cap+1 fetch trick the
+// old code couldn't distinguish this from the no-truncation case.
+func TestBackupExportCommentCapTruncatesWarns(t *testing.T) {
+	if testHandler == nil {
+		t.Skip("no database configured")
+	}
+	ctx := context.Background()
+	issueID := seedIssueWithComments(t, ctx, "Comment cap over", backupCommentCap+1)
+
+	logBuf, restore := captureSlog(t)
+	defer restore()
+
+	file := decodeBackup(t, "include_types=issues")
+
+	var got *backup.BackupIssue
+	for i := range file.Issues {
+		if file.Issues[i].ID == issueID {
+			got = &file.Issues[i]
+			break
+		}
+	}
+	if got == nil {
+		t.Fatalf("issue %s not in export", issueID)
+	}
+	if len(got.Comments) != backupCommentCap {
+		t.Errorf("comments = %d, want %d (over-cap issue must truncate to cap)", len(got.Comments), backupCommentCap)
+	}
+	if !strings.Contains(logBuf.String(), "comment cap reached") {
+		t.Errorf("truncation warning did not fire for an issue with cap+1 comments:\n%s", logBuf.String())
 	}
 }
