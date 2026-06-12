@@ -2,11 +2,14 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/backup"
+	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
 // decodeBackup runs BackupExport against the seeded test fixture and returns
@@ -304,5 +307,143 @@ func TestBackupExportSkipsUnresolvableMemberRef(t *testing.T) {
 		if m.Email == "" {
 			t.Errorf("BackupMember with empty email found (ID=%s) — identity-less row leaked", m.ID)
 		}
+	}
+}
+
+// TestMapAutopilotTriggers verifies that every trigger attached to an
+// autopilot — schedule, webhook, and the empty case — is mapped into its
+// backup representation with the correct kind-specific fields. The earlier
+// primaryTrigger helper would have dropped the webhook trigger; this test
+// pins the multi-trigger contract.
+func TestMapAutopilotTriggers(t *testing.T) {
+	rawFilters := []byte(`["push","pull_request"]`)
+	in := []db.AutopilotTrigger{
+		{
+			Kind:           "schedule",
+			Enabled:        true,
+			CronExpression: pgtype.Text{String: "0 0 * * *", Valid: true},
+			Timezone:       pgtype.Text{String: "UTC", Valid: true},
+			Label:          pgtype.Text{String: "nightly", Valid: true},
+			Provider:       "generic",
+		},
+		{
+			Kind:          "webhook",
+			Enabled:       false,
+			Provider:      "github",
+			WebhookToken:  pgtype.Text{String: "tok-1", Valid: true},
+			SigningSecret: pgtype.Text{String: "sec-1", Valid: true},
+			EventFilters:  rawFilters,
+		},
+	}
+
+	got := mapAutopilotTriggers(in)
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2 (schedule + webhook)", len(got))
+	}
+
+	sched := got[0]
+	if sched.Kind != "schedule" || !sched.Enabled || sched.Cron != "0 0 * * *" ||
+		sched.Timezone != "UTC" || sched.Label != "nightly" || sched.Provider != "generic" {
+		t.Errorf("schedule trigger mismatch: %+v", sched)
+	}
+	if sched.Payload != nil {
+		t.Errorf("schedule trigger payload = %s, want nil (no webhook fields)", sched.Payload)
+	}
+
+	hook := got[1]
+	if hook.Kind != "webhook" || hook.Enabled || hook.Provider != "github" {
+		t.Errorf("webhook trigger header mismatch: %+v", hook)
+	}
+	if hook.Cron != "" || hook.Timezone != "" {
+		t.Errorf("webhook trigger should not carry cron/timezone, got cron=%q tz=%q", hook.Cron, hook.Timezone)
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(hook.Payload, &payload); err != nil {
+		t.Fatalf("webhook payload unmarshal: %v (payload=%s)", err, hook.Payload)
+	}
+	if string(payload["webhook_token"]) != `"tok-1"` {
+		t.Errorf("webhook_token = %s, want \"tok-1\"", payload["webhook_token"])
+	}
+	if string(payload["signing_secret"]) != `"sec-1"` {
+		t.Errorf("signing_secret = %s, want \"sec-1\"", payload["signing_secret"])
+	}
+	if string(payload["event_filters"]) != `["push","pull_request"]` {
+		t.Errorf("event_filters = %s, want [\"push\",\"pull_request\"]", payload["event_filters"])
+	}
+}
+
+// TestMapAutopilotTriggersEmpty pins the nil-slice contract: an autopilot
+// with no triggers must produce a nil slice (not an empty one) so omitempty
+// drops the field from the serialised output.
+func TestMapAutopilotTriggersEmpty(t *testing.T) {
+	if got := mapAutopilotTriggers(nil); got != nil {
+		t.Errorf("mapAutopilotTriggers(nil) = %v, want nil", got)
+	}
+	if got := mapAutopilotTriggers([]db.AutopilotTrigger{}); got != nil {
+		t.Errorf("mapAutopilotTriggers([]) = %v, want nil", got)
+	}
+}
+
+// TestBackupExportPreservesAllAutopilotTriggers seeds an autopilot with two
+// triggers (a schedule and a webhook) and asserts both survive the export.
+// This is the regression for the previous primaryTrigger collapse where the
+// non-primary trigger was silently dropped.
+func TestBackupExportPreservesAllAutopilotTriggers(t *testing.T) {
+	if testHandler == nil {
+		t.Skip("no database configured")
+	}
+	ctx := context.Background()
+
+	var autopilotID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO autopilot (
+			workspace_id, title, assignee_type, assignee_id, status, execution_mode, created_by_type, created_by_id
+		)
+		VALUES ($1, 'Multi-trigger backup test', 'agent',
+		        (SELECT id FROM agent WHERE workspace_id = $1 AND archived_at IS NULL ORDER BY created_at ASC LIMIT 1),
+		        'active', 'create_issue', 'member', $2)
+		RETURNING id
+	`, testWorkspaceID, testUserID).Scan(&autopilotID); err != nil {
+		t.Fatalf("create autopilot: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM autopilot WHERE id = $1`, autopilotID)
+	})
+
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO autopilot_trigger (autopilot_id, kind, enabled, cron_expression, timezone, provider)
+		VALUES ($1, 'schedule', true, '0 0 * * *', 'UTC', 'generic')
+	`, autopilotID); err != nil {
+		t.Fatalf("create schedule trigger: %v", err)
+	}
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO autopilot_trigger (autopilot_id, kind, enabled, webhook_token, provider)
+		VALUES ($1, 'webhook', true, 'tok-multi', 'github')
+	`, autopilotID); err != nil {
+		t.Fatalf("create webhook trigger: %v", err)
+	}
+
+	file := decodeBackup(t, "include_types=autopilots")
+
+	var found *backup.BackupAutopilot
+	for i := range file.Autopilots {
+		if file.Autopilots[i].ID == autopilotID {
+			found = &file.Autopilots[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("multi-trigger autopilot %s not in export (%d total)", autopilotID, len(file.Autopilots))
+	}
+	if len(found.Triggers) != 2 {
+		t.Fatalf("triggers len = %d, want 2 (schedule + webhook); got %+v", len(found.Triggers), found.Triggers)
+	}
+
+	kinds := map[string]bool{}
+	for _, tr := range found.Triggers {
+		kinds[tr.Kind] = true
+	}
+	if !kinds["schedule"] || !kinds["webhook"] {
+		t.Errorf("expected both schedule and webhook triggers, got kinds=%v", kinds)
 	}
 }

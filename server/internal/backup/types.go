@@ -28,11 +28,12 @@ import (
 // files that do not declare this exact version.
 //
 // Version strategy: The version follows semantic versioning (major.minor).
-// - Minor version bumps add optional fields with omitempty; old readers can
-//   safely ignore unknown fields, so Unmarshal accepts any minor version
-//   as long as the major version matches.
-// - Major version bumps indicate breaking changes (removed/renamed fields,
-//   changed semantics); Unmarshal rejects mismatched major versions.
+//   - Minor version bumps add optional fields with omitempty; old readers can
+//     safely ignore unknown fields, so Unmarshal accepts any minor version
+//     as long as the major version matches.
+//   - Major version bumps indicate breaking changes (removed/renamed fields,
+//     changed semantics); Unmarshal rejects mismatched major versions.
+//
 // When adding fields, use pointer types for optional data to distinguish
 // "not set" from zero values, and always use omitempty for optional fields.
 const FormatVersion = "1.0"
@@ -101,7 +102,7 @@ type BackupSkill struct {
 	Content     string            `json:"content,omitempty"`
 	Config      json.RawMessage   `json:"config,omitempty"`
 	Files       []BackupSkillFile `json:"files,omitempty"`
-	CreatedBy   BackupActor       `json:"created_by,omitempty"`
+	CreatedBy   *BackupActor      `json:"created_by,omitempty"`
 	CreatedAt   time.Time         `json:"created_at"`
 }
 
@@ -150,7 +151,7 @@ type BackupProject struct {
 	Icon        string                  `json:"icon,omitempty"`
 	Status      string                  `json:"status,omitempty"`
 	Priority    string                  `json:"priority,omitempty"`
-	Lead        BackupActor             `json:"lead,omitempty"`
+	Lead        *BackupActor            `json:"lead,omitempty"`
 	Resources   []BackupProjectResource `json:"resources,omitempty"`
 	CreatedAt   time.Time               `json:"created_at"`
 }
@@ -165,9 +166,11 @@ type BackupProjectResource struct {
 }
 
 // BackupActor identifies a polymorphic actor (a member or an agent) by type
-// and ID. An empty Type/ID pair means "unset" (e.g. an unassigned issue).
-// Member-typed actors are resolved against BackupFile.Members by email on
-// cross-instance restore; agent-typed actors against BackupFile.Agents.
+// and ID. Optional actor fields on the surrounding structs are declared as
+// *BackupActor so an unset actor is omitted entirely by `omitempty` rather
+// than serialised as an empty object. Member-typed actors are resolved
+// against BackupFile.Members by email on cross-instance restore; agent-typed
+// actors against BackupFile.Agents.
 type BackupActor struct {
 	Type string `json:"type,omitempty"`
 	ID   string `json:"id,omitempty"`
@@ -181,8 +184,8 @@ type BackupIssue struct {
 	Description        string           `json:"description,omitempty"`
 	Status             string           `json:"status"`
 	Priority           string           `json:"priority,omitempty"`
-	Assignee           BackupActor      `json:"assignee,omitempty"`
-	Creator            BackupActor      `json:"creator,omitempty"`
+	Assignee           *BackupActor     `json:"assignee,omitempty"`
+	Creator            *BackupActor     `json:"creator,omitempty"`
 	ParentID           string           `json:"parent_id,omitempty"`
 	ProjectID          string           `json:"project_id,omitempty"`
 	LabelIDs           []string         `json:"label_ids,omitempty"`
@@ -201,15 +204,15 @@ type BackupIssue struct {
 
 // BackupComment is a comment on an issue. Threading is preserved via ParentID.
 type BackupComment struct {
-	ID             string           `json:"id"`
-	Author         BackupActor      `json:"author"`
-	Content        string           `json:"content"`
-	Type           string           `json:"type,omitempty"`
-	ParentID       string           `json:"parent_id,omitempty"`
-	CreatedAt      time.Time        `json:"created_at"`
-	Reactions      []BackupReaction `json:"reactions,omitempty"`
-	ResolvedAt     *time.Time       `json:"resolved_at,omitempty"`
-	ResolvedBy     BackupActor      `json:"resolved_by,omitempty"`
+	ID         string           `json:"id"`
+	Author     BackupActor      `json:"author"`
+	Content    string           `json:"content"`
+	Type       string           `json:"type,omitempty"`
+	ParentID   string           `json:"parent_id,omitempty"`
+	CreatedAt  time.Time        `json:"created_at"`
+	Reactions  []BackupReaction `json:"reactions,omitempty"`
+	ResolvedAt *time.Time       `json:"resolved_at,omitempty"`
+	ResolvedBy *BackupActor     `json:"resolved_by,omitempty"`
 }
 
 // BackupReaction is an emoji reaction on an issue or a comment.
@@ -223,7 +226,7 @@ type BackupSquad struct {
 	ID           string              `json:"id"`
 	Name         string              `json:"name"`
 	Description  string              `json:"description,omitempty"`
-	Leader       BackupActor         `json:"leader,omitempty"`
+	Leader       *BackupActor        `json:"leader,omitempty"`
 	Instructions string              `json:"instructions,omitempty"`
 	AvatarURL    string              `json:"avatar_url,omitempty"`
 	Members      []BackupSquadMember `json:"members,omitempty"`
@@ -238,18 +241,33 @@ type BackupSquadMember struct {
 	Role       string `json:"role,omitempty"`
 }
 
-// BackupAutopilot is an autopilot definition. Schedule is the cron expression
-// (if any) of its scheduled trigger.
+// BackupAutopilot is an autopilot definition together with every trigger
+// attached to it. An autopilot may carry multiple triggers (e.g. a schedule
+// plus a webhook) and the backup preserves all of them so a restore can
+// reconstruct the full triggering configuration.
 type BackupAutopilot struct {
-	ID            string      `json:"id"`
-	Name          string      `json:"name"`
-	Schedule      string      `json:"schedule,omitempty"`
-	Enabled       bool        `json:"enabled"`
-	Assignee      BackupActor `json:"assignee,omitempty"`
-	Status        string      `json:"status,omitempty"`
-	ExecutionMode string      `json:"execution_mode,omitempty"`
-	ProjectID     string      `json:"project_id,omitempty"`
-	TriggerKind   string      `json:"trigger_kind,omitempty"`
-	TriggerTZ     string      `json:"trigger_tz,omitempty"`
-	CreatedAt     time.Time   `json:"created_at"`
+	ID            string                   `json:"id"`
+	Name          string                   `json:"name"`
+	Assignee      *BackupActor             `json:"assignee,omitempty"`
+	Status        string                   `json:"status,omitempty"`
+	ExecutionMode string                   `json:"execution_mode,omitempty"`
+	ProjectID     string                   `json:"project_id,omitempty"`
+	Triggers      []BackupAutopilotTrigger `json:"triggers,omitempty"`
+	CreatedAt     time.Time                `json:"created_at"`
+}
+
+// BackupAutopilotTrigger is one trigger attached to an autopilot. The
+// Kind-specific fields (Cron/Timezone for schedule triggers, Payload for
+// webhook/generic triggers) are all optional with omitempty so a trigger
+// only carries the fields meaningful for its kind. Payload bundles the
+// provider-specific trigger configuration (e.g. webhook event filters) as
+// raw JSON so the format stays stable as new providers are added.
+type BackupAutopilotTrigger struct {
+	Kind     string          `json:"kind"`
+	Enabled  bool            `json:"enabled"`
+	Cron     string          `json:"cron,omitempty"`
+	Timezone string          `json:"timezone,omitempty"`
+	Label    string          `json:"label,omitempty"`
+	Provider string          `json:"provider,omitempty"`
+	Payload  json.RawMessage `json:"payload,omitempty"`
 }
