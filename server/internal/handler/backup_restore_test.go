@@ -66,7 +66,7 @@ func newBackupForTest(t *testing.T, prefix string, mutate func(*backup.BackupFil
 			ID:        "66666666-6666-6666-6666-666666666666",
 			Name:      prefix + "squad-1",
 			CreatedAt: now,
-			Leader:    backup.BackupActor{Type: "agent", ID: "33333333-3333-3333-3333-333333333333"},
+			Leader:    &backup.BackupActor{Type: "agent", ID: "33333333-3333-3333-3333-333333333333"},
 			Members: []backup.BackupSquadMember{
 				{MemberType: "agent", MemberID: "33333333-3333-3333-3333-333333333333", Role: "leader"},
 			},
@@ -76,13 +76,18 @@ func newBackupForTest(t *testing.T, prefix string, mutate func(*backup.BackupFil
 		{
 			ID:            "77777777-7777-7777-7777-777777777777",
 			Name:          prefix + "autopilot-1",
-			Schedule:      "0 * * * *",
-			TriggerTZ:     "UTC",
-			Enabled:       true,
-			Assignee:      backup.BackupActor{Type: "agent", ID: "33333333-3333-3333-3333-333333333333"},
+			Assignee:      &backup.BackupActor{Type: "agent", ID: "33333333-3333-3333-3333-333333333333"},
 			ProjectID:     "44444444-4444-4444-4444-444444444444",
 			ExecutionMode: "create_issue",
 			CreatedAt:     now,
+			Triggers: []backup.BackupAutopilotTrigger{
+				{
+					Kind:     "schedule",
+					Enabled:  true,
+					Cron:     "0 * * * *",
+					Timezone: "UTC",
+				},
+			},
 		},
 	}
 	if mutate != nil {
