@@ -84,6 +84,23 @@ type restoreWorkspaceResult struct {
 	Applied bool   `json:"applied"`
 	Skipped bool   `json:"skipped"`
 	Reason  string `json:"reason,omitempty"`
+	// Changes lists every field that the restore overwrote on the
+	// target workspace, in the form {field, before, after}. The
+	// IssuePrefix in particular is worth surfacing because it
+	// changes the public identifier scheme for every new issue
+	// created in the workspace after the restore.
+	Changes []restoreWorkspaceChange `json:"changes,omitempty"`
+}
+
+// restoreWorkspaceChange is a single before/after pair for an
+// overwritten workspace field. The Before/After strings are the
+// post-stringification view (empty for unset, raw text otherwise)
+// so the caller can render a clear diff without re-parsing the
+// raw json.RawMessage values.
+type restoreWorkspaceChange struct {
+	Field  string `json:"field"`
+	Before string `json:"before"`
+	After  string `json:"after"`
 }
 
 // restorePlanner carries the per-restore state: the target workspace,
@@ -124,6 +141,10 @@ type restorePlanner struct {
 	// workspaceApplied is set by applyWorkspaceSettings when the
 	// caller opted in and the workspace section was processed.
 	workspaceApplied bool
+	// workspaceChanges captures the per-field before/after diff
+	// produced by applyWorkspaceSettings so the response can show
+	// exactly which fields the restore overwrote.
+	workspaceChanges []restoreWorkspaceChange
 }
 
 // --- Handlers ---
@@ -197,9 +218,15 @@ func (h *Handler) handleRestore(w http.ResponseWriter, r *http.Request, doIt boo
 		remapMember:        map[string]pgtype.UUID{},
 	}
 
-	// On execute, wrap everything in a single transaction. On preview
-	// we use the live Queries handle so any error reflects the real
-	// state but no row is committed.
+	// On execute, wrap the whole pipeline in a single transaction
+	// so an infrastructure-level failure (DB error, aborted tx)
+	// rolls every written row back together. The pipeline's own
+	// per-item write failures are NOT rolled back at this level
+	// — they are recorded on the item as action="error" and the
+	// section continues, so a partial restore surfaces every
+	// failure to the operator instead of stopping at the first.
+	// On preview we use the live Queries handle so any error
+	// reflects the real state but no row is committed.
 	if doIt {
 		tx, err := h.TxStarter.Begin(r.Context())
 		if err != nil {
@@ -228,7 +255,28 @@ func (h *Handler) handleRestore(w http.ResponseWriter, r *http.Request, doIt boo
 
 // run is the section pipeline. Sections run in dependency order so
 // remap tables are populated before the sections that reference them.
+//
+// Atomicity model: this pipeline runs inside a single DB transaction
+// at the caller (handleRestore), but the atomicity boundary inside
+// the pipeline is per-section. Per-item write failures inside a
+// section are recorded as action="error" on the item and the section
+// continues with the next item — that lets a partial restore
+// surface every failure to the operator instead of stopping at the
+// first one. Only infrastructure-level errors (DB failure, find*
+// query failure, transaction-aborted) propagate up and roll the
+// whole restore back.
 func (p *restorePlanner) run(ctx context.Context, q *db.Queries) error {
+	// Member resolution must run before any section that may
+	// reference a member actor — projects (lead), agents (owner),
+	// squads (leader, members), and issues (creator, comment
+	// authors). It is gated on the backup actually carrying a
+	// members section so an empty backup does not pay the
+	// ListMembersWithUser round-trip.
+	if len(p.backup.Members) > 0 {
+		if err := p.resolveMembers(ctx, q); err != nil {
+			return err
+		}
+	}
 	if err := p.restoreSkills(ctx, q); err != nil {
 		return err
 	}
@@ -279,6 +327,7 @@ func (p *restorePlanner) response(topErr error) restoreResponse {
 			ws.Reason = "include_workspace flag was not set"
 		} else {
 			ws.Applied = true
+			ws.Changes = p.workspaceChanges
 		}
 		out.Workspace = ws
 	}
@@ -557,11 +606,9 @@ func (p *restorePlanner) restoreIssues(ctx context.Context, q *db.Queries) error
 	if !p.sectionEnabled(restoreTypeIssue) {
 		return nil
 	}
-	if len(p.backup.Members) > 0 {
-		if err := p.resolveMembers(ctx, q); err != nil {
-			return err
-		}
-	}
+	// Member remap is now built once in run() before any section
+	// runs, so the issues section can rely on it being populated
+	// when the backup carried any members.
 	for _, is := range p.backup.Issues {
 		if !p.itemEnabled(is.ID) {
 			continue
@@ -767,6 +814,12 @@ func (p *restorePlanner) restoreAutopilots(ctx context.Context, q *db.Queries) e
 // mutable settings with the values from the backup. Guarded by the
 // IncludeWorkspace flag at the handler boundary — this only runs when
 // the caller explicitly opted in.
+//
+// The per-field diff is recorded on p.workspaceChanges so the
+// response can show the operator exactly what changed. The
+// IssuePrefix in particular is worth surfacing because it changes
+// the public identifier scheme for every new issue created in the
+// workspace after the restore.
 func (p *restorePlanner) applyWorkspaceSettings(ctx context.Context, q *db.Queries) error {
 	if p.backup.Workspace == nil {
 		return nil
@@ -785,20 +838,53 @@ func (p *restorePlanner) applyWorkspaceSettings(ctx context.Context, q *db.Queri
 	if prefix == "" {
 		prefix = p.workspace.IssuePrefix
 	}
+	newDescription := nonEmpty(src.Description, p.workspace.Description.String)
+	newContext := nonEmpty(src.Context, p.workspace.Context.String)
+	newAvatar := nonEmptyText(src.AvatarURL, p.workspace.AvatarUrl)
+
+	p.recordWorkspaceChange("description", p.workspace.Description.String, newDescription)
+	p.recordWorkspaceChange("context", p.workspace.Context.String, newContext)
+	p.recordWorkspaceChange("issue_prefix", p.workspace.IssuePrefix, prefix)
+	if newAvatar.Valid != p.workspace.AvatarUrl.Valid || newAvatar.String != p.workspace.AvatarUrl.String {
+		before := ""
+		if p.workspace.AvatarUrl.Valid {
+			before = p.workspace.AvatarUrl.String
+		}
+		after := ""
+		if newAvatar.Valid {
+			after = newAvatar.String
+		}
+		p.recordWorkspaceChange("avatar_url", before, after)
+	}
+
 	if _, err := q.UpdateWorkspace(ctx, db.UpdateWorkspaceParams{
 		ID:          p.workspace.ID,
 		Name:        pgtype.Text{String: p.workspace.Name, Valid: true},
-		Description: pgtype.Text{String: nonEmpty(src.Description, p.workspace.Description.String), Valid: true},
-		Context:     pgtype.Text{String: nonEmpty(src.Context, p.workspace.Context.String), Valid: true},
+		Description: pgtype.Text{String: newDescription, Valid: true},
+		Context:     pgtype.Text{String: newContext, Valid: true},
 		Settings:    settings,
 		Repos:       repos,
 		IssuePrefix: pgtype.Text{String: prefix, Valid: true},
-		AvatarUrl:   nonEmptyText(src.AvatarURL, p.workspace.AvatarUrl),
+		AvatarUrl:   newAvatar,
 	}); err != nil {
 		return fmt.Errorf("update workspace: %w", err)
 	}
 	p.workspaceApplied = true
 	return nil
+}
+
+// recordWorkspaceChange appends a diff row IF the field actually
+// changed. Equal before/after pairs are dropped so the response
+// stays compact.
+func (p *restorePlanner) recordWorkspaceChange(field, before, after string) {
+	if before == after {
+		return
+	}
+	p.workspaceChanges = append(p.workspaceChanges, restoreWorkspaceChange{
+		Field:  field,
+		Before: before,
+		After:  after,
+	})
 }
 
 // resolveMembers loads the target workspace's members and populates

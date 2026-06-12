@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -112,11 +113,14 @@ func findIssueByTitle(ctx context.Context, q *db.Queries, workspaceID pgtype.UUI
 		WorkspaceID: workspaceID,
 		// Wide net: leave filters unset so the search hits every
 		// issue in the workspace regardless of status, assignee,
-		// or project. The list call returns paginated results;
-		// for very large workspaces a targeted query would be
-		// cheaper, but restore is operator-driven and runs at
-		// human pace.
-		Limit:  1000,
+		// or project. The limit is set to MaxInt32 so workspaces
+		// with more than a few hundred issues do not silently
+		// miss a conflict. A future optimization could replace
+		// this list-scan with a `WHERE title = $1` lookup, but
+		// ListIssues does not take a title filter directly and
+		// restore is operator-driven (human pace), so the full
+		// scan is acceptable for now.
+		Limit:  math.MaxInt32,
 		Offset: 0,
 	})
 	if err != nil {

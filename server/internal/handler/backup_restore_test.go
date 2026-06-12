@@ -71,9 +71,23 @@ type backupRestoreRequest struct {
 }
 
 type backupRestoreResponse struct {
-	Items    []backupRestoreItem `json:"items"`
-	Sections map[string]int      `json:"section_summary"`
-	Errors   []string            `json:"errors,omitempty"`
+	Items     []backupRestoreItem     `json:"items"`
+	Sections  map[string]int          `json:"section_summary"`
+	Errors    []string                `json:"errors,omitempty"`
+	Workspace *backupRestoreWorkspace `json:"workspace,omitempty"`
+}
+
+type backupRestoreWorkspace struct {
+	Applied bool                           `json:"applied"`
+	Skipped bool                           `json:"skipped"`
+	Reason  string                         `json:"reason,omitempty"`
+	Changes []backupRestoreWorkspaceChange `json:"changes,omitempty"`
+}
+
+type backupRestoreWorkspaceChange struct {
+	Field  string `json:"field"`
+	Before string `json:"before"`
+	After  string `json:"after"`
 }
 
 type backupRestoreItem struct {
@@ -631,7 +645,7 @@ func TestRestoreExecute_UnsupportedVersion(t *testing.T) {
 	}
 }
 
-func TestRestoreExecute_AtomicOnError(t *testing.T) {
+func TestRestoreExecute_IssueMissingProjectDep(t *testing.T) {
 	userID, workspaceID, _ := backupRestoreSetup(t)
 	// Build a backup whose issue references a project that is
 	// NOT in the workspace and NOT in the selected items. The
@@ -679,6 +693,121 @@ func TestRestoreExecute_MalformedBackup(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d (%s)", w.Code, w.Body.String())
 	}
+}
+
+// TestRestoreExecute_PartialRestoreResolvesMemberLead covers the
+// blocker the code review caught: when restoring ONLY projects
+// (selected_items=["projects"]) and the project's lead is a member
+// that exists in the target workspace, the project must end up
+// with a non-null lead_id pointing at the workspace's owner. The
+// member remap must run before the projects section so the lead
+// ref is resolvable.
+func TestRestoreExecute_PartialRestoreResolvesMemberLead(t *testing.T) {
+	userID, workspaceID, _ := backupRestoreSetup(t)
+	b := buildMinimalBackup()
+	// Strip everything except the project, and give the project a
+	// member lead that matches the fixture's user.
+	b.Skills = nil
+	b.Labels = nil
+	b.Agents = nil
+	b.Issues = nil
+	b.Squads = nil
+	b.Autopilots = nil
+	b.Projects[0].Lead = backup.BackupActor{Type: "member", ID: "mem-1"}
+	b.Members = []backup.BackupMember{{
+		ID:    "mem-1",
+		Email: backupRestoreTestEmail,
+		Name:  "Backup Restore Test",
+	}}
+
+	body := backupRestoreRequest{
+		Backup:        marshalBackup(t, b),
+		WorkspaceID:   workspaceID,
+		SelectedItems: []string{"projects"},
+	}
+	w := callRestoreExecute(t, userID, workspaceID, body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("execute: %d %s", w.Code, w.Body.String())
+	}
+	resp := decodeRestoreResponse(t, w)
+	if len(resp.Errors) > 0 {
+		t.Fatalf("unexpected errors: %v", resp.Errors)
+	}
+
+	var projectID string
+	if err := testPool.QueryRow(context.Background(),
+		`SELECT id FROM project WHERE workspace_id = $1 AND title = $2`,
+		workspaceID, "Migration",
+	).Scan(&projectID); err != nil {
+		t.Fatalf("project not restored: %v", err)
+	}
+	var leadType pgtype.Text
+	var leadID pgtype.UUID
+	if err := testPool.QueryRow(context.Background(),
+		`SELECT lead_type, lead_id FROM project WHERE id = $1`, projectID,
+	).Scan(&leadType, &leadID); err != nil {
+		t.Fatalf("read project lead: %v", err)
+	}
+	if !leadType.Valid || leadType.String != "member" {
+		t.Errorf("project.lead_type = %q (valid=%v), want %q", leadType.String, leadType.Valid, "member")
+	}
+	if !leadID.Valid {
+		t.Fatalf("project.lead_id is NULL; member remap did not run before the projects section")
+	}
+	// lead_id should point at the workspace owner user. We
+	// verify by checking the resolved user is a member of the
+	// workspace.
+	var memberExists int
+	if err := testPool.QueryRow(context.Background(),
+		`SELECT 1 FROM member WHERE workspace_id = $1 AND user_id = $2`, workspaceID, leadID,
+	).Scan(&memberExists); err != nil {
+		t.Errorf("project.lead_id = %q does not point at any workspace member: %v", leadID.String(), err)
+	}
+	_ = userID
+}
+
+// TestRestoreExecute_WorkspaceChangesDiff: with the workspace
+// opt-in, the response must list which fields the restore
+// overwrote, including IssuePrefix.
+func TestRestoreExecute_WorkspaceChangesDiff(t *testing.T) {
+	userID, workspaceID, _ := backupRestoreSetup(t)
+	b := buildMinimalBackup()
+	b.Workspace = &backup.BackupWorkspace{
+		ID:          "ws-source",
+		Name:        "Source Workspace",
+		Slug:        "source-ws",
+		Description: "NEW DESCRIPTION",
+		Context:     "NEW CONTEXT",
+		IssuePrefix: "ZZZ",
+		AvatarURL:   "https://example.com/avatar.png",
+	}
+	body := backupRestoreRequest{
+		Backup:           marshalBackup(t, b),
+		WorkspaceID:      workspaceID,
+		IncludeWorkspace: true,
+	}
+	w := callRestoreExecute(t, userID, workspaceID, body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("execute: %d %s", w.Code, w.Body.String())
+	}
+	resp := decodeRestoreResponse(t, w)
+	if resp.Workspace == nil || !resp.Workspace.Applied {
+		t.Fatalf("expected workspace.applied=true, got %+v", resp.Workspace)
+	}
+	wantFields := map[string]bool{"description": true, "context": true, "issue_prefix": true, "avatar_url": true}
+	gotFields := map[string]bool{}
+	for _, c := range resp.Workspace.Changes {
+		gotFields[c.Field] = true
+		if c.Before == c.After {
+			t.Errorf("change %q has equal before/after: %q", c.Field, c.Before)
+		}
+	}
+	for k := range wantFields {
+		if !gotFields[k] {
+			t.Errorf("workspace.changes missing field %q (got: %+v)", k, gotFields)
+		}
+	}
+	_ = userID
 }
 
 func int32Ptr(v int32) *int32 { return &v }
