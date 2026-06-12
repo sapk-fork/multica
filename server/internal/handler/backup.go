@@ -234,9 +234,9 @@ func (h *Handler) exportSkills(ctx context.Context, wsUUID pgtype.UUID, refs mem
 		}
 		// created_by is always a human member when set.
 		refs.add(s.CreatedBy)
-		var creator backup.BackupActor
+		var creator *backup.BackupActor
 		if s.CreatedBy.Valid {
-			creator = backup.BackupActor{Type: "member", ID: uuidToString(s.CreatedBy)}
+			creator = &backup.BackupActor{Type: "member", ID: uuidToString(s.CreatedBy)}
 		}
 		out = append(out, backup.BackupSkill{
 			ID:          uuidToString(s.ID),
@@ -359,7 +359,7 @@ func (h *Handler) exportProjects(ctx context.Context, wsUUID pgtype.UUID, refs m
 }
 
 func (h *Handler) exportIssues(ctx context.Context, wsUUID pgtype.UUID, refs memberRefs) ([]backup.BackupIssue, error) {
-	issues, err := h.listAllIssues(ctx, wsUUID)
+	issues, err := h.Queries.ListAllIssuesForBackup(ctx, wsUUID)
 	if err != nil {
 		return nil, fmt.Errorf("list issues: %w", err)
 	}
@@ -416,40 +416,6 @@ func (h *Handler) exportIssues(ctx context.Context, wsUUID pgtype.UUID, refs mem
 	return out, nil
 }
 
-// listAllIssues returns every issue in a workspace with its full column set.
-// ListIssues is paginated and omits acceptance_criteria/context_refs/origin/
-// metadata fields a backup needs, so a backup reads the table directly.
-func (h *Handler) listAllIssues(ctx context.Context, wsUUID pgtype.UUID) ([]db.Issue, error) {
-	const query = `SELECT id, workspace_id, title, description, status, priority,
-       assignee_type, assignee_id, creator_type, creator_id, parent_issue_id,
-       acceptance_criteria, context_refs, position, due_date, created_at,
-       updated_at, number, project_id, origin_type, origin_id, first_executed_at,
-       start_date, metadata
-FROM issue
-WHERE workspace_id = $1
-ORDER BY number ASC`
-	rows, err := h.DB.Query(ctx, query, wsUUID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var issues []db.Issue
-	for rows.Next() {
-		var i db.Issue
-		if err := rows.Scan(
-			&i.ID, &i.WorkspaceID, &i.Title, &i.Description, &i.Status, &i.Priority,
-			&i.AssigneeType, &i.AssigneeID, &i.CreatorType, &i.CreatorID, &i.ParentIssueID,
-			&i.AcceptanceCriteria, &i.ContextRefs, &i.Position, &i.DueDate, &i.CreatedAt,
-			&i.UpdatedAt, &i.Number, &i.ProjectID, &i.OriginType, &i.OriginID, &i.FirstExecutedAt,
-			&i.StartDate, &i.Metadata,
-		); err != nil {
-			return nil, err
-		}
-		issues = append(issues, i)
-	}
-	return issues, rows.Err()
-}
-
 // backupLabelIDsByIssue batches the label IDs attached to a set of issues.
 // Unlike the list-rendering labelsByIssue, a backup needs only the IDs (the
 // label rows themselves live in BackupFile.Labels) and treats a query failure
@@ -482,6 +448,16 @@ func (h *Handler) exportComments(ctx context.Context, wsUUID, issueID pgtype.UUI
 	if len(comments) == 0 {
 		return nil, nil
 	}
+	// The cap orders by created_at ASC, so hitting it silently drops the
+	// *newest* comments. The headroom is large (p99 ~30 per issue) but a
+	// truncated backup is the kind of data loss that must be visible.
+	if len(comments) == backupCommentCap {
+		slog.Warn("backup export: comment cap reached, newest comments may be truncated",
+			"issue_id", uuidToString(issueID),
+			"workspace_id", uuidToString(wsUUID),
+			"cap", backupCommentCap,
+		)
+	}
 	commentIDs := make([]pgtype.UUID, len(comments))
 	for i, c := range comments {
 		commentIDs[i] = c.ID
@@ -495,7 +471,7 @@ func (h *Handler) exportComments(ctx context.Context, wsUUID, issueID pgtype.UUI
 		refs.addTyped(rr.ActorType, rr.ActorID)
 		cid := uuidToString(rr.CommentID)
 		reactionsByComment[cid] = append(reactionsByComment[cid], backup.BackupReaction{
-			Actor: backupActor(rr.ActorType, rr.ActorID),
+			Actor: backupActorValue(rr.ActorType, rr.ActorID),
 			Emoji: rr.Emoji,
 		})
 	}
@@ -505,7 +481,7 @@ func (h *Handler) exportComments(ctx context.Context, wsUUID, issueID pgtype.UUI
 		refs.addTyped(textOrEmpty(c.ResolvedByType), c.ResolvedByID)
 		out = append(out, backup.BackupComment{
 			ID:         uuidToString(c.ID),
-			Author:     backupActor(c.AuthorType, c.AuthorID),
+			Author:     backupActorValue(c.AuthorType, c.AuthorID),
 			Content:    c.Content,
 			Type:       c.Type,
 			ParentID:   uuidOrEmpty(c.ParentID),
@@ -530,7 +506,7 @@ func (h *Handler) exportIssueReactions(ctx context.Context, issueID pgtype.UUID,
 	for _, rr := range rows {
 		refs.addTyped(rr.ActorType, rr.ActorID)
 		out = append(out, backup.BackupReaction{
-			Actor: backupActor(rr.ActorType, rr.ActorID),
+			Actor: backupActorValue(rr.ActorType, rr.ActorID),
 			Emoji: rr.Emoji,
 		})
 	}
@@ -559,9 +535,9 @@ func (h *Handler) exportSquads(ctx context.Context, wsUUID pgtype.UUID, refs mem
 		}
 		// A squad's leader_id always references an agent (the schema joins it
 		// to the agent table); there is no leader_type column.
-		var leader backup.BackupActor
+		var leader *backup.BackupActor
 		if s.LeaderID.Valid {
-			leader = backup.BackupActor{Type: "agent", ID: uuidToString(s.LeaderID)}
+			leader = &backup.BackupActor{Type: "agent", ID: uuidToString(s.LeaderID)}
 		}
 		out = append(out, backup.BackupSquad{
 			ID:           uuidToString(s.ID),
@@ -589,42 +565,72 @@ func (h *Handler) exportAutopilots(ctx context.Context, wsUUID pgtype.UUID, refs
 		if err != nil {
 			return nil, fmt.Errorf("list autopilot triggers for %s: %w", uuidToString(a.ID), err)
 		}
-		primary := primaryTrigger(triggers)
 		refs.addTyped(a.AssigneeType, a.AssigneeID)
-		entry := backup.BackupAutopilot{
+		out = append(out, backup.BackupAutopilot{
 			ID:            uuidToString(a.ID),
 			Name:          a.Title,
-			Enabled:       false,
 			Assignee:      backupActor(a.AssigneeType, a.AssigneeID),
 			Status:        a.Status,
 			ExecutionMode: a.ExecutionMode,
 			ProjectID:     uuidOrEmpty(a.ProjectID),
+			Triggers:      mapAutopilotTriggers(triggers),
 			CreatedAt:     tsTime(a.CreatedAt),
-		}
-		if primary != nil {
-			entry.Schedule = textOrEmpty(primary.CronExpression)
-			entry.Enabled = primary.Enabled
-			entry.TriggerKind = primary.Kind
-			entry.TriggerTZ = textOrEmpty(primary.Timezone)
-		}
-		out = append(out, entry)
+		})
 	}
 	return out, nil
 }
 
-// primaryTrigger picks the trigger that best represents an autopilot in the
-// backup. The schedule trigger wins (its cron expression is the headline
-// field); otherwise the first trigger is used. Returns nil when there are none.
-func primaryTrigger(triggers []db.AutopilotTrigger) *db.AutopilotTrigger {
+// mapAutopilotTriggers converts every trigger row attached to an autopilot
+// into its backup representation. The list order is preserved from the
+// query (ORDER BY created_at ASC) so a restore sees triggers in the order
+// they were created. Secrets carried by webhook triggers (webhook_token,
+// signing_secret) follow the same plaintext contract as agent custom_env:
+// the owner/admin gate on the export endpoint is the security boundary.
+func mapAutopilotTriggers(triggers []db.AutopilotTrigger) []backup.BackupAutopilotTrigger {
 	if len(triggers) == 0 {
 		return nil
 	}
-	for i := range triggers {
-		if triggers[i].Kind == "schedule" {
-			return &triggers[i]
-		}
+	out := make([]backup.BackupAutopilotTrigger, 0, len(triggers))
+	for _, t := range triggers {
+		out = append(out, backup.BackupAutopilotTrigger{
+			Kind:     t.Kind,
+			Enabled:  t.Enabled,
+			Cron:     textOrEmpty(t.CronExpression),
+			Timezone: textOrEmpty(t.Timezone),
+			Label:    textOrEmpty(t.Label),
+			Provider: t.Provider,
+			Payload:  autopilotTriggerPayload(t),
+		})
 	}
-	return &triggers[0]
+	return out
+}
+
+// autopilotTriggerPayload bundles the provider-specific trigger fields that
+// don't have a dedicated column on BackupAutopilotTrigger (webhook token,
+// signing secret, event filters) into a single JSON blob. Fields are omitted
+// when unset so a schedule trigger doesn't carry empty webhook fields.
+func autopilotTriggerPayload(t db.AutopilotTrigger) json.RawMessage {
+	payload := map[string]any{}
+	if t.WebhookToken.Valid && t.WebhookToken.String != "" {
+		payload["webhook_token"] = t.WebhookToken.String
+	}
+	if t.SigningSecret.Valid && t.SigningSecret.String != "" {
+		payload["signing_secret"] = t.SigningSecret.String
+	}
+	if len(t.EventFilters) > 0 {
+		payload["event_filters"] = json.RawMessage(t.EventFilters)
+	}
+	if len(payload) == 0 {
+		return nil
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		// json.Marshal on a map[string]any with string/RawMessage values
+		// cannot fail in practice; degrade to an empty payload rather than
+		// failing the whole export.
+		return nil
+	}
+	return data
 }
 
 // exportMembers resolves the collected member references into BackupMember
@@ -724,11 +730,19 @@ func rawJSON(b []byte) json.RawMessage {
 	return json.RawMessage(b)
 }
 
-// backupActor builds a polymorphic actor reference, returning the zero value
-// (omitted by omitempty) when the id is unset.
-func backupActor(actorType string, id pgtype.UUID) backup.BackupActor {
+// backupActor builds a polymorphic actor reference for an *optional* field,
+// returning nil — which omitempty drops — when the id is unset. Use
+// backupActorValue for fields where the actor is always present.
+func backupActor(actorType string, id pgtype.UUID) *backup.BackupActor {
 	if !id.Valid {
-		return backup.BackupActor{}
+		return nil
 	}
+	return &backup.BackupActor{Type: actorType, ID: uuidToString(id)}
+}
+
+// backupActorValue builds a polymorphic actor reference for a *required*
+// field (e.g. comment author, reaction actor) where there is no "unset"
+// state to represent. Callers must ensure the id is valid.
+func backupActorValue(actorType string, id pgtype.UUID) backup.BackupActor {
 	return backup.BackupActor{Type: actorType, ID: uuidToString(id)}
 }
