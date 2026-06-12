@@ -88,34 +88,47 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+// handlerTestFixtureDaemonID is a fixed, non-NULL daemon_id for the fixture
+// agent_runtime. A non-NULL value is required for ON CONFLICT (workspace_id,
+// daemon_id, provider) to match on re-runs — PostgreSQL UNIQUE constraints
+// treat NULL as distinct from every other NULL, so daemon_id=NULL would never
+// conflict and each call would insert a new row.
+const handlerTestFixtureDaemonID = "handler-tests-fixture-daemon"
+
 func setupHandlerTestFixture(ctx context.Context, pool *pgxpool.Pool) (string, string, error) {
-	if err := cleanupHandlerTestFixture(ctx, pool); err != nil {
-		return "", "", err
-	}
+	// Use ON CONFLICT upserts so that setup is idempotent: if a previous run
+	// left rows behind (e.g. because a parallel test process cleaned up while
+	// this run was mid-flight), we reuse whatever exists rather than deleting
+	// and recreating. Removing the up-front cleanupHandlerTestFixture() call
+	// eliminates the race where one process's setup tears down the workspace
+	// that another process's tests are actively using.
 
 	var userID string
 	if err := pool.QueryRow(ctx, `
 		INSERT INTO "user" (name, email)
 		VALUES ($1, $2)
+		ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name
 		RETURNING id
 	`, handlerTestName, handlerTestEmail).Scan(&userID); err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("upsert test user: %w", err)
 	}
 
 	var workspaceID string
 	if err := pool.QueryRow(ctx, `
 		INSERT INTO workspace (name, slug, description, issue_prefix)
 		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
 		RETURNING id
 	`, "Handler Tests", handlerTestWorkspaceSlug, "Temporary workspace for handler tests", "HAN").Scan(&workspaceID); err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("upsert test workspace: %w", err)
 	}
 
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO member (workspace_id, user_id, role)
 		VALUES ($1, $2, 'owner')
+		ON CONFLICT (workspace_id, user_id) DO NOTHING
 	`, workspaceID, userID); err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("upsert test member: %w", err)
 	}
 
 	var runtimeID string
@@ -123,10 +136,11 @@ func setupHandlerTestFixture(ctx context.Context, pool *pgxpool.Pool) (string, s
 		INSERT INTO agent_runtime (
 			workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at
 		)
-		VALUES ($1, NULL, $2, 'cloud', $3, 'online', $4, '{}'::jsonb, now())
+		VALUES ($1, $2, $3, 'cloud', $4, 'online', $5, '{}'::jsonb, now())
+		ON CONFLICT (workspace_id, daemon_id, provider) DO UPDATE SET name = EXCLUDED.name
 		RETURNING id
-	`, workspaceID, "Handler Test Runtime", "handler_test_runtime", "Handler test runtime").Scan(&runtimeID); err != nil {
-		return "", "", err
+	`, workspaceID, handlerTestFixtureDaemonID, "Handler Test Runtime", "handler_test_runtime", "Handler test runtime").Scan(&runtimeID); err != nil {
+		return "", "", fmt.Errorf("upsert test runtime: %w", err)
 	}
 	testRuntimeID = runtimeID
 
@@ -136,19 +150,33 @@ func setupHandlerTestFixture(ctx context.Context, pool *pgxpool.Pool) (string, s
 			runtime_id, visibility, max_concurrent_tasks, owner_id
 		)
 		VALUES ($1, $2, '', 'cloud', '{}'::jsonb, $3, 'workspace', 1, $4)
+		ON CONFLICT (workspace_id, name) DO NOTHING
 	`, workspaceID, "Handler Test Agent", runtimeID, userID); err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("upsert test agent: %w", err)
 	}
 
 	return userID, workspaceID, nil
 }
 
 func cleanupHandlerTestFixture(ctx context.Context, pool *pgxpool.Pool) error {
+	// Explicitly delete agents before their workspace to avoid the
+	// agent.runtime_id ON DELETE RESTRICT FK blocking the workspace →
+	// agent_runtime cascade. Without this, PostgreSQL may attempt to cascade-
+	// delete agent_runtime rows before cascade-deleting agent rows (the order
+	// depends on constraint OIDs), causing a constraint violation even though
+	// both tables have ON DELETE CASCADE from workspace.
+	if _, err := pool.Exec(ctx, `
+		DELETE FROM agent WHERE workspace_id = (
+			SELECT id FROM workspace WHERE slug = $1
+		)
+	`, handlerTestWorkspaceSlug); err != nil {
+		return fmt.Errorf("delete fixture agents: %w", err)
+	}
 	if _, err := pool.Exec(ctx, `DELETE FROM workspace WHERE slug = $1`, handlerTestWorkspaceSlug); err != nil {
-		return err
+		return fmt.Errorf("delete fixture workspace: %w", err)
 	}
 	if _, err := pool.Exec(ctx, `DELETE FROM "user" WHERE email = $1`, handlerTestEmail); err != nil {
-		return err
+		return fmt.Errorf("delete fixture user: %w", err)
 	}
 	return nil
 }
