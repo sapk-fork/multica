@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Globe, MoreHorizontal, Trash2 } from "lucide-react";
+import { Globe, MoreHorizontal, PauseCircle, PlayCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
@@ -10,6 +10,7 @@ import { deriveWorkload } from "@multica/core/agents";
 import {
   deriveRuntimeHealth,
   runtimeUsageOptions,
+  useResumeRuntime,
 } from "@multica/core/runtimes";
 import { Button } from "@multica/ui/components/ui/button";
 import {
@@ -31,6 +32,7 @@ import { HealthIcon, useHealthLabel } from "./shared";
 import { DeleteRuntimeDialog } from "./delete-runtime-dialog";
 import {
   computeCostInWindow,
+  formatHoldUntil,
   formatLastSeen,
   isSelfHealingRuntime,
   pctChange,
@@ -236,18 +238,38 @@ function HealthCell({
   runtime: AgentRuntime;
   now: number;
 }) {
+  const { t } = useT("runtimes");
   const labelOf = useHealthLabel();
   const health = deriveRuntimeHealth(runtime, now);
   const lastSeen = formatLastSeen(runtime.last_seen_at);
+  const holdTime = formatHoldUntil(runtime.hold_until);
   return (
-    <div className="flex min-w-0 items-center gap-1.5">
-      <HealthIcon health={health} />
-      <span className="block min-w-0 truncate text-sm">
-        {labelOf(health)}
-        {health !== "online" && runtime.last_seen_at && (
-          <span className="text-muted-foreground"> · {lastSeen}</span>
-        )}
-      </span>
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <HealthIcon health={health} />
+        <span className="block min-w-0 truncate text-sm">
+          {labelOf(health)}
+          {health !== "online" && runtime.last_seen_at && (
+            <span className="text-muted-foreground"> · {lastSeen}</span>
+          )}
+        </span>
+      </div>
+      {holdTime && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <div className="flex min-w-0 items-center gap-1">
+                <PauseCircle className="h-3 w-3 shrink-0 text-warning" />
+                <span className="truncate text-xs text-warning">
+                  {t(($) => $.health.on_hold.label)} ·{" "}
+                  {t(($) => $.health.on_hold.resumes_in, { time: holdTime })}
+                </span>
+              </div>
+            }
+          />
+          <TooltipContent>{t(($) => $.health.on_hold.tooltip)}</TooltipContent>
+        </Tooltip>
+      )}
     </div>
   );
 }
@@ -432,13 +454,11 @@ function RowMenu({
 }) {
   const { t } = useT("runtimes");
   const [deleteOpen, setDeleteOpen] = useState(false);
-  // Delete is currently the only row action; if the row can't run it, drop
-  // the kebab entirely so the column doesn't render an empty popover. The
-  // self-healing case (local + online) is the runtime-detail parity fix —
-  // see isSelfHealingRuntime for the rationale.
+  const resumeMutation = useResumeRuntime(wsId);
   const selfHealing = isSelfHealingRuntime(runtime);
+  const onHold = !!runtime.hold_until;
 
-  if (!canDelete || selfHealing) {
+  if (!canDelete || (!onHold && selfHealing)) {
     return <span aria-hidden />;
   }
 
@@ -463,14 +483,31 @@ function RowMenu({
           className="w-40"
           onClick={(e) => e.stopPropagation()}
         >
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={() => setDeleteOpen(true)}
-            title={t(($) => $.list.delete_permission_hint)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            {t(($) => $.list.delete_action)}
-          </DropdownMenuItem>
+          {onHold && (
+            <DropdownMenuItem
+              onClick={() =>
+                resumeMutation.mutate(runtime.id, {
+                  onSuccess: () =>
+                    toast.success(t(($) => $.health.on_hold.resume_toast)),
+                  onError: () =>
+                    toast.error(t(($) => $.health.on_hold.resume_failed)),
+                })
+              }
+            >
+              <PlayCircle className="h-3.5 w-3.5" />
+              {t(($) => $.health.on_hold.resume_button)}
+            </DropdownMenuItem>
+          )}
+          {!selfHealing && (
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => setDeleteOpen(true)}
+              title={t(($) => $.list.delete_permission_hint)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {t(($) => $.list.delete_action)}
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
       <DeleteRuntimeDialog
