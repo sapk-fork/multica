@@ -59,7 +59,6 @@ import {
   computeCostInWindow,
   formatHoldUntil,
   formatLastSeen,
-  isSelfHealingRuntime,
   pctChange,
 } from "../utils";
 import { splitRuntimeName } from "./runtime-machines";
@@ -487,10 +486,9 @@ export function RuntimeRowMenu({
   const { t } = useT("runtimes");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const resumeMutation = useResumeRuntime(wsId);
-  const selfHealing = isSelfHealingRuntime(runtime);
   const onHold = !!runtime.hold_until;
 
-  if (!canDelete || (!onHold && selfHealing)) {
+  if (!canDelete) {
     return <span aria-hidden />;
   }
 
@@ -524,16 +522,14 @@ export function RuntimeRowMenu({
               {t(($) => $.health.on_hold.resume_button)}
             </DropdownMenuItem>
           )}
-          {!selfHealing && (
-            <DropdownMenuItem
-              variant="destructive"
-              onClick={() => setDeleteOpen(true)}
-              title={t(($) => $.list.delete_permission_hint)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              {t(($) => $.list.delete_action)}
-            </DropdownMenuItem>
-          )}
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() => setDeleteOpen(true)}
+            title={t(($) => $.list.delete_permission_hint)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            {t(($) => $.list.delete_action)}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <DeleteRuntimeDialog
@@ -624,11 +620,7 @@ export function RuntimeList({
 
   // Mirrors RuntimeRowMenu's render guard: the kebab track only earns its
   // width when at least one row will actually show the menu.
-  const showActions = rows.some(
-    (row) =>
-      row.canDelete &&
-      (!isSelfHealingRuntime(row.runtime) || !!row.runtime.hold_until),
-  );
+  const showActions = rows.some((row) => row.canDelete);
 
   return (
     <div className="overflow-x-auto overflow-y-hidden @container">
