@@ -409,7 +409,7 @@ func (idx *restoreIndex) loadExisting(ctx context.Context, q *db.Queries) error 
 	// for user-facing consistency, but the conflict key is Title.
 	idx.existingByKey[restoreKindAutopilot] = make(map[string]string, len(autopilots))
 	for _, a := range autopilots {
-		idx.existingByKey[restoreKindAutopilot][a.Title] = uuidToString(a.ID)
+		idx.existingByKey[restoreKindAutopilot][a.Autopilot.Title] = uuidToString(a.Autopilot.ID)
 	}
 
 	return nil
