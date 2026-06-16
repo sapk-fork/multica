@@ -566,20 +566,20 @@ func (h *Handler) exportAutopilots(ctx context.Context, wsUUID pgtype.UUID, refs
 	}
 	out := make([]backup.BackupAutopilot, 0, len(autopilots))
 	for _, a := range autopilots {
-		triggers, err := h.Queries.ListAutopilotTriggers(ctx, a.ID)
+		triggers, err := h.Queries.ListAutopilotTriggers(ctx, a.Autopilot.ID)
 		if err != nil {
-			return nil, fmt.Errorf("list autopilot triggers for %s: %w", uuidToString(a.ID), err)
+			return nil, fmt.Errorf("list autopilot triggers for %s: %w", uuidToString(a.Autopilot.ID), err)
 		}
-		refs.addTyped(a.AssigneeType, a.AssigneeID)
+		refs.addTyped(a.Autopilot.AssigneeType, a.Autopilot.AssigneeID)
 		out = append(out, backup.BackupAutopilot{
-			ID:            uuidToString(a.ID),
-			Name:          a.Title,
-			Assignee:      backupActor(a.AssigneeType, a.AssigneeID),
-			Status:        a.Status,
-			ExecutionMode: a.ExecutionMode,
-			ProjectID:     uuidOrEmpty(a.ProjectID),
+			ID:            uuidToString(a.Autopilot.ID),
+			Name:          a.Autopilot.Title,
+			Assignee:      backupActor(a.Autopilot.AssigneeType, a.Autopilot.AssigneeID),
+			Status:        a.Autopilot.Status,
+			ExecutionMode: a.Autopilot.ExecutionMode,
+			ProjectID:     uuidOrEmpty(a.Autopilot.ProjectID),
 			Triggers:      mapAutopilotTriggers(triggers),
-			CreatedAt:     tsTime(a.CreatedAt),
+			CreatedAt:     tsTime(a.Autopilot.CreatedAt),
 		})
 	}
 	return out, nil
