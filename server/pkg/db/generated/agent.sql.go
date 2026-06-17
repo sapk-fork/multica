@@ -1217,7 +1217,7 @@ WHERE id = (
             -- stated reset, so we hold dispatch a little longer to absorb clock
             -- skew. The margin comes from the single holdExpiryMargin source in
             -- Go, shared with ClearExpiredHolds and runtimeOnHold.
-            AND ar.hold_until > now() - make_interval(secs => $2::double precision)
+            AND ar.hold_until > now() - make_interval(secs => $3::double precision)
       )
       AND NOT EXISTS (
           SELECT 1 FROM agent_task_queue active
@@ -1245,8 +1245,8 @@ RETURNING id, agent_id, issue_id, status, priority, dispatched_at, started_at, c
 
 type ClaimAgentTaskParams struct {
 	AgentID                 pgtype.UUID `json:"agent_id"`
-	HoldExpiryMarginSeconds float64     `json:"hold_expiry_margin_seconds"`
 	PrepareLeaseSecs        float64     `json:"prepare_lease_secs"`
+	HoldExpiryMarginSeconds float64     `json:"hold_expiry_margin_seconds"`
 }
 
 // Claims the next queued task for an agent, enforcing per-(issue, agent) serialization:
@@ -1259,7 +1259,7 @@ type ClaimAgentTaskParams struct {
 // otherwise a user mashing the create button could fire concurrent quick-creates
 // whose completion lookup would race over "most recent issue by this agent".
 func (q *Queries) ClaimAgentTask(ctx context.Context, arg ClaimAgentTaskParams) (AgentTaskQueue, error) {
-	row := q.db.QueryRow(ctx, claimAgentTask, arg.AgentID, arg.HoldExpiryMarginSeconds, arg.PrepareLeaseSecs)
+	row := q.db.QueryRow(ctx, claimAgentTask, arg.AgentID, arg.PrepareLeaseSecs, arg.HoldExpiryMarginSeconds)
 	var i AgentTaskQueue
 	err := row.Scan(
 		&i.ID,
