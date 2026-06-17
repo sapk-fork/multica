@@ -162,7 +162,7 @@ const clearRuntimeHold = `-- name: ClearRuntimeHold :one
 UPDATE agent_runtime
 SET hold_until = NULL, hold_reason = NULL, updated_at = now()
 WHERE id = $1
-RETURNING id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id, visibility, hold_until, hold_reason, profile_id
+RETURNING id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id, visibility, hold_until, hold_reason, profile_id, custom_name
 `
 
 func (q *Queries) ClearRuntimeHold(ctx context.Context, id pgtype.UUID) (AgentRuntime, error) {
@@ -187,6 +187,7 @@ func (q *Queries) ClearRuntimeHold(ctx context.Context, id pgtype.UUID) (AgentRu
 		&i.HoldUntil,
 		&i.HoldReason,
 		&i.ProfileID,
+		&i.CustomName,
 	)
 	return i, err
 }
@@ -561,7 +562,7 @@ func (q *Queries) GetAgentRuntimeForWorkspace(ctx context.Context, arg GetAgentR
 }
 
 const getAgentRuntimes = `-- name: GetAgentRuntimes :many
-SELECT id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id, visibility, profile_id, custom_name FROM agent_runtime
+SELECT id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id, visibility, hold_until, hold_reason, profile_id, custom_name FROM agent_runtime
 WHERE id = ANY($1::uuid[])
 `
 
@@ -595,6 +596,8 @@ func (q *Queries) GetAgentRuntimes(ctx context.Context, ids []pgtype.UUID) ([]Ag
 			&i.OwnerID,
 			&i.LegacyDaemonID,
 			&i.Visibility,
+			&i.HoldUntil,
+			&i.HoldReason,
 			&i.ProfileID,
 			&i.CustomName,
 		); err != nil {
@@ -1008,7 +1011,7 @@ const setRuntimeHold = `-- name: SetRuntimeHold :one
 UPDATE agent_runtime
 SET hold_until = $1, hold_reason = $2, updated_at = now()
 WHERE id = $3
-RETURNING id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id, visibility, hold_until, hold_reason, profile_id
+RETURNING id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id, visibility, hold_until, hold_reason, profile_id, custom_name
 `
 
 type SetRuntimeHoldParams struct {
@@ -1039,6 +1042,7 @@ func (q *Queries) SetRuntimeHold(ctx context.Context, arg SetRuntimeHoldParams) 
 		&i.HoldUntil,
 		&i.HoldReason,
 		&i.ProfileID,
+		&i.CustomName,
 	)
 	return i, err
 }
@@ -1184,7 +1188,7 @@ const updateAgentRuntimeCustomName = `-- name: UpdateAgentRuntimeCustomName :one
 UPDATE agent_runtime
 SET custom_name = $1, updated_at = now()
 WHERE id = $2
-RETURNING id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id, visibility, profile_id, custom_name
+RETURNING id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id, visibility, hold_until, hold_reason, profile_id, custom_name
 `
 
 type UpdateAgentRuntimeCustomNameParams struct {
@@ -1216,6 +1220,8 @@ func (q *Queries) UpdateAgentRuntimeCustomName(ctx context.Context, arg UpdateAg
 		&i.OwnerID,
 		&i.LegacyDaemonID,
 		&i.Visibility,
+		&i.HoldUntil,
+		&i.HoldReason,
 		&i.ProfileID,
 		&i.CustomName,
 	)
@@ -1228,7 +1234,7 @@ SET custom_name = $1, updated_at = now()
 WHERE workspace_id = $2
   AND daemon_id = $3
   AND ($4::uuid IS NULL OR owner_id = $4)
-RETURNING id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id, visibility, profile_id, custom_name
+RETURNING id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id, visibility, hold_until, hold_reason, profile_id, custom_name
 `
 
 type UpdateAgentRuntimeCustomNameByDaemonParams struct {
@@ -1274,6 +1280,8 @@ func (q *Queries) UpdateAgentRuntimeCustomNameByDaemon(ctx context.Context, arg 
 			&i.OwnerID,
 			&i.LegacyDaemonID,
 			&i.Visibility,
+			&i.HoldUntil,
+			&i.HoldReason,
 			&i.ProfileID,
 			&i.CustomName,
 		); err != nil {
