@@ -2,7 +2,7 @@
 //
 // Source: https://models.dev/api.json (MIT, community-maintained,
 // the same dataset OpenCode uses internally).
-// Snapshot: 2026-06-17
+// Snapshot: 2026-06-18
 //
 // Regenerate with: node scripts/generate-pricing.mjs
 
@@ -22,7 +22,6 @@ export const MODEL_PRICING: Readonly<Record<string, {
   "anthropic/claude-3-opus-20240229": { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
   "anthropic/claude-3-sonnet-20240229": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3 },
   "anthropic/claude-opus-4-20250514": { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
-  "auto": { input: 1.25, output: 6, cacheRead: 0.25, cacheWrite: 0 },
   "claude-3-5-haiku": { input: 0.8, output: 4, cacheRead: 0.08, cacheWrite: 1 },
   "claude-3-5-sonnet-20240620": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
   "claude-3-5-sonnet-20241022": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
@@ -43,13 +42,14 @@ export const MODEL_PRICING: Readonly<Record<string, {
   "claude-sonnet-4-0": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
   "claude-sonnet-4-5": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
   "claude-sonnet-4-6": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
-  "composer-1": { input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 0 },
-  "composer-1.5": { input: 3.5, output: 17.5, cacheRead: 0.35, cacheWrite: 0 },
-  "composer-2": { input: 0.5, output: 2.5, cacheRead: 0.2, cacheWrite: 0 },
-  "composer-2-fast": { input: 1.5, output: 7.5, cacheRead: 0.35, cacheWrite: 0 },
-  "composer-2.5": { input: 0.5, output: 2.5, cacheRead: 0.2, cacheWrite: 0 },
-  "composer-2.5-fast": { input: 3, output: 15, cacheRead: 0.5, cacheWrite: 0 },
   "cursor": { input: 3, output: 15, cacheRead: 0.5, cacheWrite: 0 },
+  "cursor/auto": { input: 1.25, output: 6, cacheRead: 0.25, cacheWrite: 0 },
+  "cursor/composer-1": { input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 0 },
+  "cursor/composer-1.5": { input: 3.5, output: 17.5, cacheRead: 0.35, cacheWrite: 0 },
+  "cursor/composer-2": { input: 0.5, output: 2.5, cacheRead: 0.2, cacheWrite: 0 },
+  "cursor/composer-2-fast": { input: 1.5, output: 7.5, cacheRead: 0.35, cacheWrite: 0 },
+  "cursor/composer-2.5": { input: 0.5, output: 2.5, cacheRead: 0.2, cacheWrite: 0 },
+  "cursor/composer-2.5-fast": { input: 3, output: 15, cacheRead: 0.5, cacheWrite: 0 },
   "deepseek-chat": { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
   "deepseek-reasoner": { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
   "deepseek-v4-flash": { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
@@ -124,6 +124,7 @@ export const MODEL_PRICING: Readonly<Record<string, {
   "gpt-5.4-pro": { input: 30, output: 180, cacheRead: 30, cacheWrite: 30 },
   "gpt-5.5": { input: 5, output: 30, cacheRead: 0.5, cacheWrite: 5 },
   "gpt-5.5-pro": { input: 30, output: 180, cacheRead: 30, cacheWrite: 30 },
+  "gpt-image-2": { input: 5, output: 30, cacheRead: 1.25, cacheWrite: 5 },
   "grok-4.20-0309-non-reasoning": { input: 1.25, output: 2.5, cacheRead: 0.2, cacheWrite: 1.25 },
   "grok-4.20-0309-reasoning": { input: 1.25, output: 2.5, cacheRead: 0.2, cacheWrite: 1.25 },
   "grok-4.20-multi-agent-0309": { input: 1.25, output: 2.5, cacheRead: 0.2, cacheWrite: 1.25 },
@@ -181,7 +182,6 @@ export const MODEL_PRICING: Readonly<Record<string, {
   "qwen3.6-plus": { input: 0.5, output: 3, cacheRead: 0.05, cacheWrite: 0.625 },
   "qwen3.7-max": { input: 2.5, output: 7.5, cacheRead: 0.5, cacheWrite: 3.125 },
   "qwen3.7-plus": { input: 0.4, output: 1.6, cacheRead: 0.04, cacheWrite: 0.5 },
-  "raptor-mini": { input: 0.25, output: 2, cacheRead: 0.025, cacheWrite: 0.25 },
   "text-embedding-3-large": { input: 0.13, output: 0, cacheRead: 0.13, cacheWrite: 0.13 },
   "text-embedding-3-small": { input: 0.02, output: 0, cacheRead: 0.02, cacheWrite: 0.02 },
   "text-embedding-ada-002": { input: 0.1, output: 0, cacheRead: 0.1, cacheWrite: 0.1 },
