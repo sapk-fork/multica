@@ -84,8 +84,8 @@ type TaskContextForEnv struct {
 	// contract that does not apply.
 	GitWorkBranch           string
 	GitBaseBranch           string
-	ChatSessionID           string                  // non-empty for chat tasks
-	AutopilotRunID          string                  // non-empty for autopilot run_only tasks
+	ChatSessionID           string // non-empty for chat tasks
+	AutopilotRunID          string // non-empty for autopilot run_only tasks
 	AutopilotID             string
 	AutopilotTitle          string
 	AutopilotDescription    string
