@@ -14,6 +14,15 @@ export interface CreateIssueRequest {
   project_id?: string;
   start_date?: string;
   due_date?: string;
+  /**
+   * Optional branch pinning. See `Issue.git_work_branch` for the contract.
+   * Pass an empty string on update to clear (matches the CLI flag semantics).
+   * Server enforces branch-name validation (length, charset, reserved names)
+   * and rejects `git_work_branch` values already held by another active
+   * issue in the same workspace (HTTP 409).
+   */
+  git_work_branch?: string;
+  git_base_branch?: string;
   attachment_ids?: string[];
 }
 
@@ -29,6 +38,13 @@ export interface UpdateIssueRequest {
   due_date?: string | null;
   parent_issue_id?: string | null;
   project_id?: string | null;
+  /**
+   * Update the pinned git branch. Pass `null` to clear. Pass an empty string
+   * `""` to also clear (matches the `--git-work-branch ""` CLI convention).
+   * The `null` form is preferred for clients that want a typed clear signal.
+   */
+  git_work_branch?: string | null;
+  git_base_branch?: string | null;
   /** Attachment IDs to bind to this issue alongside the description update.
    *  Used by the description editor to register newly uploaded files so they
    *  surface in `issueAttachments` and keep their preview Eye on refresh. */
