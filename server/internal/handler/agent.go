@@ -253,10 +253,18 @@ type AgentTaskResponse struct {
 	ProjectTitle       string                `json:"project_title,omitempty"`       // for surfacing in agent context
 	ProjectDescription string                `json:"project_description,omitempty"` // durable project-level context injected into the brief
 	ProjectResources   []ProjectResourceData `json:"project_resources,omitempty"`   // resources attached to the project
-	CreatedAt          string                `json:"created_at"`
-	PriorSessionID     string                `json:"prior_session_id,omitempty"` // session ID from a previous task on same issue
-	PriorWorkDir       string                `json:"prior_work_dir,omitempty"`   // work_dir from a previous task on same issue
-	WorkDir            string                `json:"work_dir,omitempty"`         // local working directory pinned for this task; populated once the daemon reports it
+	// GitWorkBranch / GitBaseBranch (MUL-44): optional issue-level branch
+	// pins. When set, the agent brief must surface a `## Git Branch`
+	// section so the working agent knows which branch to commit to and
+	// which base to target for the PR. Populated from the issue row at
+	// task-claim time; empty when the issue has no pins (and the
+	// section is omitted from the brief).
+	GitWorkBranch    string                `json:"git_work_branch,omitempty"`
+	GitBaseBranch    string                `json:"git_base_branch,omitempty"`
+	CreatedAt        string                `json:"created_at"`
+	PriorSessionID   string                `json:"prior_session_id,omitempty"` // session ID from a previous task on same issue
+	PriorWorkDir     string                `json:"prior_work_dir,omitempty"`   // work_dir from a previous task on same issue
+	WorkDir          string                `json:"work_dir,omitempty"`         // local working directory pinned for this task; populated once the daemon reports it
 	// RelativeWorkDir is a privacy-safe display form of WorkDir intended for
 	// the UI. For standard tasks it strips the daemon's workspaces root so
 	// the user sees `<wsUUID>/<taskShort>/workdir`; for local_directory
