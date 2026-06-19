@@ -6,6 +6,65 @@ after the latest `main` merge; the prior skill cited pre-merge lines that have
 since moved (see the "drifted" column). Re-confirm with the verification command
 at the bottom before relying on an exact line.
 
+## `multica issue create` / `update` — git branch pins (MUL-44)
+
+The `git_work_branch` and `git_base_branch` flags were added to
+`issue create` and `issue update` in MUL-44. Both fields are optional
+issue-level pins; when set on an issue, the working agent must commit
+to `git_work_branch` and target the PR at `git_base_branch` — the
+contract is loud, not advisory. Lines below were re-derived against
+this branch (`feature/m-44-git-work-and-base-branch`); re-confirm with
+the verification command at the bottom before depending on an exact
+line.
+
+| Behavior | File:line |
+|---|---|
+| `issue create --git-work-branch` flag registration | `server/cmd/multica/cmd_issue.go:324` |
+| `issue create --git-base-branch` flag registration | `server/cmd/multica/cmd_issue.go:325` |
+| `issue update --git-work-branch` flag registration | `server/cmd/multica/cmd_issue.go:347` |
+| `issue update --git-base-branch` flag registration | `server/cmd/multica/cmd_issue.go:348` |
+| Create body maps flag → `body["git_work_branch"]` (only when non-empty) | `server/cmd/multica/cmd_issue.go:761-762` |
+| Create body maps flag → `body["git_base_branch"]` (only when non-empty) | `server/cmd/multica/cmd_issue.go:764-765` |
+| Update body sends flag via `cmd.Flags().Changed` (empty = clear) | `server/cmd/multica/cmd_issue.go:956-962` |
+| CreateIssueRequest.GitWorkBranch / GitBaseBranch (JSON tags `git_work_branch` / `git_base_branch`) | `server/internal/handler/issue.go:2120-2121` |
+| UpdateIssueRequest.GitWorkBranch / GitBaseBranch (nullable) | `server/internal/handler/issue.go:2626-2627` |
+| `validateBranchName` helper (rules: 200 chars, allowed `A-Za-z0-9._/-`, no leading `-`, no `..`, no `@{`, not `HEAD`, work branch not `main`/`master`) | `server/internal/handler/issue.go:111-135` |
+| `branchNameRe` (the character class) | `server/internal/handler/issue.go:90` |
+| Create handler — validate each field, run multi-repo guard, run uniqueness check | `server/internal/handler/issue.go:2248-2309` |
+| Update handler — same validation path, plus cross-field work != base | `server/internal/handler/issue.go:2633-2714` |
+| Create handler — render 409 with `git_work_branch_in_use` code on `service.ErrGitWorkBranchConflict` (race path) | `server/internal/handler/issue.go:2405-2418` |
+| IssueService.Create — pre-check `FindActiveIssueByWorkBranch` inside the create tx (the authoritative race guard) | `server/internal/service/issue.go:228-236` |
+| `ErrGitWorkBranchConflict` sentinel | `server/internal/service/issue.go:141` |
+| sqlc query `FindActiveIssueByWorkBranch` (workspace-scoped, non-terminal only) | `server/pkg/db/queries/issue.sql:140-149` |
+| sqlc query `CountGithubRepoResourcesForProject` (multi-repo guard) | `server/pkg/db/queries/project_resource.sql:46-52` |
+| DB partial unique index `issue_git_work_branch_active_uidx` (last-resort safety net for races) | `server/migrations/122_issue_git_branches.up.sql:26-29` |
+| DB columns `issue.git_work_branch` / `issue.git_base_branch` (TEXT, CHECK length ≤ 200) | `server/migrations/122_issue_git_branches.up.sql:13-16` |
+| Generated `db.Issue.GitWorkBranch` / `GitBaseBranch` (pgtype.Text) | `server/pkg/db/generated/models.go:394-395` |
+| Generated `FindActiveIssueByWorkBranch` Go method | `server/pkg/db/generated/issue.sql.go:491-499` |
+| Generated `CountGithubRepoResourcesForProject` Go method | `server/pkg/db/generated/project_resource.sql.go:13-23` |
+| Daemon brief section `## Git Branch` (loud must-follow) | `server/internal/daemon/execenv/runtime_config.go:578-606` |
+
+The create and update paths share the same `validateBranchName` rules
+(handler/issue.go:111). The cross-field check (work != base when both
+are set) is computed in the handler, not the service, because the
+service only sees the GitWorkBranch / GitBaseBranch fields one at a
+time and has no easy way to know whether the caller meant the existing
+row's value or the new one.
+
+The unique-index contract: `issue_git_work_branch_active_uidx` is a
+PARTIAL unique index scoped to `status NOT IN ('done', 'cancelled')`,
+so a closed issue releases its work-branch slot and a follow-up issue
+can reuse the name. The handler's pre-check + service's in-tx check
+both come ahead of the index so concurrent creates get a structured
+409 instead of a Postgres constraint violation bubbling up as a 500.
+
+The multi-repo guard: `CountGithubRepoResourcesForProject` returns
+> 1 → 422 with `"cannot set git_work_branch or git_base_branch when
+multiple github_repo resources are bound to the project"`. 0 or 1
+github_repo resources permit the fields. The per-repo-id disambiguation
+syntax (`git_work_branch:<repo-id>`) is explicitly out of scope for
+MUL-44 — see issue body.
+
 ## `multica issue pull-requests` — read PR links from Multica
 
 | Behavior | File:line | Drifted from |
@@ -134,4 +193,12 @@ grep -n 'func issuePullRequestRowToResponse\|type GitHubPullRequestResponse stru
 grep -n 'extractIdentifiers(\|extractClosingIdentifiers(\|derivePRState(' internal/handler/github.go
 grep -n 'prevIssue.Status == "backlog"\|func (h \*Handler) shouldEnqueueAgentTask' internal/handler/issue.go
 grep -n 'func notifyParentOfChildDone'       internal/handler/issue_child_done.go
+
+# MUL-44 git branch pin lines:
+grep -n '"git-work-branch"\|"git-base-branch"' cmd/multica/cmd_issue.go
+grep -n 'func validateBranchName\|var branchNameRe' internal/handler/issue.go
+grep -n 'ErrGitWorkBranchConflict'           internal/service/issue.go
+grep -n 'FindActiveIssueByWorkBranch\|CountGithubRepoResourcesForProject' pkg/db/queries/issue.sql pkg/db/queries/project_resource.sql
+grep -n 'GitWorkBranch:\|GitBaseBranch:'     pkg/db/generated/models.go pkg/db/generated/issue.sql.go pkg/db/generated/project_resource.sql.go
+grep -n '## Git Branch'                      internal/daemon/execenv/runtime_config.go
 ```
