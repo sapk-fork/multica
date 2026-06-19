@@ -58,16 +58,16 @@ type Task struct {
 	// prompt set in Settings → General). Server populates this on every claim
 	// regardless of task kind so the daemon can inject `## Workspace Context`
 	// into the brief. Empty when the owner hasn't set one.
-	WorkspaceContext         string                `json:"workspace_context,omitempty"`
-	ThreadName               string                `json:"thread_name,omitempty"` // semantic title for provider-native session/thread history
-	Agent                    *AgentData            `json:"agent,omitempty"`
-	ConnectedApps            []ConnectedAppData    `json:"connected_apps,omitempty"` // per-run app capabilities mounted through runtime MCP overlays
-	Repos                    []RepoData            `json:"repos,omitempty"`
-	ProjectID                string                `json:"project_id,omitempty"`                  // issue's project, when present
-	ProjectTitle             string                `json:"project_title,omitempty"`               // human-readable project title for context injection
-	ProjectDescription       string                `json:"project_description,omitempty"`         // durable project-level context injected into the brief
-	ProjectResources         []ProjectResourceData `json:"project_resources,omitempty"`           // project-scoped resources to expose to the agent
-	IsLeaderTask             bool                  `json:"is_leader_task,omitempty"`              // true when executing in the squad-leader coordinator role
+	WorkspaceContext   string                `json:"workspace_context,omitempty"`
+	ThreadName         string                `json:"thread_name,omitempty"` // semantic title for provider-native session/thread history
+	Agent              *AgentData            `json:"agent,omitempty"`
+	ConnectedApps      []ConnectedAppData    `json:"connected_apps,omitempty"` // per-run app capabilities mounted through runtime MCP overlays
+	Repos              []RepoData            `json:"repos,omitempty"`
+	ProjectID          string                `json:"project_id,omitempty"`          // issue's project, when present
+	ProjectTitle       string                `json:"project_title,omitempty"`       // human-readable project title for context injection
+	ProjectDescription string                `json:"project_description,omitempty"` // durable project-level context injected into the brief
+	ProjectResources   []ProjectResourceData `json:"project_resources,omitempty"`   // project-scoped resources to expose to the agent
+	IsLeaderTask       bool                  `json:"is_leader_task,omitempty"`      // true when executing in the squad-leader coordinator role
 	// GitWorkBranch / GitBaseBranch (MUL-44): optional issue-level branch
 	// pins. The server populates these from the issue row at task-claim
 	// time; the daemon threads them into the agent brief as a `## Git
