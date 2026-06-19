@@ -1459,6 +1459,49 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
             </PropRow>
           )}
 
+          {/* Read-only git branch fields (M-44). Both come from the server
+              via `issue create --git-work-branch` / `--git-base-branch` (or
+              the equivalent update flags) and pin the branch an agent should
+              commit to / open the PR against. Editing is deferred — these
+              stay visible-but-static so the agent can see them in-context
+              without the affordance implying the value is mutable from here. */}
+          {(issue.git_work_branch || issue.git_base_branch) && (
+            <div
+              data-testid="issue-git-branches"
+              className="col-span-2 -mx-2 mt-1 flex flex-col gap-1 rounded-md px-2 py-1.5"
+            >
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                {t(($) => $.detail.prop_git_section)}
+              </span>
+              {issue.git_work_branch && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground min-w-[80px] shrink-0">
+                    {t(($) => $.detail.prop_git_work_branch)}
+                  </span>
+                  <code
+                    title={issue.git_work_branch}
+                    className="rounded bg-muted px-1.5 py-0.5 font-mono truncate"
+                  >
+                    {issue.git_work_branch}
+                  </code>
+                </div>
+              )}
+              {issue.git_base_branch && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground min-w-[80px] shrink-0">
+                    {t(($) => $.detail.prop_git_base_branch)}
+                  </span>
+                  <code
+                    title={issue.git_base_branch}
+                    className="rounded bg-muted px-1.5 py-0.5 font-mono truncate"
+                  >
+                    {issue.git_base_branch}
+                  </code>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* "+ Add property" — opens a Popover listing optional fields
               not yet displayed. Hidden once every optional field is on
               screen. Sits inside the same grid as a full-row, with its
