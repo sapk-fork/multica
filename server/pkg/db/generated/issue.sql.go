@@ -174,10 +174,12 @@ const createIssue = `-- name: CreateIssue :one
 INSERT INTO issue (
     workspace_id, title, description, status, priority,
     assignee_type, assignee_id, creator_type, creator_id,
-    parent_issue_id, position, start_date, due_date, number, project_id
+    parent_issue_id, position, start_date, due_date, number, project_id,
+    git_work_branch, git_base_branch
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
-) RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+    $16, $17
+) RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, git_work_branch, git_base_branch
 `
 
 type CreateIssueParams struct {
@@ -196,6 +198,8 @@ type CreateIssueParams struct {
 	DueDate       pgtype.Date `json:"due_date"`
 	Number        int32       `json:"number"`
 	ProjectID     pgtype.UUID `json:"project_id"`
+	GitWorkBranch pgtype.Text `json:"git_work_branch"`
+	GitBaseBranch pgtype.Text `json:"git_base_branch"`
 }
 
 func (q *Queries) CreateIssue(ctx context.Context, arg CreateIssueParams) (Issue, error) {
@@ -215,6 +219,8 @@ func (q *Queries) CreateIssue(ctx context.Context, arg CreateIssueParams) (Issue
 		arg.DueDate,
 		arg.Number,
 		arg.ProjectID,
+		arg.GitWorkBranch,
+		arg.GitBaseBranch,
 	)
 	var i Issue
 	err := row.Scan(
@@ -242,6 +248,8 @@ func (q *Queries) CreateIssue(ctx context.Context, arg CreateIssueParams) (Issue
 		&i.FirstExecutedAt,
 		&i.StartDate,
 		&i.Metadata,
+		&i.GitWorkBranch,
+		&i.GitBaseBranch,
 	)
 	return i, err
 }
@@ -251,11 +259,12 @@ INSERT INTO issue (
     workspace_id, title, description, status, priority,
     assignee_type, assignee_id, creator_type, creator_id,
     parent_issue_id, position, start_date, due_date, number, project_id,
-    origin_type, origin_id
+    origin_type, origin_id, git_work_branch, git_base_branch
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-    $16, $17
-) RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata
+    $16, $17,
+    $18, $19
+) RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, git_work_branch, git_base_branch
 `
 
 type CreateIssueWithOriginParams struct {
@@ -276,6 +285,8 @@ type CreateIssueWithOriginParams struct {
 	ProjectID     pgtype.UUID `json:"project_id"`
 	OriginType    pgtype.Text `json:"origin_type"`
 	OriginID      pgtype.UUID `json:"origin_id"`
+	GitWorkBranch pgtype.Text `json:"git_work_branch"`
+	GitBaseBranch pgtype.Text `json:"git_base_branch"`
 }
 
 func (q *Queries) CreateIssueWithOrigin(ctx context.Context, arg CreateIssueWithOriginParams) (Issue, error) {
@@ -297,6 +308,8 @@ func (q *Queries) CreateIssueWithOrigin(ctx context.Context, arg CreateIssueWith
 		arg.ProjectID,
 		arg.OriginType,
 		arg.OriginID,
+		arg.GitWorkBranch,
+		arg.GitBaseBranch,
 	)
 	var i Issue
 	err := row.Scan(
@@ -324,6 +337,8 @@ func (q *Queries) CreateIssueWithOrigin(ctx context.Context, arg CreateIssueWith
 		&i.FirstExecutedAt,
 		&i.StartDate,
 		&i.Metadata,
+		&i.GitWorkBranch,
+		&i.GitBaseBranch,
 	)
 	return i, err
 }
@@ -352,7 +367,7 @@ UPDATE issue SET
     metadata = metadata - $1::text,
     updated_at = now()
 WHERE id = $2 AND workspace_id = $3
-RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata
+RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, git_work_branch, git_base_branch
 `
 
 type DeleteIssueMetadataKeyParams struct {
@@ -391,12 +406,14 @@ func (q *Queries) DeleteIssueMetadataKey(ctx context.Context, arg DeleteIssueMet
 		&i.FirstExecutedAt,
 		&i.StartDate,
 		&i.Metadata,
+		&i.GitWorkBranch,
+		&i.GitBaseBranch,
 	)
 	return i, err
 }
 
 const findActiveDuplicateIssue = `-- name: FindActiveDuplicateIssue :one
-SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata FROM issue
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, git_work_branch, git_base_branch FROM issue
 WHERE workspace_id = $1
   AND status NOT IN ('done', 'cancelled')
   AND project_id IS NOT DISTINCT FROM $2::uuid
@@ -446,12 +463,67 @@ func (q *Queries) FindActiveDuplicateIssue(ctx context.Context, arg FindActiveDu
 		&i.FirstExecutedAt,
 		&i.StartDate,
 		&i.Metadata,
+		&i.GitWorkBranch,
+		&i.GitBaseBranch,
+	)
+	return i, err
+}
+
+const findActiveIssueByWorkBranch = `-- name: FindActiveIssueByWorkBranch :one
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, git_work_branch, git_base_branch FROM issue
+WHERE workspace_id = $1
+  AND git_work_branch = $2
+  AND status NOT IN ('done', 'cancelled')
+LIMIT 1
+`
+
+type FindActiveIssueByWorkBranchParams struct {
+	WorkspaceID   pgtype.UUID `json:"workspace_id"`
+	GitWorkBranch pgtype.Text `json:"git_work_branch"`
+}
+
+// Returns a non-terminal issue in the same workspace that already holds
+// the requested git_work_branch. The handler runs this check inside the
+// create transaction so concurrent creates get a structured 409 instead
+// of a Postgres unique-violation from issue_git_work_branch_active_uidx.
+// The partial unique index is the last-resort safety net for races that
+// beat the handler check.
+func (q *Queries) FindActiveIssueByWorkBranch(ctx context.Context, arg FindActiveIssueByWorkBranchParams) (Issue, error) {
+	row := q.db.QueryRow(ctx, findActiveIssueByWorkBranch, arg.WorkspaceID, arg.GitWorkBranch)
+	var i Issue
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Title,
+		&i.Description,
+		&i.Status,
+		&i.Priority,
+		&i.AssigneeType,
+		&i.AssigneeID,
+		&i.CreatorType,
+		&i.CreatorID,
+		&i.ParentIssueID,
+		&i.AcceptanceCriteria,
+		&i.ContextRefs,
+		&i.Position,
+		&i.DueDate,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Number,
+		&i.ProjectID,
+		&i.OriginType,
+		&i.OriginID,
+		&i.FirstExecutedAt,
+		&i.StartDate,
+		&i.Metadata,
+		&i.GitWorkBranch,
+		&i.GitBaseBranch,
 	)
 	return i, err
 }
 
 const getIssue = `-- name: GetIssue :one
-SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata FROM issue
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, git_work_branch, git_base_branch FROM issue
 WHERE id = $1
 `
 
@@ -483,12 +555,14 @@ func (q *Queries) GetIssue(ctx context.Context, id pgtype.UUID) (Issue, error) {
 		&i.FirstExecutedAt,
 		&i.StartDate,
 		&i.Metadata,
+		&i.GitWorkBranch,
+		&i.GitBaseBranch,
 	)
 	return i, err
 }
 
 const getIssueByNumber = `-- name: GetIssueByNumber :one
-SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata FROM issue
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, git_work_branch, git_base_branch FROM issue
 WHERE workspace_id = $1 AND number = $2
 `
 
@@ -525,12 +599,14 @@ func (q *Queries) GetIssueByNumber(ctx context.Context, arg GetIssueByNumberPara
 		&i.FirstExecutedAt,
 		&i.StartDate,
 		&i.Metadata,
+		&i.GitWorkBranch,
+		&i.GitBaseBranch,
 	)
 	return i, err
 }
 
 const getIssueByOrigin = `-- name: GetIssueByOrigin :one
-SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata FROM issue
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, git_work_branch, git_base_branch FROM issue
 WHERE workspace_id = $1
   AND origin_type = $2
   AND origin_id = $3
@@ -576,12 +652,14 @@ func (q *Queries) GetIssueByOrigin(ctx context.Context, arg GetIssueByOriginPara
 		&i.FirstExecutedAt,
 		&i.StartDate,
 		&i.Metadata,
+		&i.GitWorkBranch,
+		&i.GitBaseBranch,
 	)
 	return i, err
 }
 
 const getIssueInWorkspace = `-- name: GetIssueInWorkspace :one
-SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata FROM issue
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, git_work_branch, git_base_branch FROM issue
 WHERE id = $1 AND workspace_id = $2
 `
 
@@ -618,12 +696,14 @@ func (q *Queries) GetIssueInWorkspace(ctx context.Context, arg GetIssueInWorkspa
 		&i.FirstExecutedAt,
 		&i.StartDate,
 		&i.Metadata,
+		&i.GitWorkBranch,
+		&i.GitBaseBranch,
 	)
 	return i, err
 }
 
 const listChildIssues = `-- name: ListChildIssues :many
-SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata FROM issue
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, git_work_branch, git_base_branch FROM issue
 WHERE parent_issue_id = $1
 ORDER BY position ASC, created_at DESC
 `
@@ -662,6 +742,8 @@ func (q *Queries) ListChildIssues(ctx context.Context, parentIssueID pgtype.UUID
 			&i.FirstExecutedAt,
 			&i.StartDate,
 			&i.Metadata,
+			&i.GitWorkBranch,
+			&i.GitBaseBranch,
 		); err != nil {
 			return nil, err
 		}
@@ -674,7 +756,7 @@ func (q *Queries) ListChildIssues(ctx context.Context, parentIssueID pgtype.UUID
 }
 
 const listChildrenByParents = `-- name: ListChildrenByParents :many
-SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata FROM issue
+SELECT id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, git_work_branch, git_base_branch FROM issue
 WHERE workspace_id = $1
   AND parent_issue_id = ANY($2::uuid[])
 ORDER BY parent_issue_id, position ASC, created_at DESC
@@ -724,6 +806,8 @@ func (q *Queries) ListChildrenByParents(ctx context.Context, arg ListChildrenByP
 			&i.FirstExecutedAt,
 			&i.StartDate,
 			&i.Metadata,
+			&i.GitWorkBranch,
+			&i.GitBaseBranch,
 		); err != nil {
 			return nil, err
 		}
@@ -738,7 +822,8 @@ func (q *Queries) ListChildrenByParents(ctx context.Context, arg ListChildrenByP
 const listIssues = `-- name: ListIssues :many
 SELECT i.id, i.workspace_id, i.title, i.description, i.status, i.priority,
        i.assignee_type, i.assignee_id, i.creator_type, i.creator_id,
-       i.parent_issue_id, i.position, i.start_date, i.due_date, i.created_at, i.updated_at, i.number, i.project_id, i.metadata
+       i.parent_issue_id, i.position, i.start_date, i.due_date, i.created_at, i.updated_at, i.number, i.project_id, i.metadata,
+       i.git_work_branch, i.git_base_branch
 FROM issue i
 WHERE i.workspace_id = $1
   AND ($4::text IS NULL OR i.status = $4)
@@ -828,6 +913,8 @@ type ListIssuesRow struct {
 	Number        int32              `json:"number"`
 	ProjectID     pgtype.UUID        `json:"project_id"`
 	Metadata      []byte             `json:"metadata"`
+	GitWorkBranch pgtype.Text        `json:"git_work_branch"`
+	GitBaseBranch pgtype.Text        `json:"git_base_branch"`
 }
 
 // involves_user_id widens the assignee filter to surface issues where the user
@@ -878,6 +965,8 @@ func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListI
 			&i.Number,
 			&i.ProjectID,
 			&i.Metadata,
+			&i.GitWorkBranch,
+			&i.GitBaseBranch,
 		); err != nil {
 			return nil, err
 		}
@@ -892,7 +981,8 @@ func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListI
 const listOpenIssues = `-- name: ListOpenIssues :many
 SELECT i.id, i.workspace_id, i.title, i.description, i.status, i.priority,
        i.assignee_type, i.assignee_id, i.creator_type, i.creator_id,
-       i.parent_issue_id, i.position, i.start_date, i.due_date, i.created_at, i.updated_at, i.number, i.project_id, i.metadata
+       i.parent_issue_id, i.position, i.start_date, i.due_date, i.created_at, i.updated_at, i.number, i.project_id, i.metadata,
+       i.git_work_branch, i.git_base_branch
 FROM issue i
 WHERE i.workspace_id = $1
   AND i.status NOT IN ('done', 'cancelled')
@@ -968,6 +1058,8 @@ type ListOpenIssuesRow struct {
 	Number        int32              `json:"number"`
 	ProjectID     pgtype.UUID        `json:"project_id"`
 	Metadata      []byte             `json:"metadata"`
+	GitWorkBranch pgtype.Text        `json:"git_work_branch"`
+	GitBaseBranch pgtype.Text        `json:"git_base_branch"`
 }
 
 // See ListIssues for the semantics of involves_user_id (mirrors the 4-branch
@@ -1010,6 +1102,8 @@ func (q *Queries) ListOpenIssues(ctx context.Context, arg ListOpenIssuesParams) 
 			&i.Number,
 			&i.ProjectID,
 			&i.Metadata,
+			&i.GitWorkBranch,
+			&i.GitBaseBranch,
 		); err != nil {
 			return nil, err
 		}
@@ -1068,7 +1162,7 @@ UPDATE issue SET
     metadata = jsonb_set(metadata, ARRAY[$1::text], $2::jsonb),
     updated_at = now()
 WHERE id = $3 AND workspace_id = $4
-RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata
+RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, git_work_branch, git_base_branch
 `
 
 type SetIssueMetadataKeyParams struct {
@@ -1115,6 +1209,8 @@ func (q *Queries) SetIssueMetadataKey(ctx context.Context, arg SetIssueMetadataK
 		&i.FirstExecutedAt,
 		&i.StartDate,
 		&i.Metadata,
+		&i.GitWorkBranch,
+		&i.GitBaseBranch,
 	)
 	return i, err
 }
@@ -1132,9 +1228,11 @@ UPDATE issue SET
     due_date = $10,
     parent_issue_id = $11,
     project_id = $12,
+    git_work_branch = $13,
+    git_base_branch = $14,
     updated_at = now()
 WHERE id = $1
-RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata
+RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, git_work_branch, git_base_branch
 `
 
 type UpdateIssueParams struct {
@@ -1150,6 +1248,8 @@ type UpdateIssueParams struct {
 	DueDate       pgtype.Date   `json:"due_date"`
 	ParentIssueID pgtype.UUID   `json:"parent_issue_id"`
 	ProjectID     pgtype.UUID   `json:"project_id"`
+	GitWorkBranch pgtype.Text   `json:"git_work_branch"`
+	GitBaseBranch pgtype.Text   `json:"git_base_branch"`
 }
 
 func (q *Queries) UpdateIssue(ctx context.Context, arg UpdateIssueParams) (Issue, error) {
@@ -1166,6 +1266,8 @@ func (q *Queries) UpdateIssue(ctx context.Context, arg UpdateIssueParams) (Issue
 		arg.DueDate,
 		arg.ParentIssueID,
 		arg.ProjectID,
+		arg.GitWorkBranch,
+		arg.GitBaseBranch,
 	)
 	var i Issue
 	err := row.Scan(
@@ -1193,6 +1295,8 @@ func (q *Queries) UpdateIssue(ctx context.Context, arg UpdateIssueParams) (Issue
 		&i.FirstExecutedAt,
 		&i.StartDate,
 		&i.Metadata,
+		&i.GitWorkBranch,
+		&i.GitBaseBranch,
 	)
 	return i, err
 }
@@ -1202,7 +1306,7 @@ UPDATE issue SET
     status = $2,
     updated_at = now()
 WHERE id = $1 AND workspace_id = $3
-RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata
+RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, git_work_branch, git_base_branch
 `
 
 type UpdateIssueStatusParams struct {
@@ -1240,6 +1344,8 @@ func (q *Queries) UpdateIssueStatus(ctx context.Context, arg UpdateIssueStatusPa
 		&i.FirstExecutedAt,
 		&i.StartDate,
 		&i.Metadata,
+		&i.GitWorkBranch,
+		&i.GitBaseBranch,
 	)
 	return i, err
 }
