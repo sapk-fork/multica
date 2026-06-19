@@ -143,6 +143,49 @@ on it. These are the contracts, not advice:
   itself on merge — you do not also need to flip it manually.
 - **`cancelled`** stops outstanding work; treat it as a user-driven decision.
 
+## Pinned branch fields: `git_work_branch` and `git_base_branch`
+
+An issue can carry two optional text fields that pin the working agent's
+git branch. When set, the agent brief renders a `## Git Branch` section
+making the contract loud: these values PIN the agent's branch, they do
+not just suggest it. An agent that ignores them and commits to a
+different branch has to explain why in the issue thread before the
+change leaves the worktree.
+
+- `git_work_branch` — the dedicated branch the agent creates/updates and opens
+  the PR from. Must be unique across non-terminal issues in the workspace
+  (HTTP 409 on collision). Forbidden: `HEAD`, `main`, `master`. Max 200
+  chars, allowed: `A-Za-z0-9._/-`.
+- `git_base_branch` — the branch the agent branches from / rebases onto and
+  opens the PR/MR against. Same format rules. `main` / `master` are
+  allowed (those are the typical integration branches to target).
+- When both are set, they must differ from each other.
+- Both fields are forbidden when the issue's project has more than one
+  `github_repo` resource (HTTP 422). The branches would otherwise need
+  per-repo disambiguation, which is out of scope.
+
+Set on create:
+
+```bash
+multica issue create --title "..." \
+  --git-work-branch "feature/mul-44-my-branch" \
+  --git-base-branch "main" \
+  --assignee <agent>
+```
+
+Update / clear later (empty string clears the field):
+
+```bash
+multica issue update <issue-id> --git-work-branch "feature/mul-44-new-name"
+multica issue update <issue-id> --git-work-branch ""   # clear
+```
+
+Both fields are surfaced on the issue detail (read-only in the UI) and
+in the agent task brief under `## Git Branch`. The skill-level contract
+is loud about must-follow because the values pin the agent's branch —
+ignoring them requires a comment on the issue explaining why, not
+silent divergence from a different base.
+
 ## Sub-issues: `todo` starts work now, `backlog` parks it
 
 On an agent-assigned issue, create status decides whether the assignee fires
