@@ -78,6 +78,12 @@ type TaskContextForEnv struct {
 	ProjectTitle            string                  // human-readable project title
 	ProjectDescription      string                  // durable project-level context, rendered into the brief's Project Context section
 	ProjectResources        []ProjectResourceForEnv // resources attached to the project
+	// MUL-44: optional issue-level branch pins. Empty when the issue
+	// has no pins; the brief omits the `## Git Branch` section in that
+	// case so the agent does not see a "follow this" block for a
+	// contract that does not apply.
+	GitWorkBranch           string
+	GitBaseBranch           string
 	ChatSessionID           string                  // non-empty for chat tasks
 	AutopilotRunID          string                  // non-empty for autopilot run_only tasks
 	AutopilotID             string
