@@ -330,6 +330,15 @@ func init() {
 	issueCreateCmd.Flags().String("project", "", "Project ID")
 	issueCreateCmd.Flags().String("start-date", "", "Start date (calendar day, YYYY-MM-DD)")
 	issueCreateCmd.Flags().String("due-date", "", "Due date (calendar day, YYYY-MM-DD)")
+	// MUL-44: optional branch pins. See the multica-working-on-issues
+	// SKILL for the contract — when set, agents MUST commit to
+	// git-work-branch and base the PR/MR on git-base-branch.
+	// git-work-branch must be unique across non-terminal issues in
+	// the workspace (HTTP 409 on collision) and may not be HEAD /
+	// main / master. Pass on every create where the work is pinned
+	// so the agent brief can surface the contract.
+	issueCreateCmd.Flags().String("git-work-branch", "", "Branch the working agent must commit to and open the PR from (MUL-44; max 200 chars, allowed: A-Za-z0-9._/-; not HEAD/main/master)")
+	issueCreateCmd.Flags().String("git-base-branch", "", "Branch the working agent must rebase onto and target the PR at (MUL-44; max 200 chars, allowed: A-Za-z0-9._/-; not HEAD)")
 	issueCreateCmd.Flags().Bool("allow-duplicate", false, "Allow creating an issue even when an active duplicate exists")
 	issueCreateCmd.Flags().String("output", "json", "Output format: table or json")
 	issueCreateCmd.Flags().StringSlice("attachment", nil, "File path(s) to attach (can be specified multiple times)")
@@ -348,6 +357,11 @@ func init() {
 	issueUpdateCmd.Flags().String("start-date", "", "New start date (calendar day, YYYY-MM-DD; pass empty string to clear)")
 	issueUpdateCmd.Flags().String("due-date", "", "New due date (calendar day, YYYY-MM-DD)")
 	issueUpdateCmd.Flags().String("parent", "", "Parent issue ID (use --parent \"\" to clear)")
+	// MUL-44 update flags. --git-work-branch \"\" / --git-base-branch \"\"
+	// clear the field; the flag is only sent to the server when
+	// explicitly set (matching the start-date / parent pattern).
+	issueUpdateCmd.Flags().String("git-work-branch", "", "New git_work_branch (MUL-44; pass empty string to clear)")
+	issueUpdateCmd.Flags().String("git-base-branch", "", "New git_base_branch (MUL-44; pass empty string to clear)")
 	issueUpdateCmd.Flags().String("output", "json", "Output format: table or json")
 
 	// issue status
@@ -761,6 +775,15 @@ func runIssueCreate(cmd *cobra.Command, _ []string) error {
 	if v, _ := cmd.Flags().GetString("due-date"); v != "" {
 		body["due_date"] = v
 	}
+	// MUL-44: only set on create when the caller passed a non-empty
+	// value, matching the start-date / due-date pattern. The server
+	// runs the validation + uniqueness check.
+	if v, _ := cmd.Flags().GetString("git-work-branch"); v != "" {
+		body["git_work_branch"] = v
+	}
+	if v, _ := cmd.Flags().GetString("git-base-branch"); v != "" {
+		body["git_base_branch"] = v
+	}
 	if v, _ := cmd.Flags().GetBool("allow-duplicate"); v {
 		body["allow_duplicate"] = true
 	}
@@ -946,6 +969,17 @@ func runIssueUpdate(cmd *cobra.Command, args []string) error {
 	if cmd.Flags().Changed("due-date") {
 		v, _ := cmd.Flags().GetString("due-date")
 		body["due_date"] = v
+	}
+	// MUL-44: send the flag on update only when explicitly set. Empty
+	// string clears the field (the server treats an explicit null
+	// differently from a missing key).
+	if cmd.Flags().Changed("git-work-branch") {
+		v, _ := cmd.Flags().GetString("git-work-branch")
+		body["git_work_branch"] = v
+	}
+	if cmd.Flags().Changed("git-base-branch") {
+		v, _ := cmd.Flags().GetString("git-base-branch")
+		body["git_base_branch"] = v
 	}
 	if cmd.Flags().Changed("assignee") || cmd.Flags().Changed("assignee-id") {
 		aType, aID, hasAssignee, resolveErr := pickAssigneeFromFlags(ctx, client, cmd, "assignee", "assignee-id", issueAssigneeKinds)
