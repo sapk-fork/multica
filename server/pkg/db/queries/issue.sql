@@ -7,7 +7,8 @@
 -- "Assigned to me"), and the two filters must produce disjoint result sets.
 SELECT i.id, i.workspace_id, i.title, i.description, i.status, i.priority,
        i.assignee_type, i.assignee_id, i.creator_type, i.creator_id,
-       i.parent_issue_id, i.position, i.start_date, i.due_date, i.created_at, i.updated_at, i.number, i.project_id, i.metadata
+       i.parent_issue_id, i.position, i.start_date, i.due_date, i.created_at, i.updated_at, i.number, i.project_id, i.metadata,
+       i.git_work_branch, i.git_base_branch
 FROM issue i
 WHERE i.workspace_id = $1
   AND (sqlc.narg('status')::text IS NULL OR i.status = sqlc.narg('status'))
@@ -73,9 +74,11 @@ WHERE id = $1 AND workspace_id = $2;
 INSERT INTO issue (
     workspace_id, title, description, status, priority,
     assignee_type, assignee_id, creator_type, creator_id,
-    parent_issue_id, position, start_date, due_date, number, project_id
+    parent_issue_id, position, start_date, due_date, number, project_id,
+    git_work_branch, git_base_branch
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+    sqlc.narg('git_work_branch'), sqlc.narg('git_base_branch')
 ) RETURNING *;
 
 -- name: GetIssueByNumber :one
@@ -95,6 +98,8 @@ UPDATE issue SET
     due_date = sqlc.narg('due_date'),
     parent_issue_id = sqlc.narg('parent_issue_id'),
     project_id = sqlc.narg('project_id'),
+    git_work_branch = sqlc.narg('git_work_branch'),
+    git_base_branch = sqlc.narg('git_base_branch'),
     updated_at = now()
 WHERE id = $1
 RETURNING *;
@@ -112,10 +117,11 @@ INSERT INTO issue (
     workspace_id, title, description, status, priority,
     assignee_type, assignee_id, creator_type, creator_id,
     parent_issue_id, position, start_date, due_date, number, project_id,
-    origin_type, origin_id
+    origin_type, origin_id, git_work_branch, git_base_branch
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-    sqlc.narg('origin_type'), sqlc.narg('origin_id')
+    sqlc.narg('origin_type'), sqlc.narg('origin_id'),
+    sqlc.narg('git_work_branch'), sqlc.narg('git_base_branch')
 ) RETURNING *;
 
 -- name: LockIssueDuplicateKey :exec
@@ -131,6 +137,19 @@ WHERE workspace_id = $1
 ORDER BY created_at ASC
 LIMIT 1;
 
+-- name: FindActiveIssueByWorkBranch :one
+-- Returns a non-terminal issue in the same workspace that already holds
+-- the requested git_work_branch. The handler runs this check inside the
+-- create transaction so concurrent creates get a structured 409 instead
+-- of a Postgres unique-violation from issue_git_work_branch_active_uidx.
+-- The partial unique index is the last-resort safety net for races that
+-- beat the handler check.
+SELECT * FROM issue
+WHERE workspace_id = $1
+  AND git_work_branch = $2
+  AND status NOT IN ('done', 'cancelled')
+LIMIT 1;
+
 -- name: DeleteIssue :exec
 -- Defense-in-depth: the workspace_id predicate makes the tenant invariant a
 -- SQL-layer guarantee rather than a handler-layer one. Handler loaders
@@ -144,7 +163,8 @@ DELETE FROM issue WHERE id = $1 AND workspace_id = $2;
 -- filter; member-direct assignment is intentionally excluded).
 SELECT i.id, i.workspace_id, i.title, i.description, i.status, i.priority,
        i.assignee_type, i.assignee_id, i.creator_type, i.creator_id,
-       i.parent_issue_id, i.position, i.start_date, i.due_date, i.created_at, i.updated_at, i.number, i.project_id, i.metadata
+       i.parent_issue_id, i.position, i.start_date, i.due_date, i.created_at, i.updated_at, i.number, i.project_id, i.metadata,
+       i.git_work_branch, i.git_base_branch
 FROM issue i
 WHERE i.workspace_id = $1
   AND i.status NOT IN ('done', 'cancelled')
