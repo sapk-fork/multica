@@ -339,6 +339,8 @@ const issueDefaults = {
   project_id: null,
   position: 0,
   stage: null,
+  git_work_branch: null,
+  git_base_branch: null,
   metadata: {},
 };
 
