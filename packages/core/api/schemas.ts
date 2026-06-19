@@ -246,6 +246,13 @@ export const IssueSchema = z.object({
   stage: z.number().nullable().default(null),
   start_date: z.string().nullable(),
   due_date: z.string().nullable(),
+  // Optional git branch pinning (M-44). `.default(null)` keeps older
+  // backends that don't emit these fields from breaking the frontend:
+  // the parse still succeeds and downstream code reads `null` everywhere
+  // it expects a branch. The `.loose()` at the bottom of the schema
+  // already preserves any extra fields the server might add later.
+  git_work_branch: z.string().nullable().default(null),
+  git_base_branch: z.string().nullable().default(null),
   metadata: IssueMetadataSchema,
   reactions: z.array(z.unknown()).optional(),
   labels: z.array(z.unknown()).optional(),
