@@ -63,6 +63,16 @@ type IssueCreateParams struct {
 	ProjectID      pgtype.UUID
 	StartDate      pgtype.Date
 	DueDate        pgtype.Date
+	// GitWorkBranch / GitBaseBranch are the MUL-44 optional branch pin
+	// fields. Both are validated by the handler (format, length,
+	// work != base, multi-repo guard) before they land here; the
+	// service only persists them and runs the workspace-scoped
+	// uniqueness check on GitWorkBranch so a concurrent create race
+	// surfaces as ErrGitWorkBranchConflict (mapped to HTTP 409 at the
+	// handler) rather than a Postgres unique-violation from
+	// issue_git_work_branch_active_uidx.
+	GitWorkBranch  pgtype.Text
+	GitBaseBranch  pgtype.Text
 	OriginType     pgtype.Text
 	OriginID       pgtype.UUID
 	AttachmentIDs  []pgtype.UUID
@@ -120,6 +130,15 @@ var ErrParentIssueNotFound = errors.New("parent issue not found in this workspac
 // MCP / API key callers) enforces the same workspace boundary without
 // having to remember it. Callers translate this into 400.
 var ErrProjectNotFound = errors.New("project not found in this workspace")
+
+// ErrGitWorkBranchConflict signals that the requested git_work_branch is
+// already held by another non-terminal issue in the same workspace. The
+// handler translates this into HTTP 409 with the conflicting issue's
+// identifier in the body. The DB-level partial unique index
+// (issue_git_work_branch_active_uidx) is the last-resort guard for races
+// that beat the in-tx FindActiveIssueByWorkBranch check; this error is
+// the structured 409 path for the common case.
+var ErrGitWorkBranchConflict = errors.New("git_work_branch already in use")
 
 // IssueCreateResult is the typed return from IssueService.Create.
 //
@@ -200,6 +219,23 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 		return IssueCreateResult{DuplicateIssue: &dup}, ErrActiveDuplicate
 	}
 
+	// Workspace-scoped uniqueness check on git_work_branch. Runs inside the
+	// same tx as the create so a concurrent create for the same work
+	// branch serializes on the workspace row lock from
+	// issueguard.LockAndFindActiveDuplicate above. The DB-level partial
+	// unique index (issue_git_work_branch_active_uidx) is the safety net
+	// for races that somehow beat the in-tx check.
+	if p.GitWorkBranch.Valid {
+		existing, err := qtx.FindActiveIssueByWorkBranch(ctx, db.FindActiveIssueByWorkBranchParams{
+			WorkspaceID:   p.WorkspaceID,
+			GitWorkBranch: p.GitWorkBranch,
+		})
+		if err == nil && existing.ID.Valid {
+			dup := existing
+			return IssueCreateResult{DuplicateIssue: &dup}, ErrGitWorkBranchConflict
+		}
+	}
+
 	issueNumber, err := qtx.IncrementIssueCounter(ctx, p.WorkspaceID)
 	if err != nil {
 		return IssueCreateResult{}, fmt.Errorf("increment counter: %w", err)
@@ -239,6 +275,8 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 			ProjectID:     projectID,
 			OriginType:    p.OriginType,
 			OriginID:      p.OriginID,
+			GitWorkBranch: p.GitWorkBranch,
+			GitBaseBranch: p.GitBaseBranch,
 		})
 	} else {
 		issue, err = qtx.CreateIssue(ctx, db.CreateIssueParams{
@@ -257,6 +295,8 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 			DueDate:       p.DueDate,
 			Number:        issueNumber,
 			ProjectID:     projectID,
+			GitWorkBranch: p.GitWorkBranch,
+			GitBaseBranch: p.GitBaseBranch,
 		})
 	}
 	if err != nil {
