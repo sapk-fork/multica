@@ -54,6 +54,22 @@ export interface Issue {
   // + local formatting, which shifts the day by the viewer's offset.
   start_date: string | null;
   due_date: string | null;
+  /**
+   * Optional git branch names pinned to this issue. Both fields default to
+   * `null` when unset — agents that see `null` should keep their existing
+   * branch-derivation behavior.
+   *
+   * - `git_work_branch` is the dedicated branch the agent should create or
+   *   check out and push commits to, and the branch it opens the PR/MR from.
+   *   Server-enforced unique across non-terminal issues in the workspace.
+   * - `git_base_branch` is the branch the agent should base / rebase the
+   *   work branch on, and the branch the PR/MR targets.
+   *
+   * When either is set, agents MUST follow it (see the
+   * `multica-working-on-issues` skill — section "Git Branch Fields").
+   */
+  git_work_branch: string | null;
+  git_base_branch: string | null;
   metadata: IssueMetadata;
   reactions?: IssueReaction[];
   labels?: Label[];

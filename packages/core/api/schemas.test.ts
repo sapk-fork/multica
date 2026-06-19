@@ -36,6 +36,8 @@ const baseIssue = {
   position: 0,
   start_date: null,
   due_date: null,
+  git_work_branch: null,
+  git_base_branch: null,
   metadata: {},
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
@@ -73,6 +75,48 @@ describe("IssueSchema (via ListIssuesResponseSchema)", () => {
       total: 1,
     };
     expect(ListIssuesResponseSchema.safeParse(payload).success).toBe(false);
+  });
+
+  it("parses issue with git_work_branch and git_base_branch", () => {
+    // M-44: agents read these from the parsed Issue to know which branch
+    // to commit to and which branch to target for the PR.
+    const payload = {
+      issues: [
+        {
+          ...baseIssue,
+          git_work_branch: "feature/add-thing",
+          git_base_branch: "main",
+        },
+      ],
+      total: 1,
+    };
+    const parsed = ListIssuesResponseSchema.parse(payload);
+    expect(parsed.issues[0]?.git_work_branch).toBe("feature/add-thing");
+    expect(parsed.issues[0]?.git_base_branch).toBe("main");
+  });
+
+  it("defaults git_work_branch and git_base_branch to null when the server omits them (backward compat)", () => {
+    // Older backend versions don't include these fields. The schema must
+    // still parse so older deployments don't break the frontend.
+    const {
+      git_work_branch: _omitWork,
+      git_base_branch: _omitBase,
+      ...issueWithoutGit
+    } = baseIssue;
+    const payload = { issues: [issueWithoutGit], total: 1 };
+    const parsed = ListIssuesResponseSchema.parse(payload);
+    expect(parsed.issues[0]?.git_work_branch).toBeNull();
+    expect(parsed.issues[0]?.git_base_branch).toBeNull();
+  });
+
+  it("preserves only one git branch when the issue has just work_branch set", () => {
+    const payload = {
+      issues: [{ ...baseIssue, git_work_branch: "fix/something" }],
+      total: 1,
+    };
+    const parsed = ListIssuesResponseSchema.parse(payload);
+    expect(parsed.issues[0]?.git_work_branch).toBe("fix/something");
+    expect(parsed.issues[0]?.git_base_branch).toBeNull();
   });
 });
 
