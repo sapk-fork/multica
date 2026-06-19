@@ -50,8 +50,15 @@ type IssueResponse struct {
 	Stage     *int32  `json:"stage"`
 	StartDate *string `json:"start_date"`
 	DueDate   *string `json:"due_date"`
-	CreatedAt string  `json:"created_at"`
-	UpdatedAt string  `json:"updated_at"`
+	// GitWorkBranch / GitBaseBranch (MUL-44): optional issue-level pins
+	// that tell the working agent which branch to commit to and which
+	// base to open the PR/MR against. Pointer + omitempty so paths that
+	// don't load them (or that want the field absent) emit nothing; the
+	// full row → response path always populates the pointer explicitly.
+	GitWorkBranch *string `json:"git_work_branch,omitempty"`
+	GitBaseBranch *string `json:"git_base_branch,omitempty"`
+	CreatedAt     string  `json:"created_at"`
+	UpdatedAt     string  `json:"updated_at"`
 	// Metadata is the per-issue KV map (see issue_metadata.go). Always emitted
 	// (empty object when unset) so frontend code can `issue.metadata[key]`
 	// without nil-guarding the parent field.
@@ -84,6 +91,55 @@ func validateIssueEnum(w http.ResponseWriter, field, value string, allowed []str
 	return false
 }
 
+// branchNameRe defines the set of characters allowed in a git branch name
+// (matches git's own check-ref-format allowed set minus the wildcard glob
+// markers we never want here). Used by validateBranchName.
+var branchNameRe = regexp.MustCompile(`^[A-Za-z0-9._/\-]+$`)
+
+// validateBranchName checks a git branch name value for the field named
+// by field. Returns nil when value is empty (the field is optional). The
+// field parameter is "git_work_branch" or "git_base_branch" and selects
+// which extra rules apply (git_work_branch forbids "main" and "master";
+// the cross-field check that work != base is the caller's job because
+// it needs both final values).
+//
+// Rules:
+//   - empty allowed (field is optional)
+//   - max 200 chars
+//   - allowed chars: A-Za-z0-9._/-
+//   - no leading '-'
+//   - no '..' substring
+//   - no '@{' substring
+//   - not 'HEAD'
+//   - git_work_branch must not be 'main' or 'master'
+func validateBranchName(field, value string) error {
+	if value == "" {
+		return nil
+	}
+	if len(value) > 200 {
+		return fmt.Errorf("%s must be at most 200 characters", field)
+	}
+	if !branchNameRe.MatchString(value) {
+		return fmt.Errorf("%s contains invalid characters (allowed: A-Za-z0-9._/-)", field)
+	}
+	if strings.HasPrefix(value, "-") {
+		return fmt.Errorf("%s must not start with '-'", field)
+	}
+	if strings.Contains(value, "..") {
+		return fmt.Errorf("%s must not contain '..'", field)
+	}
+	if strings.Contains(value, "@{") {
+		return fmt.Errorf("%s must not contain '@{'", field)
+	}
+	if value == "HEAD" {
+		return fmt.Errorf("%s must not be 'HEAD'", field)
+	}
+	if field == "git_work_branch" && (value == "main" || value == "master") {
+		return fmt.Errorf("git_work_branch must not be an integration branch ('main' or 'master'); use a feature/fix branch")
+	}
+	return nil
+}
+
 func issueToResponse(i db.Issue, issuePrefix string) IssueResponse {
 	identifier := issuePrefix + "-" + strconv.Itoa(int(i.Number))
 	return IssueResponse{
@@ -105,6 +161,8 @@ func issueToResponse(i db.Issue, issuePrefix string) IssueResponse {
 		Stage:         int4ToPtr(i.Stage),
 		StartDate:     dateToPtr(i.StartDate),
 		DueDate:       dateToPtr(i.DueDate),
+		GitWorkBranch: textToPtr(i.GitWorkBranch),
+		GitBaseBranch: textToPtr(i.GitBaseBranch),
 		CreatedAt:     timestampToString(i.CreatedAt),
 		UpdatedAt:     timestampToString(i.UpdatedAt),
 		Metadata:      parseIssueMetadata(i.Metadata),
@@ -133,6 +191,8 @@ func issueListRowToResponse(i db.ListIssuesRow, issuePrefix string) IssueRespons
 		Stage:         int4ToPtr(i.Stage),
 		StartDate:     dateToPtr(i.StartDate),
 		DueDate:       dateToPtr(i.DueDate),
+		GitWorkBranch: textToPtr(i.GitWorkBranch),
+		GitBaseBranch: textToPtr(i.GitBaseBranch),
 		CreatedAt:     timestampToString(i.CreatedAt),
 		UpdatedAt:     timestampToString(i.UpdatedAt),
 		Metadata:      parseIssueMetadata(i.Metadata),
@@ -191,6 +251,8 @@ func openIssueRowToResponse(i db.ListOpenIssuesRow, issuePrefix string) IssueRes
 		Stage:         int4ToPtr(i.Stage),
 		StartDate:     dateToPtr(i.StartDate),
 		DueDate:       dateToPtr(i.DueDate),
+		GitWorkBranch: textToPtr(i.GitWorkBranch),
+		GitBaseBranch: textToPtr(i.GitBaseBranch),
 		CreatedAt:     timestampToString(i.CreatedAt),
 		UpdatedAt:     timestampToString(i.UpdatedAt),
 		Metadata:      parseIssueMetadata(i.Metadata),
