@@ -58,6 +58,15 @@ type Task struct {
 	ProjectTitle             string                `json:"project_title,omitempty"`               // human-readable project title for context injection
 	ProjectDescription       string                `json:"project_description,omitempty"`         // durable project-level context injected into the brief
 	ProjectResources         []ProjectResourceData `json:"project_resources,omitempty"`           // project-scoped resources to expose to the agent
+	// GitWorkBranch / GitBaseBranch (MUL-44): optional issue-level branch
+	// pins. The server populates these from the issue row at task-claim
+	// time; the daemon threads them into the agent brief as a `## Git
+	// Branch` section that the agent MUST follow when committing /
+	// opening a PR. Empty when the issue has no pins — the section is
+	// omitted in that case so the brief looks the same as it did
+	// pre-MUL-44.
+	GitWorkBranch            string                `json:"git_work_branch,omitempty"`
+	GitBaseBranch            string                `json:"git_base_branch,omitempty"`
 	PriorSessionID           string                `json:"prior_session_id,omitempty"`            // Claude session ID from a previous task on this issue
 	PriorWorkDir             string                `json:"prior_work_dir,omitempty"`              // work_dir from a previous task on this issue
 	TriggerCommentID         string                `json:"trigger_comment_id,omitempty"`          // comment that triggered this task
