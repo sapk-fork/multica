@@ -575,6 +575,29 @@ func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 		}
 	}
 
+	// MUL-44: inject the optional issue-level branch pins as a `## Git
+	// Branch` section. The contract is loud on purpose: these fields
+	// PIN the working agent's branch — they are not suggestions. An
+	// agent that ignores them and commits to a different branch has
+	// to explain why in the issue thread. The section is emitted
+	// only when at least one pin is set, so issues without pins look
+	// exactly the same as pre-MUL-44 briefs (no extra noise).
+	if ctx.GitWorkBranch != "" || ctx.GitBaseBranch != "" {
+		b.WriteString("## Git Branch\n\n")
+		b.WriteString("This issue has pinned git branch fields. **Agents must follow these when creating commits or opening pull requests** — the values are not suggestions, they pin the working branch. If you commit to a different branch or open the PR against a different base, post a comment on this issue explaining why before the change leaves the worktree.\n\n")
+		if ctx.GitWorkBranch != "" {
+			fmt.Fprintf(&b, "- **Work branch** (`git_work_branch`): `%s` — create or check out this branch; all commits go here; open the PR/MR from this branch.\n", ctx.GitWorkBranch)
+		}
+		if ctx.GitBaseBranch != "" {
+			fmt.Fprintf(&b, "- **Base branch** (`git_base_branch`): `%s` — branch from here / rebase onto this; open the PR/MR targeting this branch.\n", ctx.GitBaseBranch)
+		}
+		if ctx.GitWorkBranch != "" && ctx.GitBaseBranch != "" {
+			b.WriteString("\nIf `git_work_branch` already exists remotely, check it out rather than creating a new branch. If it was claimed by another agent on this same issue, coordinate via an issue comment before rebasing so the work does not collide.\n\n")
+		} else {
+			b.WriteString("\n")
+		}
+	}
+
 	// Issue Metadata semantics — emitted only for tasks that operate on a real
 	// issue (comment-triggered or assignment-triggered). Chat / quick-create /
 	// run-only autopilot don't carry an issue id and would just generate a
