@@ -2121,6 +2121,12 @@ type CreateIssueRequest struct {
 	Stage         *int32   `json:"stage,omitempty"`
 	StartDate     *string  `json:"start_date"`
 	DueDate       *string  `json:"due_date"`
+	// GitWorkBranch / GitBaseBranch (MUL-44) pin the working agent's
+	// commit / base branches. Optional; the handler validates format,
+	// uniqueness (workspace-scoped), and the multi-repo guard before
+	// the service creates the row.
+	GitWorkBranch *string  `json:"git_work_branch,omitempty"`
+	GitBaseBranch *string  `json:"git_base_branch,omitempty"`
 	AttachmentIDs []string `json:"attachment_ids,omitempty"`
 	// OriginType / OriginID stamp the new issue with its provenance so
 	// platform-internal flows can deterministically locate it later. Only
@@ -2244,6 +2250,74 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		dueDate = d
 	}
 
+	// MUL-44: optional git branch pins. Validate format + cross-field
+	// invariants and run the workspace-scoped uniqueness check before
+	// the service does the insert. The multi-repo guard (a project
+	// with > 1 github_repo resources cannot have these fields set)
+	// is checked here so the rejection carries a 422 with a clear
+	// message instead of a silently accepted value that would later
+	// be ambiguous about which repo the branch lives on.
+	var gitWorkBranch pgtype.Text
+	var gitBaseBranch pgtype.Text
+	gitBranchSet := req.GitWorkBranch != nil || req.GitBaseBranch != nil
+	if gitBranchSet {
+		gwb := ""
+		if req.GitWorkBranch != nil {
+			gwb = *req.GitWorkBranch
+		}
+		gbb := ""
+		if req.GitBaseBranch != nil {
+			gbb = *req.GitBaseBranch
+		}
+		if err := validateBranchName("git_work_branch", gwb); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if err := validateBranchName("git_base_branch", gbb); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if gwb != "" && gbb != "" && gwb == gbb {
+			writeError(w, http.StatusBadRequest, "git_work_branch and git_base_branch must be different")
+			return
+		}
+		// Multi-repo guard: refuse the request if the issue's project
+		// has more than one github_repo resource, because the branch
+		// pins would otherwise need per-repo-id disambiguation (a
+		// per-repo map syntax that is out of scope for MUL-44).
+		if projectID.Valid {
+			count, err := h.Queries.CountGithubRepoResourcesForProject(r.Context(), projectID)
+			if err != nil {
+				slog.Warn("count github_repo resources failed", append(logger.RequestAttrs(r), "error", err, "project_id", util.UUIDToString(projectID))...)
+				writeError(w, http.StatusInternalServerError, "failed to count project resources")
+				return
+			}
+			if count > 1 {
+				writeError(w, http.StatusUnprocessableEntity,
+					"cannot set git_work_branch or git_base_branch when multiple github_repo resources are bound to the project")
+				return
+			}
+		}
+		if gwb != "" {
+			existing, err := h.Queries.FindActiveIssueByWorkBranch(r.Context(), db.FindActiveIssueByWorkBranchParams{
+				WorkspaceID:   wsUUID,
+				GitWorkBranch: pgtype.Text{String: gwb, Valid: true},
+			})
+			if err == nil && existing.ID.Valid {
+				prefix := h.getIssuePrefix(r.Context(), wsUUID)
+				existingID := prefix + "-" + strconv.Itoa(int(existing.Number))
+				writeJSON(w, http.StatusConflict, map[string]any{
+					"code":  "git_work_branch_in_use",
+					"error": fmt.Sprintf("git_work_branch %q is already used by issue %s", gwb, existingID),
+					"issue": existing,
+				})
+				return
+			}
+		}
+		gitWorkBranch = pgtype.Text{String: gwb, Valid: gwb != ""}
+		gitBaseBranch = pgtype.Text{String: gbb, Valid: gbb != ""}
+	}
+
 	// Determine creator identity: agent (via X-Agent-ID header) or member.
 	creatorType, actualCreatorID := h.resolveActor(r, creatorID, workspaceID)
 
@@ -2313,6 +2387,8 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		ProjectID:      projectID,
 		StartDate:      startDate,
 		DueDate:        dueDate,
+		GitWorkBranch:  gitWorkBranch,
+		GitBaseBranch:  gitBaseBranch,
 		OriginType:     originType,
 		OriginID:       originID,
 		Stage:          ptrToInt4(req.Stage),
@@ -2335,6 +2411,19 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusConflict, map[string]any{
 			"code":  "active_duplicate_issue",
 			"error": duplicateIssueMessage(existing),
+			"issue": existing,
+		})
+		return
+	}
+	if errors.Is(err, service.ErrGitWorkBranchConflict) {
+		// Reached only when a concurrent create beat the handler's
+		// pre-check (the service runs the same query inside the create
+		// tx under the workspace row lock). Render the same 409 shape.
+		dup := *res.DuplicateIssue
+		existing := issueToResponse(dup, h.getIssuePrefix(r.Context(), dup.WorkspaceID))
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"code":  "git_work_branch_in_use",
+			"error": fmt.Sprintf("git_work_branch %q is already used by issue %s", existing.GitWorkBranch, existing.Identifier),
 			"issue": existing,
 		})
 		return
