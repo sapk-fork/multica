@@ -80,9 +80,9 @@ func TestCreateIssueGitWorkBranchConflict(t *testing.T) {
 // All must return 400 with a clear message.
 func TestCreateIssueGitBranchValidation(t *testing.T) {
 	cases := []struct {
-		name     string
-		body     map[string]any
-		wantSub  string
+		name    string
+		body    map[string]any
+		wantSub string
 	}{
 		{"HEAD forbidden for work", map[string]any{"title": "x", "git_work_branch": "HEAD"}, "HEAD"},
 		{"HEAD forbidden for base", map[string]any{"title": "x", "git_base_branch": "HEAD"}, "HEAD"},
