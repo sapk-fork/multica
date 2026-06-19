@@ -155,8 +155,8 @@ type Daemon struct {
 	// command resolves; read by runTask via customCommandPathForRuntime to
 	// launch the custom command for a claimed task. Guarded by mu.
 	profileCommandPaths map[string]string
-	reloading    sync.Mutex         // prevents concurrent workspace syncs
-	runtimeSet   *runtimeSetWatcher // multi-subscriber pub/sub for runtime-set changes
+	reloading           sync.Mutex         // prevents concurrent workspace syncs
+	runtimeSet          *runtimeSetWatcher // multi-subscriber pub/sub for runtime-set changes
 
 	versionsMu    sync.RWMutex      // guards agentVersions
 	agentVersions map[string]string // provider -> detected CLI version (set during registration)

@@ -2103,16 +2103,16 @@ func readRuntimeCLIVersion(metadata []byte) string {
 }
 
 type CreateIssueRequest struct {
-	Title         string   `json:"title"`
-	Description   *string  `json:"description"`
-	Status        string   `json:"status"`
-	Priority      string   `json:"priority"`
-	AssigneeType  *string  `json:"assignee_type"`
-	AssigneeID    *string  `json:"assignee_id"`
-	ParentIssueID *string  `json:"parent_issue_id"`
-	ProjectID     *string  `json:"project_id"`
-	StartDate     *string  `json:"start_date"`
-	DueDate       *string  `json:"due_date"`
+	Title         string  `json:"title"`
+	Description   *string `json:"description"`
+	Status        string  `json:"status"`
+	Priority      string  `json:"priority"`
+	AssigneeType  *string `json:"assignee_type"`
+	AssigneeID    *string `json:"assignee_id"`
+	ParentIssueID *string `json:"parent_issue_id"`
+	ProjectID     *string `json:"project_id"`
+	StartDate     *string `json:"start_date"`
+	DueDate       *string `json:"due_date"`
 	// GitWorkBranch / GitBaseBranch (MUL-44) pin the working agent's
 	// commit / base branches. Optional; the handler validates format,
 	// uniqueness (workspace-scoped), and the multi-repo guard before
@@ -2457,8 +2457,8 @@ type UpdateIssueRequest struct {
 	// commit / base branches. Optional; passing an explicit null in
 	// the JSON body clears the field (same contract as start_date /
 	// due_date).
-	GitWorkBranch *string  `json:"git_work_branch"`
-	GitBaseBranch *string  `json:"git_base_branch"`
+	GitWorkBranch *string `json:"git_work_branch"`
+	GitBaseBranch *string `json:"git_base_branch"`
 	// AttachmentIDs lets the description editor bind newly uploaded files to
 	// this issue so they surface in `GET /api/issues/:id/attachments` and the
 	// editor's preview Eye keeps working past a refresh. Existing bindings
@@ -2763,28 +2763,28 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	actorType, actorID := h.resolveActor(r, userID, workspaceID)
 
 	h.publish(protocol.EventIssueUpdated, workspaceID, actorType, actorID, map[string]any{
-		"issue":                  resp,
-		"assignee_changed":       assigneeChanged,
-		"status_changed":         statusChanged,
-		"priority_changed":       priorityChanged,
-		"start_date_changed":     startDateChanged,
-		"due_date_changed":       dueDateChanged,
+		"issue":                   resp,
+		"assignee_changed":        assigneeChanged,
+		"status_changed":          statusChanged,
+		"priority_changed":        priorityChanged,
+		"start_date_changed":      startDateChanged,
+		"due_date_changed":        dueDateChanged,
 		"git_work_branch_changed": gitWorkBranchChanged,
 		"git_base_branch_changed": gitBaseBranchChanged,
-		"description_changed":    descriptionChanged,
-		"title_changed":          titleChanged,
-		"prev_title":             prevIssue.Title,
-		"prev_assignee_type":     textToPtr(prevIssue.AssigneeType),
-		"prev_assignee_id":       uuidToPtr(prevIssue.AssigneeID),
-		"prev_status":            prevIssue.Status,
-		"prev_priority":          prevIssue.Priority,
-		"prev_start_date":        prevStartDate,
-		"prev_due_date":          prevDueDate,
-		"prev_git_work_branch":   prevGitWorkBranch,
-		"prev_git_base_branch":   prevGitBaseBranch,
-		"prev_description":       textToPtr(prevIssue.Description),
-		"creator_type":           prevIssue.CreatorType,
-		"creator_id":             uuidToString(prevIssue.CreatorID),
+		"description_changed":     descriptionChanged,
+		"title_changed":           titleChanged,
+		"prev_title":              prevIssue.Title,
+		"prev_assignee_type":      textToPtr(prevIssue.AssigneeType),
+		"prev_assignee_id":        uuidToPtr(prevIssue.AssigneeID),
+		"prev_status":             prevIssue.Status,
+		"prev_priority":           prevIssue.Priority,
+		"prev_start_date":         prevStartDate,
+		"prev_due_date":           prevDueDate,
+		"prev_git_work_branch":    prevGitWorkBranch,
+		"prev_git_base_branch":    prevGitBaseBranch,
+		"prev_description":        textToPtr(prevIssue.Description),
+		"creator_type":            prevIssue.CreatorType,
+		"creator_id":              uuidToString(prevIssue.CreatorID),
 	})
 
 	// Reconcile task queue when assignee changes.

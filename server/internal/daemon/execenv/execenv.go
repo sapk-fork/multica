@@ -62,28 +62,28 @@ type PrepareParams struct {
 
 // TaskContextForEnv is the subset of task context used for writing context files.
 type TaskContextForEnv struct {
-	IssueID                 string
-	TriggerCommentID        string // comment that triggered this task (empty for on_assign)
-	TriggerThreadID         string // root comment ID for the triggering thread; falls back to TriggerCommentID when empty
-	NewCommentCount         int    // issue-wide comments since this agent's last run (excludes its own and the injected trigger)
-	NewCommentsSince        string // RFC3339 anchor (last run's started_at) the count is measured from; empty on cold start
-	PriorSessionResumed     bool   // true when the daemon will resume an existing provider session for this task
-	AgentID                 string // unique ID of the dispatched agent
-	AgentName               string
-	AgentInstructions       string // agent identity/persona instructions, injected into CLAUDE.md
-	AgentSkills             []SkillContextForEnv
-	Repos                   []RepoContextForEnv     // workspace repos available for checkout
-	ProjectID               string                  // issue's project, when present
-	ProjectTitle            string                  // human-readable project title
-	ProjectResources        []ProjectResourceForEnv // resources attached to the project
+	IssueID             string
+	TriggerCommentID    string // comment that triggered this task (empty for on_assign)
+	TriggerThreadID     string // root comment ID for the triggering thread; falls back to TriggerCommentID when empty
+	NewCommentCount     int    // issue-wide comments since this agent's last run (excludes its own and the injected trigger)
+	NewCommentsSince    string // RFC3339 anchor (last run's started_at) the count is measured from; empty on cold start
+	PriorSessionResumed bool   // true when the daemon will resume an existing provider session for this task
+	AgentID             string // unique ID of the dispatched agent
+	AgentName           string
+	AgentInstructions   string // agent identity/persona instructions, injected into CLAUDE.md
+	AgentSkills         []SkillContextForEnv
+	Repos               []RepoContextForEnv     // workspace repos available for checkout
+	ProjectID           string                  // issue's project, when present
+	ProjectTitle        string                  // human-readable project title
+	ProjectResources    []ProjectResourceForEnv // resources attached to the project
 	// MUL-44: optional issue-level branch pins. Empty when the issue
 	// has no pins; the brief omits the `## Git Branch` section in that
 	// case so the agent does not see a "follow this" block for a
 	// contract that does not apply.
 	GitWorkBranch           string
 	GitBaseBranch           string
-	ChatSessionID           string                  // non-empty for chat tasks
-	AutopilotRunID          string                  // non-empty for autopilot run_only tasks
+	ChatSessionID           string // non-empty for chat tasks
+	AutopilotRunID          string // non-empty for autopilot run_only tasks
 	AutopilotID             string
 	AutopilotTitle          string
 	AutopilotDescription    string
