@@ -406,6 +406,8 @@ const mockIssue: Issue = {
   position: 0,
   start_date: null,
   due_date: "2026-06-01T00:00:00Z",
+  git_work_branch: null,
+  git_base_branch: null,
   metadata: {},
   created_at: "2026-01-15T00:00:00Z",
   updated_at: "2026-01-20T00:00:00Z",
@@ -686,6 +688,45 @@ describe("IssueDetail (shared)", () => {
     // Key names are not rendered in the sidebar prior to opening the dialog.
     expect(screen.queryByText("pr_url")).not.toBeInTheDocument();
     expect(screen.queryByText("pipeline_status")).not.toBeInTheDocument();
+  });
+
+  it("renders the Git section in the sidebar when both branches are set", async () => {
+    // M-44: an issue pinned to specific work/base branches must surface them
+    // read-only in the properties sidebar. Editing from the UI is deferred —
+    // the values come from `multica issue create/update --git-work-branch`.
+    mockApiObj.getIssue.mockResolvedValue({
+      ...mockIssue,
+      git_work_branch: "feature/m-44-thing",
+      git_base_branch: "main",
+    });
+
+    renderIssueDetail();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("issue-git-branches")).toBeInTheDocument();
+    });
+
+    // Both branch names render as monospace text. The "Git" header is the
+    // section anchor; the two label cells are "Work branch" / "Base branch".
+    expect(screen.getByText("feature/m-44-thing")).toBeInTheDocument();
+    expect(screen.getByText("main")).toBeInTheDocument();
+  });
+
+  it("hides the Git section when neither branch is set", async () => {
+    // No pinning on the issue → no Git block in the sidebar.
+    mockApiObj.getIssue.mockResolvedValue({
+      ...mockIssue,
+      git_work_branch: null,
+      git_base_branch: null,
+    });
+
+    renderIssueDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Properties")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId("issue-git-branches")).not.toBeInTheDocument();
   });
 
   it("opens a dialog with formatted JSON when the Metadata button is clicked", async () => {

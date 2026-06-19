@@ -338,6 +338,8 @@ const issueDefaults = {
   parent_issue_id: null,
   project_id: null,
   position: 0,
+  git_work_branch: null,
+  git_base_branch: null,
   metadata: {},
 };
 
