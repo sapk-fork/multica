@@ -7,6 +7,8 @@ import {
   Cpu,
   Globe,
   Lock,
+  PauseCircle,
+  PlayCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
@@ -14,7 +16,7 @@ import type { AgentRuntime, Agent, MemberWithUser } from "@multica/core/types";
 import { useAuthStore } from "@multica/core/auth";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { memberListOptions, agentListOptions } from "@multica/core/workspace/queries";
-import { useUpdateRuntime } from "@multica/core/runtimes/mutations";
+import { useUpdateRuntime, useResumeRuntime } from "@multica/core/runtimes/mutations";
 import { deriveRuntimeHealth } from "@multica/core/runtimes";
 import {
   type AgentPresenceDetail,
@@ -31,7 +33,7 @@ import { ActorAvatar } from "../../common/actor-avatar";
 import { BreadcrumbHeader } from "../../layout/breadcrumb-header";
 import { AppLink, useNavigation } from "../../navigation";
 import { availabilityConfig, workloadConfig } from "../../agents/presence";
-import { formatLastSeen } from "../utils";
+import { formatHoldUntil, formatLastSeen } from "../utils";
 import { HealthBadge } from "./shared";
 import { ProviderLogo } from "./provider-logo";
 import { UpdateSection } from "./update-section";
@@ -163,6 +165,7 @@ export function RuntimeDetail({ runtime }: { runtime: AgentRuntime }) {
               ownerMember={ownerMember}
               cliVersion={cliVersion}
               daemonShort={daemonShort}
+              canDelete={!!canDelete}
             />
             <UsageSection runtime={runtime} />
           </div>
@@ -220,6 +223,7 @@ function HeroCard({
   ownerMember,
   cliVersion,
   daemonShort,
+  canDelete,
 }: {
   runtime: AgentRuntime;
   health: ReturnType<typeof deriveRuntimeHealth>;
@@ -227,9 +231,12 @@ function HeroCard({
   ownerMember: MemberWithUser | null;
   cliVersion: string | null;
   daemonShort: string | null;
+  canDelete: boolean;
 }) {
   const { t } = useT("runtimes");
   const [showDetails, setShowDetails] = useState(false);
+  const wsId = useWorkspaceId();
+  const resumeMutation = useResumeRuntime(wsId);
   const device = runtime.device_info ? parseDeviceInfo(runtime.device_info) : null;
   const hasTechDetails = !!cliVersion || !!daemonShort;
 
@@ -250,6 +257,36 @@ function HeroCard({
               {t(($) => $.detail.last_seen, { when: lastSeen })}
             </span>
           </div>
+          {runtime.hold_until && (
+            <div className="mt-2 flex items-center gap-1.5 rounded-md bg-warning/10 px-2 py-1.5 text-xs text-warning">
+              <PauseCircle className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 flex-1">
+                {t(($) => $.health.on_hold.label)} —{" "}
+                {t(($) => $.health.on_hold.resumes_in, {
+                  time: formatHoldUntil(runtime.hold_until)!,
+                })}
+              </span>
+              {canDelete && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 gap-1 border-warning/30 px-2 text-[11px] text-warning hover:bg-warning/10"
+                  disabled={resumeMutation.isPending}
+                  onClick={() =>
+                    resumeMutation.mutate(runtime.id, {
+                      onSuccess: () =>
+                        toast.success(t(($) => $.health.on_hold.resume_toast)),
+                      onError: () =>
+                        toast.error(t(($) => $.health.on_hold.resume_failed)),
+                    })
+                  }
+                >
+                  <PlayCircle className="h-3 w-3" />
+                  {t(($) => $.health.on_hold.resume_button)}
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
