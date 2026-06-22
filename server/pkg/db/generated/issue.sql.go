@@ -175,10 +175,11 @@ INSERT INTO issue (
     workspace_id, title, description, status, priority,
     assignee_type, assignee_id, creator_type, creator_id,
     parent_issue_id, position, start_date, due_date, number, project_id,
-    stage, last_activity_at, git_work_branch, git_base_branch
+    stage, last_activity_at, git_work_branch, git_base_branch, id
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-    $16, now(), $17, $18
+    $16, now(), $17, $18,
+    COALESCE($19::uuid, gen_random_uuid())
 ) RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, git_work_branch, git_base_branch, stage, properties, revision, last_activity_at
 `
 
@@ -201,6 +202,7 @@ type CreateIssueParams struct {
 	Stage         pgtype.Int4 `json:"stage"`
 	GitWorkBranch pgtype.Text `json:"git_work_branch"`
 	GitBaseBranch pgtype.Text `json:"git_base_branch"`
+	ID            pgtype.UUID `json:"id"`
 }
 
 func (q *Queries) CreateIssue(ctx context.Context, arg CreateIssueParams) (Issue, error) {
@@ -223,6 +225,7 @@ func (q *Queries) CreateIssue(ctx context.Context, arg CreateIssueParams) (Issue
 		arg.Stage,
 		arg.GitWorkBranch,
 		arg.GitBaseBranch,
+		arg.ID,
 	)
 	var i Issue
 	err := row.Scan(
@@ -265,11 +268,11 @@ INSERT INTO issue (
     workspace_id, title, description, status, priority,
     assignee_type, assignee_id, creator_type, creator_id,
     parent_issue_id, position, start_date, due_date, number, project_id,
-    origin_type, origin_id, stage, last_activity_at, git_work_branch, git_base_branch
+    origin_type, origin_id, stage, last_activity_at, git_work_branch, git_base_branch, id
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
     $16, $17, $18, now(),
-    $19, $20
+    $19, $20, COALESCE($21::uuid, gen_random_uuid())
 ) RETURNING id, workspace_id, title, description, status, priority, assignee_type, assignee_id, creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date, created_at, updated_at, number, project_id, origin_type, origin_id, first_executed_at, start_date, metadata, git_work_branch, git_base_branch, stage, properties, revision, last_activity_at
 `
 
@@ -294,6 +297,7 @@ type CreateIssueWithOriginParams struct {
 	Stage         pgtype.Int4 `json:"stage"`
 	GitWorkBranch pgtype.Text `json:"git_work_branch"`
 	GitBaseBranch pgtype.Text `json:"git_base_branch"`
+	ID            pgtype.UUID `json:"id"`
 }
 
 func (q *Queries) CreateIssueWithOrigin(ctx context.Context, arg CreateIssueWithOriginParams) (Issue, error) {
@@ -318,6 +322,7 @@ func (q *Queries) CreateIssueWithOrigin(ctx context.Context, arg CreateIssueWith
 		arg.Stage,
 		arg.GitWorkBranch,
 		arg.GitBaseBranch,
+		arg.ID,
 	)
 	var i Issue
 	err := row.Scan(
