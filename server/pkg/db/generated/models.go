@@ -478,6 +478,8 @@ type Issue struct {
 	FirstExecutedAt    pgtype.Timestamptz `json:"first_executed_at"`
 	StartDate          pgtype.Date        `json:"start_date"`
 	Metadata           []byte             `json:"metadata"`
+	GitWorkBranch      pgtype.Text        `json:"git_work_branch"`
+	GitBaseBranch      pgtype.Text        `json:"git_base_branch"`
 	Stage              pgtype.Int4        `json:"stage"`
 }
 
