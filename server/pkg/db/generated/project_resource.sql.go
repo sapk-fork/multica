@@ -11,6 +11,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countGithubRepoResourcesForProject = `-- name: CountGithubRepoResourcesForProject :one
+SELECT count(*) FROM project_resource
+WHERE project_id = $1
+  AND resource_type = 'github_repo'
+`
+
+// Returns the number of github_repo resources bound to a project. Used by
+// the issue create / update handlers to enforce the MUL-44 multi-repo
+// guard: setting git_work_branch or git_base_branch is forbidden when
+// the issue's project has more than one github_repo resource (the
+// metadata would otherwise need per-repo-id disambiguation, deferred
+// to a follow-up). A project with zero or one github_repo resources
+// permits the fields; the > 1 case returns a 422.
+func (q *Queries) CountGithubRepoResourcesForProject(ctx context.Context, projectID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countGithubRepoResourcesForProject, projectID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countProjectResources = `-- name: CountProjectResources :one
 SELECT count(*) FROM project_resource WHERE project_id = $1
 `
