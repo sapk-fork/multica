@@ -2292,12 +2292,22 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 				GitWorkBranch: pgtype.Text{String: gwb, Valid: true},
 			})
 			if err == nil && existing.ID.Valid {
-				prefix := h.getIssuePrefix(r.Context(), wsUUID)
-				existingID := prefix + "-" + strconv.Itoa(int(existing.Number))
+				// Route through issueToResponse so the pre-check 409 body
+				// shape matches the post-race path (service
+				// ErrGitWorkBranchConflict). Without this, `"issue"`
+				// here is a raw db.Issue (sqlc internals leak) and
+				// clients that pin to IssueResponse keys see a
+				// different shape depending on which path fired.
+				// Locked in by TestCreateIssueGitWorkBranchConflictBody.
+				existingResp := issueToResponse(existing, h.getIssuePrefix(r.Context(), existing.WorkspaceID))
+				branch := ""
+				if existingResp.GitWorkBranch != nil {
+					branch = *existingResp.GitWorkBranch
+				}
 				writeJSON(w, http.StatusConflict, map[string]any{
 					"code":  "git_work_branch_in_use",
-					"error": fmt.Sprintf("git_work_branch %q is already used by issue %s", gwb, existingID),
-					"issue": existing,
+					"error": fmt.Sprintf("git_work_branch %q is already used by issue %s", branch, existingResp.Identifier),
+					"issue": existingResp,
 				})
 				return
 			}
@@ -2647,12 +2657,21 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 				GitWorkBranch: pgtype.Text{String: gwb, Valid: true},
 			})
 			if err == nil && existing.ID.Valid && existing.ID != prevIssue.ID {
-				prefix := h.getIssuePrefix(r.Context(), prevIssue.WorkspaceID)
-				existingID := prefix + "-" + strconv.Itoa(int(existing.Number))
+				// Route through issueToResponse so the pre-check
+				// 409 body shape matches the post-race path
+				// (service ErrGitWorkBranchConflict, which only
+				// fires on create) and the create pre-check
+				// path. Locked in by
+				// TestUpdateIssueGitWorkBranchConflictBody.
+				existingResp := issueToResponse(existing, h.getIssuePrefix(r.Context(), existing.WorkspaceID))
+				branch := ""
+				if existingResp.GitWorkBranch != nil {
+					branch = *existingResp.GitWorkBranch
+				}
 				writeJSON(w, http.StatusConflict, map[string]any{
 					"code":  "git_work_branch_in_use",
-					"error": fmt.Sprintf("git_work_branch %q is already used by issue %s", gwb, existingID),
-					"issue": existing,
+					"error": fmt.Sprintf("git_work_branch %q is already used by issue %s", branch, existingResp.Identifier),
+					"issue": existingResp,
 				})
 				return
 			}
