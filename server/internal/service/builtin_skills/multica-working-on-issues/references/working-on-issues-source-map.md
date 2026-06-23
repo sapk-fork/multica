@@ -27,9 +27,9 @@ line.
 | Create body maps flag → `body["git_base_branch"]` (only when non-empty) | `server/cmd/multica/cmd_issue.go:764-765` |
 | Update body sends flag via `cmd.Flags().Changed` (empty = clear) | `server/cmd/multica/cmd_issue.go:956-962` |
 | CreateIssueRequest.GitWorkBranch / GitBaseBranch (JSON tags `git_work_branch` / `git_base_branch`) | `server/internal/handler/issue.go:2120-2121` |
-| UpdateIssueRequest.GitWorkBranch / GitBaseBranch (nullable) | `server/internal/handler/issue.go:2626-2627` |
+| UpdateIssueRequest.GitWorkBranch / GitBaseBranch (nullable) | `server/internal/handler/issue.go:2460-2461` |
 | `validateBranchName` helper (rules: 200 chars, allowed `A-Za-z0-9._/-`, no leading `-`, no `..`, no `@{`, not `HEAD`, work branch not `main`/`master`) | `server/internal/handler/issue.go:111-135` |
-| `branchNameRe` (the character class) | `server/internal/handler/issue.go:90` |
+| `branchNameRe` (the character class) | `server/internal/handler/issue.go:93` |
 | Create handler — validate each field, run multi-repo guard, run uniqueness check | `server/internal/handler/issue.go:2248-2309` |
 | Update handler — same validation path, plus cross-field work != base | `server/internal/handler/issue.go:2633-2714` |
 | Create handler — render 409 with `git_work_branch_in_use` code on `service.ErrGitWorkBranchConflict` (race path) | `server/internal/handler/issue.go:2405-2418` |
@@ -41,8 +41,8 @@ line.
 | DB columns `issue.git_work_branch` / `issue.git_base_branch` (TEXT, CHECK length ≤ 200) | `server/migrations/122_issue_git_branches.up.sql:13-16` |
 | Generated `db.Issue.GitWorkBranch` / `GitBaseBranch` (pgtype.Text) | `server/pkg/db/generated/models.go:394-395` |
 | Generated `FindActiveIssueByWorkBranch` Go method | `server/pkg/db/generated/issue.sql.go:491-499` |
-| Generated `CountGithubRepoResourcesForProject` Go method | `server/pkg/db/generated/project_resource.sql.go:13-23` |
-| Daemon brief section `## Git Branch` (loud must-follow) | `server/internal/daemon/execenv/runtime_config.go:578-606` |
+| Generated `CountGithubRepoResourcesForProject` Go method | `server/pkg/db/generated/project_resource.sql.go:14, 27-32` |
+| Daemon brief section `## Git Branch` (loud must-follow) | `server/internal/daemon/execenv/runtime_config.go:586` |
 
 The create and update paths share the same `validateBranchName` rules
 (handler/issue.go:111). The cross-field check (work != base when both
@@ -197,8 +197,9 @@ grep -n 'func notifyParentOfChildDone'       internal/handler/issue_child_done.g
 # MUL-44 git branch pin lines:
 grep -n '"git-work-branch"\|"git-base-branch"' cmd/multica/cmd_issue.go
 grep -n 'func validateBranchName\|var branchNameRe' internal/handler/issue.go
+grep -n 'GitWorkBranch\|GitBaseBranch'       internal/handler/issue.go
 grep -n 'ErrGitWorkBranchConflict'           internal/service/issue.go
 grep -n 'FindActiveIssueByWorkBranch\|CountGithubRepoResourcesForProject' pkg/db/queries/issue.sql pkg/db/queries/project_resource.sql
-grep -n 'GitWorkBranch:\|GitBaseBranch:'     pkg/db/generated/models.go pkg/db/generated/issue.sql.go pkg/db/generated/project_resource.sql.go
+grep -n 'GitWorkBranch\|GitBaseBranch'       pkg/db/generated/models.go pkg/db/generated/issue.sql.go pkg/db/generated/project_resource.sql.go
 grep -n '## Git Branch'                      internal/daemon/execenv/runtime_config.go
 ```
