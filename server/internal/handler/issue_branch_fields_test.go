@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -73,6 +74,171 @@ func TestCreateIssueGitWorkBranchConflict(t *testing.T) {
 	if !strings.Contains(body, workBranch) {
 		t.Errorf("expected body to mention %q, got: %s", workBranch, body)
 	}
+}
+
+// assertConflictBodyShape decodes the 409 body and asserts that the
+// "issue" key has the same JSON keys as IssueResponse. Both
+// pre-check paths (create, update) and the post-race path
+// (service.ErrGitWorkBranchConflict → handler render) must produce a
+// body with the same `issue` shape — without this lock-in, a future
+// refactor can silently re-introduce the drift where the pre-check
+// returns a raw db.Issue (sqlc internals leak) while the post-race
+// path returns an IssueResponse.
+//
+// Note: we don't require *every* IssueResponse field to be present in
+// the body — some fields are `omitempty` (e.g. assignee_id, description,
+// git_work_branch) and a zero value legitimately drops them. What we
+// lock in is the *opposite* direction: no field in the body may be one
+// that IssueResponse doesn't know about. That's the failure mode
+// pre-check could produce (sqlc internal field names like
+// `first_executed_at` or `origin_id`).
+func assertConflictBodyShape(t *testing.T, body []byte) {
+	t.Helper()
+	var parsed struct {
+		Code  string         `json:"code"`
+		Error string         `json:"error"`
+		Issue map[string]any `json:"issue"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		t.Fatalf("decode 409 body: %v\nbody: %s", err, string(body))
+	}
+	if parsed.Code != "git_work_branch_in_use" {
+		t.Errorf("code = %q, want %q", parsed.Code, "git_work_branch_in_use")
+	}
+	if parsed.Error == "" {
+		t.Errorf("error is empty")
+	}
+	if parsed.Issue == nil {
+		t.Fatalf("issue is missing in body: %s", string(body))
+	}
+
+	// Build the set of known IssueResponse JSON keys via reflection
+	// (so the test stays in sync with struct changes automatically).
+	known := issueResponseJSONKeys(t)
+	for k := range parsed.Issue {
+		if _, ok := known[k]; !ok {
+			t.Errorf("conflict body has key %q that is not in IssueResponse — sqlc-internal field leak (present keys: %v)", k, mapKeys(parsed.Issue))
+		}
+	}
+}
+
+// issueResponseJSONKeys returns the set of JSON keys IssueResponse
+// marshals, derived from struct field tags. We use reflection so the
+// test stays in sync with IssueResponse changes without maintaining a
+// hardcoded key list.
+func issueResponseJSONKeys(t *testing.T) map[string]struct{} {
+	t.Helper()
+	rt := reflect.TypeOf(IssueResponse{})
+	known := make(map[string]struct{}, rt.NumField())
+	for i := 0; i < rt.NumField(); i++ {
+		f := rt.Field(i)
+		tag := f.Tag.Get("json")
+		// strip ",omitempty" and similar
+		name := tag
+		for j, c := range tag {
+			if c == ',' {
+				name = tag[:j]
+				break
+			}
+		}
+		if name == "-" || name == "" {
+			// unexported or no json tag — skip
+			continue
+		}
+		known[name] = struct{}{}
+	}
+	return known
+}
+
+// TestCreateIssueGitWorkBranchConflictBody locks in the body shape for
+// the create pre-check 409 path. The body must surface the
+// `git_work_branch_in_use` code and an `issue` object whose keys match
+// IssueResponse — same as the post-race path that fires only on
+// concurrent creates.
+func TestCreateIssueGitWorkBranchConflictBody(t *testing.T) {
+	const workBranch = "feature/mul-44-conflict-body"
+
+	first := createTestIssue(t, "MUL-44: conflict-body first", "todo", "none")
+	t.Cleanup(func() { deleteTestIssue(t, first) })
+
+	// Update the first issue to claim the work branch.
+	w := httptest.NewRecorder()
+	req := newRequest("PUT", "/api/issues/"+first, map[string]any{
+		"git_work_branch": workBranch,
+	})
+	req = withURLParam(req, "id", first)
+	testHandler.UpdateIssue(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("set work branch on first: %d %s", w.Code, w.Body.String())
+	}
+
+	// Second create with the same work branch — pre-check 409 path.
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title":           "MUL-44: conflict-body second",
+		"git_work_branch": workBranch,
+	})
+	testHandler.CreateIssue(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+	assertConflictBodyShape(t, w.Body.Bytes())
+}
+
+// TestUpdateIssueGitWorkBranchConflictBody locks in the body shape for
+// the update pre-check 409 path. The body must surface the
+// `git_work_branch_in_use` code and an `issue` object whose keys match
+// IssueResponse — same as the create pre-check path and the post-race
+// path. Without this lock-in, a future refactor can silently re-introduce
+// the drift.
+func TestUpdateIssueGitWorkBranchConflictBody(t *testing.T) {
+	const workBranch = "feature/mul-44-conflict-body-update"
+
+	first := createTestIssue(t, "MUL-44: update-conflict first", "todo", "none")
+	t.Cleanup(func() { deleteTestIssue(t, first) })
+
+	// Update the first issue to claim the work branch.
+	w := httptest.NewRecorder()
+	req := newRequest("PUT", "/api/issues/"+first, map[string]any{
+		"git_work_branch": workBranch,
+	})
+	req = withURLParam(req, "id", first)
+	testHandler.UpdateIssue(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("set work branch on first: %d %s", w.Code, w.Body.String())
+	}
+
+	// Second issue attempts to claim the same work branch via update.
+	second := createTestIssue(t, "MUL-44: update-conflict second", "todo", "none")
+	t.Cleanup(func() { deleteTestIssue(t, second) })
+
+	w = httptest.NewRecorder()
+	req = newRequest("PUT", "/api/issues/"+second, map[string]any{
+		"git_work_branch": workBranch,
+	})
+	req = withURLParam(req, "id", second)
+	testHandler.UpdateIssue(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+	assertConflictBodyShape(t, w.Body.Bytes())
+}
+
+// mapKeys returns the sorted keys of a map[string]any for stable error
+// messages.
+func mapKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	// small insertion sort — for the handful of keys we ever print in
+	// test failure messages, this beats pulling in `sort`.
+	for i := 1; i < len(keys); i++ {
+		for j := i; j > 0 && keys[j-1] > keys[j]; j-- {
+			keys[j-1], keys[j] = keys[j], keys[j-1]
+		}
+	}
+	return keys
 }
 
 // TestCreateIssueGitBranchValidation covers the bad-input paths: HEAD,
