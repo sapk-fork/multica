@@ -233,9 +233,9 @@ vi.mock("@multica/core/api", () => ({
 
 // Mock issue config
 vi.mock("@multica/core/issues/config", () => ({
-  ALL_STATUSES: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"],
+  ALL_STATUSES: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled", "archived"],
   BOARD_STATUSES: ["backlog", "todo", "in_progress", "in_review", "done", "blocked"],
-  STATUS_ORDER: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"],
+  STATUS_ORDER: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled", "archived"],
   STATUS_CONFIG: {
     backlog: { label: "Backlog", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
     todo: { label: "Todo", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
@@ -244,6 +244,7 @@ vi.mock("@multica/core/issues/config", () => ({
     done: { label: "Done", iconColor: "text-info", hoverBg: "hover:bg-info/10" },
     blocked: { label: "Blocked", iconColor: "text-destructive", hoverBg: "hover:bg-destructive/10" },
     cancelled: { label: "Cancelled", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
+    archived: { label: "Archived", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
   },
   PRIORITY_ORDER: ["urgent", "high", "medium", "low", "none"],
   PRIORITY_CONFIG: {
@@ -253,6 +254,8 @@ vi.mock("@multica/core/issues/config", () => ({
     low: { label: "Low", bars: 1, color: "text-info", badgeBg: "bg-info/10", badgeText: "text-info" },
     none: { label: "No priority", bars: 0, color: "text-muted-foreground", badgeBg: "bg-muted", badgeText: "text-muted-foreground" },
   },
+  TERMINAL_ISSUE_STATUSES: new Set(["done", "cancelled", "archived"]),
+  isTerminalIssueStatus: (status: string) => status === "done" || status === "cancelled" || status === "archived",
 }));
 
 // Mock recent issues store
@@ -1230,6 +1233,42 @@ describe("IssueDetail (shared)", () => {
         expect.objectContaining({ description: "" }),
       );
     });
+  });
+
+  it("renders an archived child issue with done styling (text-muted-foreground)", async () => {
+    const archivedChild = {
+      id: "child-1",
+      workspace_id: "ws-1",
+      number: 42,
+      identifier: "TES-42",
+      title: "Archived sub-task",
+      description: null,
+      status: "archived" as const,
+      priority: "none" as const,
+      assignee_type: null,
+      assignee_id: null,
+      creator_type: "member" as const,
+      creator_id: "user-1",
+      parent_issue_id: "issue-1",
+      project_id: null,
+      position: 0,
+      start_date: null,
+      due_date: null,
+      metadata: {},
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    };
+
+    mockApiObj.listChildIssues.mockResolvedValue({ issues: [archivedChild] });
+
+    renderIssueDetail();
+
+    // Wait for the child to appear in the DOM.
+    const childTitle = await screen.findByText("Archived sub-task");
+
+    // An archived child must use the same "done" styling as a done/cancelled
+    // child — muted text — so it is visually distinguishable from active children.
+    expect(childTitle.className).toContain("text-muted-foreground");
   });
 });
 

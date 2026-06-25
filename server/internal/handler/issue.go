@@ -71,7 +71,7 @@ type IssueResponse struct {
 // the issue table. Write handlers pre-validate these so callers get a clean
 // 400 with the allowed values instead of a database CHECK violation bubbling
 // up as a 500.
-var validIssueStatuses = []string{"backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"}
+var validIssueStatuses = []string{"backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled", "archived"}
 var validIssuePriorities = []string{"urgent", "high", "medium", "low", "none"}
 
 func validateIssueEnum(w http.ResponseWriter, field, value string, allowed []string) bool {
@@ -450,7 +450,7 @@ func buildSearchQuery(phrase string, terms []string, queryNum int, hasNum bool, 
 	whereClause := "(" + strings.Join(whereParts, " OR ") + ")"
 
 	if !includeClosed {
-		whereClause += " AND i.status NOT IN ('done', 'cancelled')"
+		whereClause += " AND i.status NOT IN ('done', 'cancelled', 'archived')"
 	}
 
 	// --- ORDER BY clause ---
@@ -515,6 +515,7 @@ func buildSearchQuery(phrase string, terms []string, queryNum int, hasNum bool, 
 		WHEN 'backlog' THEN 4
 		WHEN 'done' THEN 5
 		WHEN 'cancelled' THEN 6
+		WHEN 'archived' THEN 6
 		ELSE 7
 	END`
 
@@ -2584,10 +2585,10 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		h.dispatchIssueRun(r.Context(), issue, trigger, actorType, actorID, req.HandoffNote)
 	}
 
-	// Cancel active tasks when the issue is cancelled by a user.
-	// This is distinct from agent-managed status transitions — cancellation
-	// is a user-initiated terminal action that should stop execution.
-	if statusChanged && issue.Status == "cancelled" {
+	// Cancel active tasks when the issue is cancelled or archived by a user.
+	// This is distinct from agent-managed status transitions — these are
+	// user-initiated terminal actions that should stop execution.
+	if statusChanged && (issue.Status == "cancelled" || issue.Status == "archived") {
 		h.TaskService.CancelTasksForIssue(r.Context(), issue.ID)
 	}
 
@@ -3079,8 +3080,8 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 			h.dispatchIssueRun(r.Context(), issue, trigger, actorType, actorID, req.Updates.HandoffNote)
 		}
 
-		// Cancel active tasks when the issue is cancelled by a user.
-		if statusChanged && issue.Status == "cancelled" {
+		// Cancel active tasks when the issue is cancelled or archived by a user.
+		if statusChanged && (issue.Status == "cancelled" || issue.Status == "archived") {
 			h.TaskService.CancelTasksForIssue(r.Context(), issue.ID)
 		}
 

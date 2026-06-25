@@ -45,7 +45,7 @@ import { ActorAvatar } from "../../common/actor-avatar";
 import { PropRow } from "../../common/prop-row";
 import type { Attachment, Issue, IssueStatus, IssuePriority, TimelineEntry, UpdateIssueRequest } from "@multica/core/types";
 import { contentReferencesAttachment } from "@multica/core/types";
-import { STATUS_CONFIG, PRIORITY_CONFIG } from "@multica/core/issues/config";
+import { STATUS_CONFIG, PRIORITY_CONFIG, isTerminalIssueStatus } from "@multica/core/issues/config";
 import { formatDateOnly } from "@multica/core/issues/date";
 import { useUpdateIssue } from "@multica/core/issues/mutations";
 import { toast } from "sonner";
@@ -576,7 +576,7 @@ function SubIssueRow({ child }: { child: Issue }) {
   const updateIssue = useUpdateIssue();
   const selected = useIssueSelectionStore((s) => s.selectedIds.has(child.id));
   const toggleSelected = useIssueSelectionStore((s) => s.toggle);
-  const isDone = child.status === "done" || child.status === "cancelled";
+  const isDone = isTerminalIssueStatus(child.status);
 
   const handleUpdate = useCallback(
     (updates: Partial<UpdateIssueRequest>) => {
@@ -1803,7 +1803,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                 it never overlaps the title (which truncates to make room).
                 It self-hides when no agent is active. */}
             <IssueAgentHeaderChip issueId={id} />
-            {onDone && issue.status !== "done" && issue.status !== "cancelled" && (
+            {onDone && !isTerminalIssueStatus(issue.status) && (
               <Tooltip>
                 <TooltipTrigger
                   render={

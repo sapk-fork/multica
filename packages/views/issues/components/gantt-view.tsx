@@ -8,6 +8,7 @@ import { useViewStore, useViewStoreApi } from "@multica/core/issues/stores/view-
 import type { GanttZoom } from "@multica/core/issues/stores/view-store";
 import { projectListOptions } from "@multica/core/projects/queries";
 import type { Issue, IssueStatus } from "@multica/core/types";
+import { isTerminalIssueStatus } from "@multica/core/issues/config";
 import { dateOnlyToUTCDate } from "@multica/core/issues/date";
 import { cn } from "@multica/ui/lib/utils";
 import {
@@ -298,6 +299,7 @@ const STATUS_BAR_BG: Record<IssueStatus, string> = {
   done: "bg-info",
   blocked: "bg-destructive",
   cancelled: "bg-muted-foreground/40",
+  archived: "bg-muted-foreground/40",
 };
 
 // ---------------------------------------------------------------------------
@@ -460,7 +462,7 @@ export function GanttView({ issues }: { issues: Issue[] }) {
     const dated = issues.filter((i) => i.start_date || i.due_date);
     const filtered = showCompleted
       ? dated
-      : dated.filter((i) => i.status !== "done" && i.status !== "cancelled");
+      : dated.filter((i) => !isTerminalIssueStatus(i.status));
     // "position" makes no sense on a gantt — default to start_date asc when
     // the user hasn't picked a more specific sort.
     const sortField = sortBy === "position" ? "start_date" : sortBy;

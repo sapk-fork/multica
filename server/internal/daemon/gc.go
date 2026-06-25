@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/multica-ai/multica/server/internal/daemon/execenv"
+	"github.com/multica-ai/multica/server/internal/util"
 )
 
 // gcLoop periodically scans local workspace directories and removes those
@@ -269,7 +270,7 @@ func (d *Daemon) gcDecisionIssue(ctx context.Context, taskDir string, meta *exec
 		return gcActionSkip
 	}
 
-	if (status.Status == "done" || status.Status == "cancelled") &&
+	if util.IsTerminalIssueStatus(status.Status) &&
 		time.Since(status.UpdatedAt) > d.cfg.GCTTL {
 		d.logger.Info("gc: eligible for cleanup",
 			"dir", filepath.Base(taskDir),

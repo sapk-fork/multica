@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
@@ -87,7 +88,7 @@ func (h *Handler) notifyParentOfChildDone(ctx context.Context, prev, issue db.Is
 			"parent_id", uuidToString(issue.ParentIssueID))
 		return
 	}
-	if parent.Status == "done" || parent.Status == "cancelled" {
+	if util.IsTerminalIssueStatus(parent.Status) {
 		return
 	}
 	// A parent parked in backlog is deliberately held for later. Posting the
@@ -202,10 +203,11 @@ func (h *Handler) notifyParentOfChildDone(ctx context.Context, prev, issue db.Is
 }
 
 // isTerminalChildStatus reports whether a child issue status counts as
-// "finished" for stage-barrier purposes. Cancelled counts as terminal: a
-// cancelled sibling will never complete, so it must not hold a stage open.
+// "finished" for stage-barrier purposes. Cancelled and archived count as
+// terminal: such a sibling will never complete, so it must not hold a stage
+// open.
 func isTerminalChildStatus(status string) bool {
-	return status == "done" || status == "cancelled"
+	return util.IsTerminalIssueStatus(status)
 }
 
 // siblingsAreStaged reports whether any child in the set carries an explicit

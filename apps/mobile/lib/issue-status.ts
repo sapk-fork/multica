@@ -12,7 +12,7 @@
  */
 import type { IssuePriority, IssueStatus } from "@multica/core/types";
 
-/** Statuses surfaced in list/board views (matches web — `cancelled` excluded). */
+/** Statuses surfaced in list/board views (matches web — `cancelled`/`archived` excluded). */
 export const BOARD_STATUSES: IssueStatus[] = [
   "backlog",
   "todo",
@@ -30,7 +30,26 @@ export const STATUS_LABEL: Record<IssueStatus, string> = {
   done: "Done",
   blocked: "Blocked",
   cancelled: "Cancelled",
+  archived: "Archived",
 };
+
+/**
+ * Issue statuses that mark the issue as closed/terminal. Mirrors web's
+ * `TERMINAL_ISSUE_STATUSES` (packages/core/issues/config/status.ts) — kept
+ * in sync manually because mobile mirrors the whole status surface (see
+ * file header) and does not import web's helper.
+ */
+export const TERMINAL_ISSUE_STATUSES: ReadonlySet<IssueStatus> = new Set<IssueStatus>([
+  "done",
+  "cancelled",
+  "archived",
+]);
+
+/** Returns true if the given status is terminal (closed: done/cancelled/archived). */
+export function isTerminalIssueStatus(status: IssueStatus | string | null | undefined): boolean {
+  if (!status) return false;
+  return TERMINAL_ISSUE_STATUSES.has(status as IssueStatus);
+}
 
 export const PRIORITY_LABEL: Record<IssuePriority, string> = {
   none: "No priority",

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -98,7 +99,7 @@ func (s *IssueService) WillEnqueueRun(ctx context.Context, in IssueTriggerInput,
 		}
 		source = RunSourceAssign
 	case in.StatusChanged && in.PrevStatus == "backlog" &&
-		issue.Status != "done" && issue.Status != "cancelled":
+		!util.IsTerminalIssueStatus(issue.Status):
 		if probe.IsSelfLoop != nil && probe.IsSelfLoop() {
 			return IssueRunTrigger{}, false
 		}

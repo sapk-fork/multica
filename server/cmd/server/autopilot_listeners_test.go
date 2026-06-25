@@ -7,8 +7,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/events"
+	"github.com/multica-ai/multica/server/internal/handler"
 	"github.com/multica-ai/multica/server/internal/service"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
 func TestAutopilotRunOnlyTaskTerminalEventsUpdateRun(t *testing.T) {
@@ -483,5 +485,104 @@ func TestManualTriggerDoesNotErrorOnPostAdmissionSkip(t *testing.T) {
 	}
 	if run.Status != "skipped" {
 		t.Fatalf("expected run status 'skipped', got %q", run.Status)
+	}
+}
+
+// TestArchivingIssueFailsAutopilotRun verifies that archiving a create_issue
+// autopilot's linked issue terminates the run as "failed" — same outcome as
+// cancelling. This exercises the autopilot_listeners.go guard and the
+// autopilot.go switch case added for "archived".
+func TestArchivingIssueFailsAutopilotRun(t *testing.T) {
+	ctx := context.Background()
+	queries := db.New(testPool)
+	bus := events.New()
+	taskSvc := service.NewTaskService(queries, testPool, nil, bus)
+	autopilotSvc := service.NewAutopilotService(queries, testPool, bus, taskSvc)
+	registerAutopilotListeners(bus, autopilotSvc)
+
+	var agentID, runtimeID string
+	if err := testPool.QueryRow(ctx,
+		`SELECT id::text, runtime_id::text FROM agent WHERE workspace_id = $1 LIMIT 1`,
+		testWorkspaceID,
+	).Scan(&agentID, &runtimeID); err != nil {
+		t.Fatalf("load agent: %v", err)
+	}
+
+	ap, err := queries.CreateAutopilot(ctx, db.CreateAutopilotParams{
+		WorkspaceID:        parseUUID(testWorkspaceID),
+		Title:              "archive-autopilot-run-test",
+		AssigneeType:       "agent",
+		AssigneeID:         parseUUID(agentID),
+		Status:             "active",
+		ExecutionMode:      "create_issue",
+		IssueTitleTemplate: pgtype.Text{String: "Archived run test", Valid: true},
+		CreatedByType:      "member",
+		CreatedByID:        parseUUID(testUserID),
+	})
+	if err != nil {
+		t.Fatalf("CreateAutopilot: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM autopilot WHERE id = $1`, ap.ID)
+	})
+
+	// Create a run and a linked issue with origin_type='autopilot'.
+	var runID string
+	if err := testPool.QueryRow(ctx,
+		`INSERT INTO autopilot_run (autopilot_id, source, status) VALUES ($1, 'manual', 'running') RETURNING id::text`,
+		ap.ID,
+	).Scan(&runID); err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+
+	var issueID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO issue (workspace_id, title, status, origin_type, origin_id, creator_type, creator_id)
+		VALUES ($1, 'archive-autopilot-issue', 'in_progress', 'autopilot', $2, 'member', $3)
+		RETURNING id::text
+	`, testWorkspaceID, ap.ID, testUserID).Scan(&issueID); err != nil {
+		t.Fatalf("create issue: %v", err)
+	}
+	// Link the run to the issue (mirrors DispatchAutopilot's UpdateAutopilotRunIssueCreated).
+	if _, err := testPool.Exec(ctx,
+		`UPDATE autopilot_run SET issue_id = $1, status = 'issue_created' WHERE id = $2`,
+		parseUUID(issueID), runID,
+	); err != nil {
+		t.Fatalf("link run to issue: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM issue WHERE id = $1`, issueID)
+		testPool.Exec(context.Background(), `DELETE FROM autopilot_run WHERE id = $1`, runID)
+	})
+
+	// Mark the issue as archived directly in the DB (the listener reads the
+	// persisted status, not the payload's IssueResponse.Status).
+	if _, err := testPool.Exec(ctx,
+		`UPDATE issue SET status = 'archived' WHERE id = $1`, issueID,
+	); err != nil {
+		t.Fatalf("archive issue: %v", err)
+	}
+
+	// Publish an EventIssueUpdated as if the handler just archived the issue.
+	bus.Publish(events.Event{
+		Type:        protocol.EventIssueUpdated,
+		WorkspaceID: testWorkspaceID,
+		Payload: map[string]any{
+			"status_changed": true,
+			"issue": handler.IssueResponse{
+				ID:          issueID,
+				WorkspaceID: testWorkspaceID,
+				Status:      "archived",
+			},
+		},
+	})
+
+	// Verify the autopilot run is now failed.
+	var runStatus string
+	if err := testPool.QueryRow(ctx, `SELECT status FROM autopilot_run WHERE id = $1`, runID).Scan(&runStatus); err != nil {
+		t.Fatalf("query run status: %v", err)
+	}
+	if runStatus != "failed" {
+		t.Errorf("autopilot run should be 'failed' after issue archived, got %q", runStatus)
 	}
 }

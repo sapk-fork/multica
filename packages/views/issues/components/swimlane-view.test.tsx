@@ -100,9 +100,9 @@ vi.mock("../../navigation", () => ({
 
 // Mock issue config
 vi.mock("@multica/core/issues/config", () => ({
-  ALL_STATUSES: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"],
+  ALL_STATUSES: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled", "archived"],
   BOARD_STATUSES: ["backlog", "todo", "in_progress", "in_review", "done", "blocked"],
-  STATUS_ORDER: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled"],
+  STATUS_ORDER: ["backlog", "todo", "in_progress", "in_review", "done", "blocked", "cancelled", "archived"],
   STATUS_CONFIG: {
     backlog: { label: "Backlog", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
     todo: { label: "Todo", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
@@ -111,6 +111,7 @@ vi.mock("@multica/core/issues/config", () => ({
     done: { label: "Done", iconColor: "text-info", hoverBg: "hover:bg-info/10" },
     blocked: { label: "Blocked", iconColor: "text-destructive", hoverBg: "hover:bg-destructive/10" },
     cancelled: { label: "Cancelled", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
+    archived: { label: "Archived", iconColor: "text-muted-foreground", hoverBg: "hover:bg-accent" },
   },
   PRIORITY_ORDER: ["urgent", "high", "medium", "low", "none"],
   PRIORITY_CONFIG: {
@@ -118,8 +119,10 @@ vi.mock("@multica/core/issues/config", () => ({
     high: { label: "High", bars: 3, color: "text-warning" },
     medium: { label: "Medium", bars: 2, color: "text-warning" },
     low: { label: "Low", bars: 1, color: "text-info" },
-    none: { label: "No priority", bars: 0, color: "text-muted-foreground" },
+    none: { label: "No priority", color: "text-muted-foreground" },
   },
+  TERMINAL_ISSUE_STATUSES: new Set(["done", "cancelled", "archived"]),
+  isTerminalIssueStatus: (status: string) => status === "done" || status === "cancelled" || status === "archived",
 }));
 
 // Default mock returns hasMore=false so the load-more sentinels render

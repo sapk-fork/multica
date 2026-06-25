@@ -511,3 +511,49 @@ describe("createMentionSuggestion", () => {
     expect(items.some((i) => i.type === "agent" && i.label === "魏和尚")).toBe(true);
   });
 });
+
+describe("MentionList — archived issue dimming", () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("renders an archived issue item with opacity-60 (dimmed like cancelled/done)", () => {
+    const archivedItem: MentionItem = {
+      id: "i-archived",
+      type: "issue",
+      label: "MUL-99",
+      description: "Archived feature",
+      status: "archived",
+    };
+
+    render(
+      <I18nWrapper>
+        <MentionList items={[archivedItem]} query="archived" command={vi.fn()} />
+      </I18nWrapper>,
+    );
+
+    // The button wrapping an archived issue should carry opacity-60 so it is
+    // visually distinguishable from active issues in the picker.
+    const button = screen.getByRole("button");
+    expect(button.className).toContain("opacity-60");
+  });
+
+  it("renders an active issue item without opacity-60", () => {
+    const activeItem: MentionItem = {
+      id: "i-active",
+      type: "issue",
+      label: "MUL-1",
+      description: "Active feature",
+      status: "in_progress",
+    };
+
+    render(
+      <I18nWrapper>
+        <MentionList items={[activeItem]} query="active" command={vi.fn()} />
+      </I18nWrapper>,
+    );
+
+    const button = screen.getByRole("button");
+    expect(button.className).not.toContain("opacity-60");
+  });
+});

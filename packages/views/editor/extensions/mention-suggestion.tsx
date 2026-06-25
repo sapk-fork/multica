@@ -18,6 +18,7 @@ import { useAuthStore } from "@multica/core/auth";
 import { canAssignAgentToIssue } from "@multica/core/permissions";
 import { api } from "@multica/core/api";
 import { isImeComposing } from "@multica/core/utils";
+import { isTerminalIssueStatus } from "@multica/core/issues/config";
 import type {
   Issue,
   ListIssuesCache,
@@ -385,9 +386,9 @@ function MentionRow({
 }) {
   const { t } = useT("editor");
   if (item.type === "issue") {
-    // Visually dim closed issues (done/cancelled) so they're distinguishable
+    // Visually dim closed issues (done/cancelled/archived) so they're distinguishable
     // from active ones in the suggestion list — they're still selectable.
-    const isClosed = item.status === "done" || item.status === "cancelled";
+    const isClosed = isTerminalIssueStatus(item.status);
     return (
       <button
         type="button"

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -35,9 +36,16 @@ func TestBuildSearchQuery_SingleTerm(t *testing.T) {
 		t.Error("exact title rank should compare LOWER(i.title) = $1 directly")
 	}
 
-	// Should exclude closed issues by default.
-	if !strings.Contains(query, "NOT IN ('done', 'cancelled')") {
-		t.Error("query should exclude done/cancelled when includeClosed=false")
+	// All closed statuses (done, cancelled, archived) should be excluded by default.
+	// Parse the NOT IN clause from the generated SQL — this is a behavioural
+	// assertion: it locks the *list of excluded statuses*, not a literal
+	// string fragment, so adding a new terminal status only requires updating
+	// the list below (the helper refactor's whole point).
+	closedInList := extractStatusNotInList(t, query)
+	for _, closedStatus := range []string{"done", "cancelled", "archived"} {
+		if _, ok := closedInList[closedStatus]; !ok {
+			t.Errorf("query should exclude %q status when includeClosed=false (NOT IN list: %v)", closedStatus, closedInList)
+		}
 	}
 }
 
@@ -79,9 +87,31 @@ func TestBuildSearchQuery_WithNumber(t *testing.T) {
 func TestBuildSearchQuery_IncludeClosed(t *testing.T) {
 	query, _ := buildSearchQuery("test", []string{"test"}, 0, false, true)
 
-	if strings.Contains(query, "NOT IN ('done', 'cancelled')") {
-		t.Error("query should not exclude done/cancelled when includeClosed=true")
+	// No status filter should be applied when includeClosed=true — archived and other closed issues must appear.
+	if strings.Contains(query, "i.status NOT IN") {
+		t.Error("query should not apply status exclusion when includeClosed=true")
 	}
+}
+
+// extractStatusNotInList parses the `i.status NOT IN ('x', 'y', ...)` clause
+// out of a generated search query and returns the set of status values it
+// excludes. It fails the test if the clause is missing — the test should
+// only call this when the caller is asserting the clause is present.
+func extractStatusNotInList(t *testing.T, query string) map[string]struct{} {
+	t.Helper()
+	re := regexp.MustCompile(`i\.status NOT IN \(([^)]+)\)`)
+	match := re.FindStringSubmatch(query)
+	if match == nil {
+		t.Fatal("query should contain `i.status NOT IN (...)` clause")
+	}
+	raw := match[1]
+	out := map[string]struct{}{}
+	// Each entry is a single-quoted SQL literal: 'done', 'cancelled', 'archived'.
+	litRe := regexp.MustCompile(`'([^']+)'`)
+	for _, m := range litRe.FindAllStringSubmatch(raw, -1) {
+		out[m[1]] = struct{}{}
+	}
+	return out
 }
 
 func TestBuildSearchQuery_SpecialChars(t *testing.T) {

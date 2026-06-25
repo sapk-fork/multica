@@ -43,6 +43,7 @@ import {
 } from "@/data/viewed-issues-store";
 import type { MentionMarker } from "@/lib/mention-serialize";
 import { cn } from "@/lib/utils";
+import { isTerminalIssueStatus } from "@/lib/issue-status";
 
 type Mode = "comment" | "chat";
 
@@ -329,9 +330,7 @@ export function MentionSuggestionBar({
             );
           }
           // issue
-          const closed =
-            item.issue.status === "done" ||
-            item.issue.status === "cancelled";
+          const closed = isTerminalIssueStatus(item.issue.status);
           return (
             <Pressable
               onPress={() =>
