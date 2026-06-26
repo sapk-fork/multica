@@ -201,6 +201,8 @@
     "prop_due_date": "Due date",
     "prop_project": "Project",
     "prop_labels": "Labels",
+    "prop_git_work_branch": "Work branch",
+    "prop_git_base_branch": "Base branch",
     "add_property_action": "Add property",
     "prop_created_by": "Created by",
     "prop_created": "Created",
@@ -432,6 +434,24 @@
   "pickers": {
     "filter_options_aria": "Filter options",
     "no_results": "No results",
+    "branch": {
+      "empty_label": "Set branch",
+      "apply_action": "Apply",
+      "clear_action": "Clear",
+      "work_placeholder": "feature/my-branch",
+      "base_placeholder": "main",
+      "work_aria": "Work branch name",
+      "base_aria": "Base branch name",
+      "errors": {
+        "too_long": "Must be at most 200 characters",
+        "invalid_chars": "Only letters, digits, and . _ / - are allowed",
+        "leading_dash": "Must not start with '-'",
+        "dotdot": "Must not contain '..'",
+        "at_brace": "Must not contain '@{'",
+        "head": "Must not be 'HEAD'",
+        "work_integration": "Use a feature branch, not 'main' or 'master'"
+      }
+    },
     "assignee": {
       "trigger_unassigned": "Unassigned",
       "search_placeholder": "Assign to...",

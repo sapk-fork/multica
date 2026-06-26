@@ -201,6 +201,8 @@
     "prop_due_date": "마감일",
     "prop_project": "프로젝트",
     "prop_labels": "라벨",
+    "prop_git_work_branch": "작업 브랜치",
+    "prop_git_base_branch": "베이스 브랜치",
     "add_property_action": "속성 추가",
     "prop_created_by": "생성자",
     "prop_created": "생성일",
@@ -431,6 +433,24 @@
   "pickers": {
     "filter_options_aria": "필터 옵션",
     "no_results": "결과 없음",
+    "branch": {
+      "empty_label": "브랜치 설정",
+      "apply_action": "적용",
+      "clear_action": "지우기",
+      "work_placeholder": "feature/my-branch",
+      "base_placeholder": "main",
+      "work_aria": "작업 브랜치 이름",
+      "base_aria": "베이스 브랜치 이름",
+      "errors": {
+        "too_long": "최대 200자까지 입력할 수 있습니다",
+        "invalid_chars": "문자, 숫자 및 . _ / - 만 사용할 수 있습니다",
+        "leading_dash": "'-'로 시작할 수 없습니다",
+        "dotdot": "'..'를 포함할 수 없습니다",
+        "at_brace": "'@{'를 포함할 수 없습니다",
+        "head": "'HEAD'일 수 없습니다",
+        "work_integration": "'main'이나 'master'가 아닌 기능 브랜치를 사용하세요"
+      }
+    },
     "assignee": {
       "trigger_unassigned": "담당자 없음",
       "search_placeholder": "담당자 지정...",

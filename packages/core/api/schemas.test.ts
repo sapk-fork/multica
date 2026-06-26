@@ -74,6 +74,29 @@ describe("IssueSchema (via ListIssuesResponseSchema)", () => {
     };
     expect(ListIssuesResponseSchema.safeParse(payload).success).toBe(false);
   });
+
+  it("parses git branch pins when the server sends them", () => {
+    const payload = {
+      issues: [
+        {
+          ...baseIssue,
+          git_work_branch: "feature/m-44",
+          git_base_branch: "main",
+        },
+      ],
+      total: 1,
+    };
+    const parsed = ListIssuesResponseSchema.parse(payload);
+    expect(parsed.issues[0]?.git_work_branch).toBe("feature/m-44");
+    expect(parsed.issues[0]?.git_base_branch).toBe("main");
+  });
+
+  it("defaults git branch pins to null when the server omits them (older backend)", () => {
+    // baseIssue has no git_work_branch / git_base_branch keys.
+    const parsed = ListIssuesResponseSchema.parse({ issues: [baseIssue], total: 1 });
+    expect(parsed.issues[0]?.git_work_branch).toBeNull();
+    expect(parsed.issues[0]?.git_base_branch).toBeNull();
+  });
 });
 
 describe("TimelineEntriesSchema", () => {

@@ -243,6 +243,11 @@ export const IssueSchema = z.object({
   position: z.number(),
   start_date: z.string().nullable(),
   due_date: z.string().nullable(),
+  // MUL-44 git branch pins. The server omits these (omitempty) when unset, so
+  // default to null for forward/backward compat with backends that never send
+  // them. Always present as `string | null` after parse — no nil-guard needed.
+  git_work_branch: z.string().nullable().default(null),
+  git_base_branch: z.string().nullable().default(null),
   metadata: IssueMetadataSchema,
   reactions: z.array(z.unknown()).optional(),
   labels: z.array(z.unknown()).optional(),

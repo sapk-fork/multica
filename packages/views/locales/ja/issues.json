@@ -198,6 +198,8 @@
     "prop_due_date": "期限",
     "prop_project": "プロジェクト",
     "prop_labels": "ラベル",
+    "prop_git_work_branch": "作業ブランチ",
+    "prop_git_base_branch": "ベースブランチ",
     "add_property_action": "プロパティを追加",
     "prop_created_by": "作成者",
     "prop_created": "作成日",
@@ -413,6 +415,24 @@
   "pickers": {
     "filter_options_aria": "フィルターオプション",
     "no_results": "結果なし",
+    "branch": {
+      "empty_label": "ブランチを設定",
+      "apply_action": "適用",
+      "clear_action": "クリア",
+      "work_placeholder": "feature/my-branch",
+      "base_placeholder": "main",
+      "work_aria": "作業ブランチ名",
+      "base_aria": "ベースブランチ名",
+      "errors": {
+        "too_long": "200文字以内で入力してください",
+        "invalid_chars": "使用できるのは英数字と . _ / - のみです",
+        "leading_dash": "'-' で始めることはできません",
+        "dotdot": "'..' を含めることはできません",
+        "at_brace": "'@{' を含めることはできません",
+        "head": "'HEAD' は使用できません",
+        "work_integration": "'main' や 'master' ではなくフィーチャーブランチを使用してください"
+      }
+    },
     "assignee": {
       "trigger_unassigned": "未割り当て",
       "search_placeholder": "担当者を割り当て...",

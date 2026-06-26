@@ -53,6 +53,14 @@ export interface Issue {
   // + local formatting, which shifts the day by the viewer's offset.
   start_date: string | null;
   due_date: string | null;
+  // Optional git branch pins (MUL-44): the dedicated work branch the agent
+  // commits to / pushes, and the base branch it branches from and targets the
+  // PR at. Null when explicitly unset; `undefined` when an older backend omits
+  // the field entirely (the server uses omitempty), so treat the two the same.
+  // The API schema defaults both to null, so parsed issues always carry the
+  // key — the `?` is for forward/backward compat and defensive call sites.
+  git_work_branch?: string | null;
+  git_base_branch?: string | null;
   metadata: IssueMetadata;
   reactions?: IssueReaction[];
   labels?: Label[];

@@ -199,6 +199,8 @@
     "prop_due_date": "截止日期",
     "prop_project": "项目",
     "prop_labels": "标签",
+    "prop_git_work_branch": "工作分支",
+    "prop_git_base_branch": "基础分支",
     "add_property_action": "添加字段",
     "prop_created_by": "创建者",
     "prop_created": "创建时间",
@@ -418,6 +420,24 @@
   "pickers": {
     "filter_options_aria": "筛选选项",
     "no_results": "无结果",
+    "branch": {
+      "empty_label": "设置分支",
+      "apply_action": "应用",
+      "clear_action": "清除",
+      "work_placeholder": "feature/my-branch",
+      "base_placeholder": "main",
+      "work_aria": "工作分支名称",
+      "base_aria": "基础分支名称",
+      "errors": {
+        "too_long": "最多 200 个字符",
+        "invalid_chars": "仅允许字母、数字以及 . _ / -",
+        "leading_dash": "不能以 '-' 开头",
+        "dotdot": "不能包含 '..'",
+        "at_brace": "不能包含 '@{'",
+        "head": "不能为 'HEAD'",
+        "work_integration": "请使用功能分支，而非 'main' 或 'master'"
+      }
+    },
     "assignee": {
       "trigger_unassigned": "未分配",
       "search_placeholder": "分配给...",

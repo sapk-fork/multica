@@ -10,6 +10,7 @@ import {
   Calendar,
   CalendarClock,
   CalendarDays,
+  GitBranch,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -48,7 +49,7 @@ import { STATUS_CONFIG, PRIORITY_CONFIG } from "@multica/core/issues/config";
 import { formatDateOnly } from "@multica/core/issues/date";
 import { useUpdateIssue } from "@multica/core/issues/mutations";
 import { toast } from "sonner";
-import { StatusIcon, PriorityIcon, StatusPicker, PriorityPicker, StartDatePicker, DueDatePicker, AssigneePicker, LabelPicker } from ".";
+import { StatusIcon, PriorityIcon, StatusPicker, PriorityPicker, StartDatePicker, DueDatePicker, AssigneePicker, LabelPicker, BranchPicker } from ".";
 import { IssueActionsDropdown, useIssueActions } from "../actions";
 import { ProjectPicker } from "../../projects/components/project-picker";
 import { LocalDirectoryHint } from "../../projects/components/local-directory-hint";
@@ -303,7 +304,7 @@ const EMPTY_REPLIES: TimelineEntry[] = [];
 // means appending here, wiring its row in the JSX switch below, and
 // adding a locale key. The picker, visibility rules, and add-property
 // menu all flow from this one list.
-const OPTIONAL_PROP_KEYS = ["priority", "start_date", "due_date", "labels"] as const;
+const OPTIONAL_PROP_KEYS = ["priority", "start_date", "due_date", "labels", "git_work_branch", "git_base_branch"] as const;
 type OptionalPropKey = (typeof OPTIONAL_PROP_KEYS)[number];
 
 function isOptionalPropSet(
@@ -320,6 +321,10 @@ function isOptionalPropSet(
       return !!issue.due_date;
     case "labels":
       return attachedLabelsCount > 0;
+    case "git_work_branch":
+      return !!issue.git_work_branch;
+    case "git_base_branch":
+      return !!issue.git_base_branch;
   }
 }
 
@@ -1458,6 +1463,28 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
               />
             </PropRow>
           )}
+          {visibleOptionalProps.has("git_work_branch") && (
+            <PropRow label={t(($) => $.detail.prop_git_work_branch)}>
+              <BranchPicker
+                field="git_work_branch"
+                value={issue.git_work_branch ?? null}
+                onUpdate={handleUpdateField}
+                align="start"
+                defaultOpen={autoOpenProp === "git_work_branch"}
+              />
+            </PropRow>
+          )}
+          {visibleOptionalProps.has("git_base_branch") && (
+            <PropRow label={t(($) => $.detail.prop_git_base_branch)}>
+              <BranchPicker
+                field="git_base_branch"
+                value={issue.git_base_branch ?? null}
+                onUpdate={handleUpdateField}
+                align="start"
+                defaultOpen={autoOpenProp === "git_base_branch"}
+              />
+            </PropRow>
+          )}
 
           {/* "+ Add property" — opens a Popover listing optional fields
               not yet displayed. Hidden once every optional field is on
@@ -1496,11 +1523,16 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                       {k === "labels" && (
                         <Tag className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       )}
+                      {(k === "git_work_branch" || k === "git_base_branch") && (
+                        <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      )}
                       <span className="truncate">
                         {k === "priority" && t(($) => $.detail.prop_priority)}
                         {k === "start_date" && t(($) => $.detail.prop_start_date)}
                         {k === "due_date" && t(($) => $.detail.prop_due_date)}
                         {k === "labels" && t(($) => $.detail.prop_labels)}
+                        {k === "git_work_branch" && t(($) => $.detail.prop_git_work_branch)}
+                        {k === "git_base_branch" && t(($) => $.detail.prop_git_base_branch)}
                       </span>
                     </button>
                   ))}

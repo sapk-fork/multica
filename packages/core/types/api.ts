@@ -29,6 +29,10 @@ export interface UpdateIssueRequest {
   due_date?: string | null;
   parent_issue_id?: string | null;
   project_id?: string | null;
+  /** MUL-44 git branch pins. Send `null` to clear (same nullable contract as
+   *  start_date / due_date); omit the key to leave the column untouched. */
+  git_work_branch?: string | null;
+  git_base_branch?: string | null;
   /** Attachment IDs to bind to this issue alongside the description update.
    *  Used by the description editor to register newly uploaded files so they
    *  surface in `issueAttachments` and keep their preview Eye on refresh. */
