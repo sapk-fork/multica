@@ -4,9 +4,9 @@ import type {
   DashboardUsageByModel,
   DashboardAgentRunTime,
   DashboardRunTimeDaily,
-  DashboardRuntimeRunTime,
+  DashboardRuntimeDuration,
   DashboardModelRunTime,
-  DashboardRuntimeUsage,
+  DashboardUsageByRuntime,
 } from "@multica/core/types";
 import {
   addDaysIso,
@@ -498,8 +498,8 @@ export interface RuntimeDashboardRow {
 // runtime, matching how the agent scope computes per-agent cost.
 // Sorted by seconds desc, then cost desc.
 export function aggregateRuntimeRows(
-  runTimeRows: DashboardRuntimeRunTime[],
-  usageRows: DashboardRuntimeUsage[],
+  runTimeRows: DashboardRuntimeDuration[],
+  usageRows: DashboardUsageByRuntime[],
 ): RuntimeDashboardRow[] {
   // Fold (runtime, model) usage rows into per-runtime token+cost totals.
   const usageByRuntime = new Map<string, { tokens: number; cost: number }>();
