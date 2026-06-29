@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { ApiError } from "@multica/core/api";
 import type { InboxItem } from "@multica/core/types";
 import { useInboxFilterStore } from "@multica/core/inbox/filter-store";
+import { useInboxSortStore } from "@multica/core/inbox/store";
 import { InboxPage } from "./inbox-page";
 
 vi.mock("sonner", () => ({
@@ -67,12 +68,23 @@ vi.mock("@multica/core/issues/stores/draft-store", () => ({
   useIssueDraftStore: { getState: () => ({ setDraft: vi.fn() }) },
 }));
 
+// Stand-in for the real sortInboxItems, whose ordering matrix is pinned in
+// core/inbox/queries.test.ts. It records what the page asked for and returns
+// the items untouched for every field except "priority", which it reverses so
+// a test can tell the sort's result apart from the raw list.
+const sortInboxItems = vi.hoisted(() =>
+  vi.fn((items: InboxItem[], field: string) =>
+    field === "priority" ? [...items].reverse() : [...items],
+  ),
+);
+
 vi.mock("@multica/core/inbox/queries", () => ({
   inboxListOptions: () => ({ queryKey: ["inbox", "workspace-1", "list"] }),
   archivedInboxPagesOptions: () => ({ queryKey: ["inbox", "workspace-1", "archived", "pages"] }),
   archivedInboxLookupOptions: () => ({ queryKey: ["inbox", "workspace-1", "archived", "lookup"] }),
   deduplicateInboxItems: (items: InboxItem[]) => items.filter((i) => !i.archived),
   deduplicateArchivedInboxItems: (items: InboxItem[]) => items.filter((i) => i.archived),
+  sortInboxItems,
   useInboxUnreadCount: () => 2,
 }));
 
@@ -292,6 +304,8 @@ function reset() {
   issueDetailProps.length = 0;
   layout.width = PHONE;
   useInboxFilterStore.setState({ filtersByWorkspace: {} });
+  useInboxSortStore.setState({ sortField: "date", sortDirection: "desc" });
+  sortInboxItems.mockClear();
 }
 
 describe("InboxPage", () => {
@@ -508,17 +522,81 @@ describe("InboxPage", () => {
     expect(screen.getByTestId("row").textContent).toBe("archived-1");
   });
 
-  it("hides the batch-actions menu in the archived view", () => {
-    // Every batch action archives from the MAIN inbox; offering them over the
-    // archived list would read as "archive all of these" and do the opposite.
+  it("hides the sort and batch-actions menus in the archived view", () => {
+    // The archived list is paginated, so a client-side sort would only order
+    // the pages loaded so far; and every batch action archives from the MAIN
+    // inbox, so offering them over the archived list would read as "archive
+    // all of these" and do the opposite.
     reset();
     listData.archived = [item({ id: "archived-1", archived: true })];
     const { container: mainView } = render(<InboxPage />);
-    expect(mainView.querySelector('[aria-haspopup="menu"]')).not.toBeNull();
+    expect(mainView.querySelectorAll('[aria-haspopup="menu"]')).toHaveLength(2);
 
     searchParams = new URLSearchParams("view=archived");
     const { container: archivedView } = render(<InboxPage />);
-    expect(archivedView.querySelector('[aria-haspopup="menu"]')).toBeNull();
+    expect(archivedView.querySelectorAll('[aria-haspopup="menu"]')).toHaveLength(0);
+  });
+
+  // The ordering matrix itself belongs to core/inbox/queries.test.ts and the
+  // store's persistence to core/inbox/store.test.ts. This layer owns the
+  // wiring: the persisted preference reaches the sort, and the list renders
+  // whatever the sort returns.
+  describe("inbox sorting", () => {
+    it("sorts the deduplicated list with the persisted field and direction", () => {
+      reset();
+      listData.active = [
+        item({ id: "active-a", issue_id: "issue-a" }),
+        item({ id: "active-b", issue_id: "issue-b" }),
+      ];
+      useInboxSortStore.setState({ sortField: "priority", sortDirection: "asc" });
+
+      render(<InboxPage />);
+
+      expect(sortInboxItems).toHaveBeenLastCalledWith(
+        [expect.objectContaining({ id: "active-a" }), expect.objectContaining({ id: "active-b" })],
+        "priority",
+        "asc",
+      );
+      expect(screen.getAllByTestId("row").map((row) => row.textContent)).toEqual([
+        "active-b",
+        "active-a",
+      ]);
+    });
+
+    it("re-sorts the list when the persisted preference changes", () => {
+      reset();
+      listData.active = [
+        item({ id: "active-a", issue_id: "issue-a" }),
+        item({ id: "active-b", issue_id: "issue-b" }),
+      ];
+
+      const { rerender } = render(<InboxPage />);
+      expect(sortInboxItems).toHaveBeenLastCalledWith(expect.any(Array), "date", "desc");
+      expect(screen.getAllByTestId("row")[0]).toHaveTextContent("active-a");
+
+      act(() => {
+        useInboxSortStore.getState().setSortField("priority");
+      });
+      rerender(<InboxPage />);
+
+      expect(sortInboxItems).toHaveBeenLastCalledWith(expect.any(Array), "priority", "desc");
+      expect(screen.getAllByTestId("row")[0]).toHaveTextContent("active-b");
+    });
+
+    it("never sorts the archived list", () => {
+      // The archived list is paginated: sorting the pages loaded so far would
+      // read as a sorted list while silently leaving the rest out of order.
+      reset();
+      searchParams = new URLSearchParams("view=archived");
+      listData.archived = [item({ id: "archived-1", archived: true })];
+      useInboxSortStore.setState({ sortField: "priority", sortDirection: "desc" });
+
+      render(<InboxPage />);
+
+      // The sort only ever saw the (empty) main list, never the archive.
+      expect(sortInboxItems.mock.calls.flatMap(([items]) => items)).toEqual([]);
+      expect(screen.getByTestId("row")).toHaveTextContent("archived-1");
+    });
   });
 
   it("keeps the archive open when it is empty", () => {
