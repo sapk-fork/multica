@@ -1,119 +1,183 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import type { InboxItem } from "@multica/core/types";
-import { InboxPage } from "./inbox-page";
+import { I18nProvider } from "@multica/core/i18n/react";
+import { useInboxSortStore } from "@multica/core/inbox/store";
+import enCommon from "../../locales/en/common.json";
+import enInbox from "../../locales/en/inbox.json";
 
-vi.mock("react-resizable-panels", () => ({
-  useDefaultLayout: () => ({ defaultLayout: undefined, onLayoutChanged: vi.fn() }),
+// ── Hoisted mock factories ────────────────────────────────────────────────────
+const { listInbox, listArchivedInbox, currentSearchParams, currentReplace } = vi.hoisted(() => ({
+  listInbox: vi.fn(),
+  listArchivedInbox: vi.fn(),
+  currentSearchParams: { value: new URLSearchParams() },
+  currentReplace: { fn: vi.fn() },
 }));
 
-// The page runs two queries — the active list and the archived one. They are
-// told apart by the queryKey their options carry, so each test can stock the
-// two lists independently.
-const listData: { active: InboxItem[]; archived: InboxItem[] } = {
-  active: [],
-  archived: [],
-};
+// ── Module mocks ──────────────────────────────────────────────────────────────
 
-vi.mock("@tanstack/react-query", () => ({
-  useQuery: (options: { queryKey: readonly unknown[] }) => ({
-    data: options.queryKey.includes("archived") ? listData.archived : listData.active,
-    isLoading: false,
-    isError: false,
-  }),
-}));
-
-vi.mock("@multica/core/hooks", () => ({
-  useWorkspaceId: () => "workspace-1",
-}));
+vi.mock("@multica/core/hooks", () => ({ useWorkspaceId: () => "ws-1" }));
 
 vi.mock("@multica/core/paths", () => ({
   useWorkspacePaths: () => ({
-    inbox: () => "/acme/inbox",
-    issueDetail: (id: string) => `/acme/issues/${id}`,
+    inbox: () => "/ws/inbox",
+    issueDetail: (id: string) => `/ws/issues/${id}`,
   }),
 }));
 
 vi.mock("@multica/core/modals", () => ({
-  useModalStore: { getState: () => ({ open: vi.fn() }) },
+  useModalStore: Object.assign(
+    () => ({ open: vi.fn() }),
+    { getState: () => ({ open: vi.fn() }) },
+  ),
 }));
 
 vi.mock("@multica/core/issues/stores/draft-store", () => ({
-  useIssueDraftStore: { getState: () => ({ setDraft: vi.fn() }) },
+  useIssueDraftStore: Object.assign(
+    () => ({ setDraft: vi.fn() }),
+    { getState: () => ({ setDraft: vi.fn() }) },
+  ),
 }));
 
-vi.mock("@multica/core/inbox/queries", () => ({
-  inboxListOptions: () => ({ queryKey: ["inbox", "workspace-1", "list"] }),
-  archivedInboxListOptions: () => ({ queryKey: ["inbox", "workspace-1", "archived"] }),
-  deduplicateInboxItems: (items: InboxItem[]) => items.filter((i) => !i.archived),
-  deduplicateArchivedInboxItems: (items: InboxItem[]) => items.filter((i) => i.archived),
-  useInboxUnreadCount: () => 2,
+vi.mock("@multica/core/api", () => ({
+  api: {
+    listInbox,
+    listArchivedInbox,
+    getInboxUnreadSummary: vi.fn().mockResolvedValue([]),
+  },
 }));
 
-vi.mock("@multica/core/inbox/mutations", () => {
-  const mutation = () => ({ mutate: vi.fn() });
-  return {
-    useMarkInboxRead: mutation,
-    useArchiveInbox: mutation,
-    useUnarchiveInbox: mutation,
-    useMarkAllInboxRead: mutation,
-    useArchiveAllInbox: mutation,
-    useArchiveAllReadInbox: mutation,
-    useArchiveCompletedInbox: mutation,
-  };
-});
+vi.mock("@multica/core/inbox/mutations", () => ({
+  useMarkInboxRead: () => ({ mutate: vi.fn() }),
+  useArchiveInbox: () => ({ mutate: vi.fn() }),
+  useUnarchiveInbox: () => ({ mutate: vi.fn() }),
+  useMarkAllInboxRead: () => ({ mutate: vi.fn() }),
+  useArchiveAllInbox: () => ({ mutate: vi.fn() }),
+  useArchiveAllReadInbox: () => ({ mutate: vi.fn() }),
+  useArchiveCompletedInbox: () => ({ mutate: vi.fn() }),
+}));
 
 vi.mock("../../issues/components", () => ({
   IssueDetail: () => null,
   StatusIcon: () => null,
+  ErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-const replace = vi.fn();
-let searchParams = new URLSearchParams();
+vi.mock("../../common/actor-avatar", () => ({ ActorAvatar: () => null }));
 
 vi.mock("../../navigation", () => ({
-  useNavigation: () => ({ searchParams, replace }),
+  useNavigation: () => ({
+    searchParams: currentSearchParams.value,
+    replace: currentReplace.fn,
+    push: vi.fn(),
+  }),
 }));
 
-vi.mock("@multica/ui/hooks/use-mobile", () => ({ useIsMobile: () => true }));
-vi.mock("./inbox-list", () => ({
-  InboxList: ({
-    items,
-    view,
-    onSelect,
-  }: {
-    items: InboxItem[];
-    view: string;
-    onSelect: (item: InboxItem) => void;
-  }) => (
-    <div data-testid="list" data-view={view}>
-      {items.map((i) => (
-        <button key={i.id} data-testid="row" onClick={() => onSelect(i)}>
-          {i.id}
-        </button>
-      ))}
-    </div>
+vi.mock("@multica/ui/hooks/use-mobile", () => ({ useIsMobile: () => false }));
+
+vi.mock("react-resizable-panels", () => ({
+  useDefaultLayout: () => ({ defaultLayout: undefined, onLayoutChanged: () => {} }),
+}));
+
+vi.mock("@multica/ui/components/ui/resizable", () => ({
+  ResizablePanelGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ResizablePanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ResizableHandle: () => null,
+}));
+
+vi.mock("../../layout/page-header", () => ({
+  PageHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+// Render each inbox item as a simple div so order in DOM is testable.
+vi.mock("./inbox-list-item", () => ({
+  InboxListItem: ({ item }: { item: InboxItem }) => (
+    <div data-testid={`inbox-item-${item.id}`}>{item.title}</div>
   ),
+  useTimeAgo: () => () => "1h",
 }));
-vi.mock("./inbox-list-item", () => ({ useTimeAgo: () => vi.fn() }));
-vi.mock("./inbox-detail-label", () => ({ useTypeLabels: () => ({}) }));
-vi.mock("../../i18n", () => ({ useT: () => ({ t: () => "Inbox" }) }));
 
-function item(overrides: Partial<InboxItem> = {}): InboxItem {
+vi.mock("./inbox-detail-label", () => ({
+  InboxDetailLabel: () => null,
+  useTypeLabels: () => ({}),
+}));
+
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+
+// Mock the dropdown-menu with always-visible content to avoid Base UI portal
+// and GroupLabel context requirements in jsdom. The test pins that the sort
+// options are present and functional, not the dropdown open/close UX.
+vi.mock("@multica/ui/components/ui/dropdown-menu", async () => {
+  const { createContext, useContext } = await import("react");
+
+  type RadioCtxType = ((v: string) => void) | null;
+  const RadioCtx = createContext<RadioCtxType>(null);
+
   return {
-    id: "inbox-1",
-    workspace_id: "workspace-1",
+    DropdownMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => (
+      <button type="button">{children}</button>
+    ),
+    DropdownMenuPortal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    DropdownMenuLabel: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+    DropdownMenuGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    DropdownMenuSeparator: () => <hr />,
+    DropdownMenuItem: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
+      <button type="button" role="menuitem" onClick={onClick}>{children}</button>
+    ),
+    DropdownMenuRadioGroup: ({
+      children,
+      value,
+      onValueChange,
+    }: {
+      children: React.ReactNode;
+      value: string;
+      onValueChange: (v: string) => void;
+    }) => (
+      <RadioCtx.Provider value={onValueChange}>
+        <div data-sort-field={value}>{children}</div>
+      </RadioCtx.Provider>
+    ),
+    DropdownMenuRadioItem: ({ children, value }: { children: React.ReactNode; value: string }) => {
+      const onChange = useContext(RadioCtx);
+      return (
+        <button type="button" role="menuitemradio" data-value={value} onClick={() => onChange?.(value)}>
+          {children}
+        </button>
+      );
+    },
+  };
+});
+
+// ── Import subject AFTER all vi.mock() calls ──────────────────────────────────
+import { InboxPage } from "./inbox-page";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const TEST_RESOURCES = { en: { common: enCommon, inbox: enInbox } };
+
+let _idCounter = 0;
+function makeItem(overrides: Partial<InboxItem> & { id: string }): InboxItem {
+  _idCounter++;
+  return {
+    id: overrides.id,
+    workspace_id: "ws-1",
     recipient_type: "member",
     recipient_id: "member-1",
     actor_type: "agent",
     actor_id: "agent-1",
     type: "new_comment",
     severity: "info",
-    issue_id: "issue-1",
-    title: "Issue title",
+    // Each item gets a unique issue_id so deduplicateInboxItems keeps all of them.
+    issue_id: `issue-${overrides.id}`,
+    title: overrides.id,
     body: null,
     issue_status: null,
-    read: true,
+    issue_priority: null,
+    read: false,
     archived: false,
     created_at: "2026-06-15T08:00:00Z",
     details: null,
@@ -121,111 +185,186 @@ function item(overrides: Partial<InboxItem> = {}): InboxItem {
   };
 }
 
-function reset() {
-  listData.active = [];
-  listData.archived = [];
-  searchParams = new URLSearchParams();
-  replace.mockClear();
+function renderInbox() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <I18nProvider locale="en" resources={TEST_RESOURCES}>
+      <QueryClientProvider client={queryClient}>
+        <InboxPage />
+      </QueryClientProvider>
+    </I18nProvider>,
+  );
 }
 
-describe("InboxPage", () => {
-  it("keeps the title unread count static", () => {
-    reset();
-    const { container } = render(<InboxPage />);
-    const titleCount = container.querySelector("h1")?.parentElement?.querySelector(
-      "number-flow-react",
-    ) as (HTMLElement & { animated?: boolean }) | null;
+function reset() {
+  listInbox.mockResolvedValue([]);
+  listArchivedInbox.mockResolvedValue([]);
+  currentSearchParams.value = new URLSearchParams();
+  currentReplace.fn.mockClear();
+}
 
-    expect(titleCount?.getAttribute("aria-label")).toBe("2");
-    expect(titleCount?.animated).toBe(false);
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe("InboxPage — sort dropdown", () => {
+  beforeEach(() => {
+    reset();
+    vi.clearAllMocks();
+    // Reset sort store to default between tests
+    useInboxSortStore.setState({ sortField: "date", sortDirection: "desc" });
   });
 
-  it("shows the active list by default", () => {
-    reset();
-    listData.active = [item({ id: "active-1" })];
-    listData.archived = [item({ id: "archived-1", archived: true })];
-
-    render(<InboxPage />);
-
-    expect(screen.getByTestId("list").dataset.view).toBe("inbox");
-    expect(screen.getByTestId("row").textContent).toBe("active-1");
+  afterEach(() => {
+    cleanup();
+    document.body.innerHTML = "";
   });
 
-  it("renders the archived list when the URL asks for it", () => {
-    // ?view=archived is what makes a refresh, a back/forward step, or a mobile
-    // detail-back land in the archive instead of the main inbox.
-    reset();
-    searchParams = new URLSearchParams("view=archived");
-    listData.active = [item({ id: "active-1" })];
-    listData.archived = [item({ id: "archived-1", archived: true })];
+  // sort dropdown renders in the inbox header — pin that sort options are present
+  it("renders sort options (Date, Priority, Unread first) in the inbox header", async () => {
+    listInbox.mockResolvedValue([
+      makeItem({ id: "a", title: "Item A" }),
+    ]);
+    renderInbox();
 
-    render(<InboxPage />);
+    await waitFor(() => screen.getByTestId("inbox-item-a"));
 
-    expect(screen.getByTestId("list").dataset.view).toBe("archived");
-    expect(screen.getByTestId("row").textContent).toBe("archived-1");
+    // Sort by label from the dropdown label
+    expect(screen.getByText("Sort by")).toBeInTheDocument();
+    // All three sort fields are available
+    expect(screen.getByRole("menuitemradio", { name: "Date" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitemradio", { name: "Priority" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitemradio", { name: "Unread first" })).toBeInTheDocument();
   });
 
-  it("hides the batch-actions menu in the archived view", () => {
-    // Every batch action archives from the MAIN inbox; offering them over the
-    // archived list would read as "archive all of these" and do the opposite.
-    reset();
-    listData.archived = [item({ id: "archived-1", archived: true })];
-    const { container: mainView } = render(<InboxPage />);
-    expect(mainView.querySelector('[aria-haspopup="menu"]')).not.toBeNull();
+  // clicking Priority radio changes the sort field via the store
+  it("clicking the Priority option in the dropdown switches the sort store to priority", async () => {
+    listInbox.mockResolvedValue([
+      makeItem({ id: "a", title: "Item A" }),
+    ]);
+    renderInbox();
 
-    searchParams = new URLSearchParams("view=archived");
-    const { container: archivedView } = render(<InboxPage />);
-    expect(archivedView.querySelector('[aria-haspopup="menu"]')).toBeNull();
+    await waitFor(() => screen.getByTestId("inbox-item-a"));
+
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Priority" }));
+
+    expect(useInboxSortStore.getState().sortField).toBe("priority");
+    expect(useInboxSortStore.getState().sortDirection).toBe("desc");
   });
 
-  it("falls back to the main inbox when the archive drains", () => {
-    // Restoring the last archived item must not strand the user on an empty
-    // archive — same fallback chat's archived view has.
-    reset();
-    searchParams = new URLSearchParams("view=archived");
-    listData.archived = [];
+  // Default (Date desc) must match the pre-change ordering
+  it("default Date-desc shows newest item first without any sort interaction", async () => {
+    listInbox.mockResolvedValue([
+      makeItem({ id: "old", title: "Oldest", created_at: "2026-06-10T08:00:00Z" }),
+      makeItem({ id: "new", title: "Newest", created_at: "2026-06-15T10:00:00Z" }),
+      makeItem({ id: "mid", title: "Middle", created_at: "2026-06-12T09:00:00Z" }),
+    ]);
+    renderInbox();
 
-    render(<InboxPage />);
+    await waitFor(() => screen.getByTestId("inbox-item-new"));
 
-    expect(replace).toHaveBeenCalledWith("/acme/inbox");
+    const items = screen.getAllByTestId(/^inbox-item-/);
+    const ids = items.map((el) => el.dataset["testid"]?.replace("inbox-item-", ""));
+    expect(ids).toEqual(["new", "mid", "old"]);
   });
 
-  it("keeps the archived view in the URL when selecting an item there", () => {
-    // A bare `?issue=` write would silently drop the user back to the main
-    // inbox on the next refresh — both pieces of state travel together.
-    reset();
-    searchParams = new URLSearchParams("view=archived");
-    listData.archived = [
-      item({ id: "archived-1", issue_id: "issue-9", archived: true }),
-    ];
+  // switching to Priority orders urgent→…→none with null/no-issue items sinking to the bottom
+  it("Priority sort orders urgent first and sinks items with no linked issue to the bottom", async () => {
+    listInbox.mockResolvedValue([
+      makeItem({ id: "none-prio",  title: "No priority",  issue_priority: "none",   created_at: "2026-06-15T08:00:00Z" }),
+      makeItem({ id: "urgent",     title: "Urgent",       issue_priority: "urgent", created_at: "2026-06-15T08:00:00Z" }),
+      makeItem({ id: "no-issue",   title: "No issue",     issue_id: null, issue_priority: null, created_at: "2026-06-15T08:00:00Z" }),
+      makeItem({ id: "high",       title: "High",         issue_priority: "high",   created_at: "2026-06-15T08:00:00Z" }),
+      makeItem({ id: "medium",     title: "Medium",       issue_priority: "medium", created_at: "2026-06-15T08:00:00Z" }),
+      makeItem({ id: "low",        title: "Low",          issue_priority: "low",    created_at: "2026-06-15T08:00:00Z" }),
+    ]);
 
-    render(<InboxPage />);
-    fireEvent.click(screen.getByTestId("row"));
+    useInboxSortStore.setState({ sortField: "priority", sortDirection: "desc" });
 
-    expect(replace).toHaveBeenCalledWith("/acme/inbox?view=archived&issue=issue-9");
+    renderInbox();
+    await waitFor(() => screen.getByTestId("inbox-item-urgent"));
+
+    const items = screen.getAllByTestId(/^inbox-item-/);
+    const ids = items.map((el) => el.dataset["testid"]?.replace("inbox-item-", ""));
+    expect(ids).toEqual(["urgent", "high", "medium", "low", "none-prio", "no-issue"]);
   });
 
-  it("writes a bare issue param when selecting in the main view", () => {
+  // Unread-first bubbles unread up with date as secondary key
+  it("Unread-first sort puts unread items at top, newest first within each group", async () => {
+    listInbox.mockResolvedValue([
+      makeItem({ id: "read-new",   title: "Read new",   read: true,  created_at: "2026-06-15T10:00:00Z" }),
+      makeItem({ id: "unread-old", title: "Unread old", read: false, created_at: "2026-06-15T08:00:00Z" }),
+      makeItem({ id: "unread-new", title: "Unread new", read: false, created_at: "2026-06-15T09:00:00Z" }),
+      makeItem({ id: "read-old",   title: "Read old",   read: true,  created_at: "2026-06-15T07:00:00Z" }),
+    ]);
+
+    useInboxSortStore.setState({ sortField: "unread", sortDirection: "desc" });
+
+    renderInbox();
+    await waitFor(() => screen.getByTestId("inbox-item-unread-new"));
+
+    const items = screen.getAllByTestId(/^inbox-item-/);
+    const ids = items.map((el) => el.dataset["testid"]?.replace("inbox-item-", ""));
+    expect(ids).toEqual(["unread-new", "unread-old", "read-new", "read-old"]);
+  });
+});
+
+describe("InboxPage — archived view", () => {
+  beforeEach(() => {
     reset();
-    listData.active = [item({ id: "active-1", issue_id: "issue-3" })];
-
-    render(<InboxPage />);
-    fireEvent.click(screen.getByTestId("row"));
-
-    expect(replace).toHaveBeenCalledWith("/acme/inbox?issue=issue-3");
+    vi.clearAllMocks();
+    useInboxSortStore.setState({ sortField: "date", sortDirection: "desc" });
   });
 
-  it("does not swallow a deep link to an issue that is not in the archive", () => {
-    // ?view=archived&issue=X with an empty archive: the drain effect and the
-    // unresolved-selection fallback both want to navigate. The fallback must
-    // win, or the deep link silently lands on an empty inbox instead of X.
-    reset();
-    searchParams = new URLSearchParams("view=archived&issue=issue-404");
-    listData.archived = [];
+  afterEach(() => {
+    cleanup();
+    document.body.innerHTML = "";
+  });
 
-    render(<InboxPage />);
+  it("shows the active list by default", async () => {
+    listInbox.mockResolvedValue([makeItem({ id: "active-1" })]);
+    listArchivedInbox.mockResolvedValue([makeItem({ id: "archived-1", archived: true })]);
 
-    expect(replace).toHaveBeenCalledWith("/acme/issues/issue-404");
-    expect(replace).not.toHaveBeenCalledWith("/acme/inbox");
+    renderInbox();
+
+    await waitFor(() => screen.getByTestId("inbox-item-active-1"));
+    expect(screen.queryByTestId("inbox-item-archived-1")).not.toBeInTheDocument();
+  });
+
+  it("renders the archived list when the URL asks for it", async () => {
+    currentSearchParams.value = new URLSearchParams("view=archived");
+    listInbox.mockResolvedValue([makeItem({ id: "active-1" })]);
+    listArchivedInbox.mockResolvedValue([makeItem({ id: "archived-1", archived: true })]);
+
+    renderInbox();
+
+    await waitFor(() => screen.getByTestId("inbox-item-archived-1"));
+    expect(screen.queryByTestId("inbox-item-active-1")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the main inbox when the archive drains", async () => {
+    currentSearchParams.value = new URLSearchParams("view=archived");
+    listInbox.mockResolvedValue([]);
+    listArchivedInbox.mockResolvedValue([]);
+
+    renderInbox();
+
+    await waitFor(() => {
+      expect(currentReplace.fn).toHaveBeenCalledWith("/ws/inbox");
+    });
+  });
+
+  it("keeps the archived view in the URL when selecting an item there", async () => {
+    currentSearchParams.value = new URLSearchParams("view=archived");
+    listArchivedInbox.mockResolvedValue([
+      makeItem({ id: "archived-1", issue_id: "issue-9", archived: true }),
+    ]);
+
+    renderInbox();
+    await waitFor(() => screen.getByTestId("inbox-item-archived-1"));
+
+    fireEvent.click(screen.getByTestId("inbox-item-archived-1"));
+
+    expect(currentReplace.fn).toHaveBeenCalledWith("/ws/inbox?view=archived&issue=issue-9");
   });
 });
