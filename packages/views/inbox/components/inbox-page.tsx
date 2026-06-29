@@ -28,8 +28,14 @@ import {
   archivedInboxLookupOptions,
   deduplicateInboxItems,
   deduplicateArchivedInboxItems,
+  sortInboxItems,
   useInboxUnreadCount,
 } from "@multica/core/inbox/queries";
+import {
+  useInboxSortStore,
+  type InboxSortField,
+  type InboxSortDirection,
+} from "@multica/core/inbox/store";
 import {
   useMarkInboxRead,
   useMarkInboxUnread,
@@ -65,6 +71,7 @@ import {
   ChevronLeft,
   ListChecks,
   ArrowLeft,
+  ArrowUpDown,
 } from "lucide-react";
 import type { InboxItem } from "@multica/core/types";
 import { Button } from "@multica/ui/components/ui/button";
@@ -81,6 +88,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuGroup,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
 } from "@multica/ui/components/ui/dropdown-menu";
 import { useIsCompact } from "@multica/ui/hooks/use-mobile";
 import { cn } from "@multica/ui/lib/utils";
@@ -135,7 +146,17 @@ export function InboxPage() {
   const { data: rawItems = [], isLoading: loading } = useQuery({
     ...inboxListOptions(wsId), enabled: !isArchivedView,
   });
-  const items = useMemo(() => deduplicateInboxItems(rawItems), [rawItems]);
+  // Sort preference (persisted, workspace-aware). Select primitives
+  // individually so each selector returns a stable reference.
+  const sortField = useInboxSortStore((s) => s.sortField);
+  const sortDirection = useInboxSortStore((s) => s.sortDirection);
+  const setSortField = useInboxSortStore((s) => s.setSortField);
+  const setSortDirection = useInboxSortStore((s) => s.setSortDirection);
+
+  const items = useMemo(
+    () => sortInboxItems(deduplicateInboxItems(rawItems), sortField, sortDirection),
+    [rawItems, sortField, sortDirection],
+  );
   const archiveQuery = useInfiniteQuery({
     ...archivedInboxPagesOptions(wsId, filters), enabled: isArchivedView,
   });
@@ -516,42 +537,92 @@ export function InboxPage() {
         priorityFilterSupport={priorityFilterSupport}
         archived={isArchivedView}
       />
-      {/* Batch actions are main-view only. Every entry archives from the MAIN
-          inbox, so offering them while the archived list is on screen reads as
-          "archive all of these" and does the opposite of what it looks like. */}
+      {/* Sort and batch actions are main-view only. The archived list is
+          paginated, so a client-side sort would only order the pages loaded so
+          far; and every batch entry archives from the MAIN inbox, so offering
+          them while the archived list is on screen reads as "archive all of
+          these" and does the opposite of what it looks like. */}
       {!isArchivedView && (
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground"
-            />
-          }
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-auto">
-          <DropdownMenuItem onClick={handleMarkAllRead}>
-            <CheckCheck className="h-4 w-4" />
-            {t(($) => $.menu.mark_all_read)}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleArchiveAll}>
-            <Archive className="h-4 w-4" />
-            {t(($) => $.menu.archive_all)}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleArchiveAllRead}>
-            <BookCheck className="h-4 w-4" />
-            {t(($) => $.menu.archive_all_read)}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleArchiveCompleted}>
-            <ListChecks className="h-4 w-4" />
-            {t(($) => $.menu.archive_completed)}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className="flex items-center gap-0.5">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+              />
+            }
+          >
+            <ArrowUpDown className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-auto">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>{t(($) => $.sort.sort_by)}</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={sortField}
+                onValueChange={(value) => setSortField(value as InboxSortField)}
+              >
+                <DropdownMenuRadioItem value="date">
+                  {t(($) => $.sort.date)}
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="priority">
+                  {t(($) => $.sort.priority)}
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="unread">
+                  {t(($) => $.sort.unread)}
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuRadioGroup
+              value={sortDirection}
+              onValueChange={(value) =>
+                setSortDirection(value as InboxSortDirection)
+              }
+            >
+              <DropdownMenuRadioItem value="desc">
+                {t(($) => $.sort.desc)}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="asc">
+                {t(($) => $.sort.asc)}
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+              />
+            }
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-auto">
+            <DropdownMenuItem onClick={handleMarkAllRead}>
+              <CheckCheck className="h-4 w-4" />
+              {t(($) => $.menu.mark_all_read)}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleArchiveAll}>
+              <Archive className="h-4 w-4" />
+              {t(($) => $.menu.archive_all)}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleArchiveAllRead}>
+              <BookCheck className="h-4 w-4" />
+              {t(($) => $.menu.archive_all_read)}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleArchiveCompleted}>
+              <ListChecks className="h-4 w-4" />
+              {t(($) => $.menu.archive_completed)}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       )}
     </PageHeader>
   );
