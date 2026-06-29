@@ -55,6 +55,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -267,21 +268,23 @@ export function InboxPage() {
           <ArrowUpDown className="h-4 w-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-auto">
-          <DropdownMenuLabel>{t(($) => $.sort.sort_by)}</DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={sortField}
-            onValueChange={(value) => setSortField(value as InboxSortField)}
-          >
-            <DropdownMenuRadioItem value="date">
-              {t(($) => $.sort.date)}
-            </DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="priority">
-              {t(($) => $.sort.priority)}
-            </DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="unread">
-              {t(($) => $.sort.unread)}
-            </DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>{t(($) => $.sort.sort_by)}</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={sortField}
+              onValueChange={(value) => setSortField(value as InboxSortField)}
+            >
+              <DropdownMenuRadioItem value="date">
+                {t(($) => $.sort.date)}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="priority">
+                {t(($) => $.sort.priority)}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="unread">
+                {t(($) => $.sort.unread)}
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuRadioGroup
             value={sortDirection}
