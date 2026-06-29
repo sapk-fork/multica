@@ -29,6 +29,14 @@
     "unarchive": "Désarchiver",
     "open_in_new_tab": "Ouvrir dans un nouvel onglet"
   },
+  "sort": {
+    "sort_by": "Trier par",
+    "date": "Date",
+    "priority": "Priorité",
+    "unread": "Non lus d'abord",
+    "asc": "Croissant",
+    "desc": "Décroissant"
+  },
   "list": {
     "loading_selection": "Chargement de la notification…",
     "empty": "Aucune notification",
