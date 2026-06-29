@@ -21,9 +21,9 @@ import {
   dashboardAgentRunTimeOptions,
   dashboardRunTimeDailyOptions,
   dashboardUsageByModelOptions,
-  dashboardRuntimeRunTimeOptions,
+  dashboardRuntimeDurationOptions,
   dashboardModelRunTimeOptions,
-  dashboardRuntimeUsageOptions,
+  dashboardUsageByRuntimeOptions,
 } from "@multica/core/dashboard";
 import { runtimeListOptions } from "@multica/core/runtimes/queries";
 import { useCustomPricingStore } from "@multica/core/runtimes/custom-pricing-store";
@@ -111,7 +111,7 @@ const EMPTY_BY_MODEL: import("@multica/core/types").DashboardUsageByModel[] = []
 const EMPTY_RUNTIME: import("@multica/core/types").DashboardAgentRunTime[] = [];
 const EMPTY_RUNTIME_DAILY: import("@multica/core/types").DashboardRunTimeDaily[] = [];
 const EMPTY_AGENTS: Agent[] = [];
-const EMPTY_RUNTIME_RUNTIME: import("@multica/core/types").DashboardRuntimeRunTime[] = [];
+const EMPTY_RUNTIME_DURATION: import("@multica/core/types").DashboardRuntimeDuration[] = [];
 
 function fmtMoney(n: number): string {
   if (n >= 100) return `$${n.toFixed(0)}`;
@@ -223,14 +223,14 @@ export function DashboardPage() {
   const byModelQuery = useQuery(
     dashboardUsageByModelOptions(wsId, days, projectId, viewTZ),
   );
-  const runtimeRunTimeQuery = useQuery(
-    dashboardRuntimeRunTimeOptions(wsId, days, projectId, viewTZ),
+  const runtimeDurationQuery = useQuery(
+    dashboardRuntimeDurationOptions(wsId, days, projectId, viewTZ),
   );
   const modelRunTimeQuery = useQuery(
     dashboardModelRunTimeOptions(wsId, days, projectId, viewTZ),
   );
-  const runtimeUsageQuery = useQuery(
-    dashboardRuntimeUsageOptions(wsId, days, projectId, viewTZ),
+  const usageByRuntimeQuery = useQuery(
+    dashboardUsageByRuntimeOptions(wsId, days, projectId, viewTZ),
   );
 
   const dailyUsage = dailyQuery.data ?? EMPTY_DAILY;
@@ -238,9 +238,9 @@ export function DashboardPage() {
   const byModelUsage = byModelQuery.data ?? EMPTY_BY_MODEL;
   const runTimeRows = runTimeQuery.data ?? EMPTY_RUNTIME;
   const runTimeDailyRows = runTimeDailyQuery.data ?? EMPTY_RUNTIME_DAILY;
-  const runtimeRunTime = runtimeRunTimeQuery.data ?? EMPTY_RUNTIME_RUNTIME;
+  const runtimeDuration = runtimeDurationQuery.data ?? EMPTY_RUNTIME_DURATION;
   const modelRunTime = modelRunTimeQuery.data ?? [];
-  const runtimeUsage = runtimeUsageQuery.data ?? [];
+  const usageByRuntime = usageByRuntimeQuery.data ?? [];
 
   // Daily-aggregation surfaces (cost/tokens/time/tasks KPIs and the Daily
   // trend chart) re-scope to the user-selected `days` even when we
@@ -268,9 +268,9 @@ export function DashboardPage() {
     byModelQuery.isLoading ||
     runTimeQuery.isLoading ||
     runTimeDailyQuery.isLoading ||
-    runtimeRunTimeQuery.isLoading ||
+    runtimeDurationQuery.isLoading ||
     modelRunTimeQuery.isLoading ||
-    runtimeUsageQuery.isLoading;
+    usageByRuntimeQuery.isLoading;
 
   // Four independent rollups, but the empty-state is one decision — only
   // show "no data yet" when ALL came back empty so a project with tokens
@@ -282,7 +282,7 @@ export function DashboardPage() {
     byModelUsage.length === 0 &&
     runTimeRows.length === 0 &&
     runTimeDailyRows.length === 0 &&
-    runtimeRunTime.length === 0;
+    runtimeDuration.length === 0;
 
   // Cost / token math — re-derived when usage, days, or pricings change.
   const totals = useMemo(
@@ -467,8 +467,8 @@ export function DashboardPage() {
                 agents={agents}
                 byModelUsage={byModelUsage}
                 modelRunTime={modelRunTime}
-                runtimeRunTime={runtimeRunTime}
-                runtimeUsage={runtimeUsage}
+                runtimeDuration={runtimeDuration}
+                usageByRuntime={usageByRuntime}
                 runtimes={runtimes}
                 lessThanMinuteLabel={t(($) => $.duration.less_than_minute)}
               />
@@ -703,8 +703,8 @@ function Leaderboard({
   agents,
   byModelUsage,
   modelRunTime,
-  runtimeRunTime,
-  runtimeUsage,
+  runtimeDuration,
+  usageByRuntime,
   runtimes,
   lessThanMinuteLabel,
 }: {
@@ -712,8 +712,8 @@ function Leaderboard({
   agents: { id: string; name: string }[];
   byModelUsage: import("@multica/core/types").DashboardUsageByModel[];
   modelRunTime: import("@multica/core/types").DashboardModelRunTime[];
-  runtimeRunTime: import("@multica/core/types").DashboardRuntimeRunTime[];
-  runtimeUsage: import("@multica/core/types").DashboardRuntimeUsage[];
+  runtimeDuration: import("@multica/core/types").DashboardRuntimeDuration[];
+  usageByRuntime: import("@multica/core/types").DashboardUsageByRuntime[];
   runtimes: { id: string; name: string }[];
   lessThanMinuteLabel: string;
 }) {
@@ -726,8 +726,8 @@ function Leaderboard({
     [byModelUsage, modelRunTime],
   );
   const runtimeRows = useMemo(
-    () => aggregateRuntimeRows(runtimeRunTime, runtimeUsage),
-    [runtimeRunTime, runtimeUsage],
+    () => aggregateRuntimeRows(runtimeDuration, usageByRuntime),
+    [runtimeDuration, usageByRuntime],
   );
 
   const activeRows: (AgentDashboardRow | ModelDashboardRow | RuntimeDashboardRow)[] = useMemo(() => {

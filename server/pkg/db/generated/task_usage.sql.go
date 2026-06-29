@@ -228,7 +228,7 @@ func (q *Queries) ListDashboardRunTimeDaily(ctx context.Context, arg ListDashboa
 	return items, nil
 }
 
-const listDashboardRuntimeRunTime = `-- name: ListDashboardRuntimeRunTime :many
+const listDashboardRuntimeDuration = `-- name: ListDashboardRuntimeDuration :many
 SELECT
     atq.runtime_id,
     COALESCE(
@@ -250,13 +250,13 @@ GROUP BY atq.runtime_id
 ORDER BY total_seconds DESC
 `
 
-type ListDashboardRuntimeRunTimeParams struct {
+type ListDashboardRuntimeDurationParams struct {
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
 	Since       pgtype.Timestamptz `json:"since"`
 	ProjectID   pgtype.UUID        `json:"project_id"`
 }
 
-type ListDashboardRuntimeRunTimeRow struct {
+type ListDashboardRuntimeDurationRow struct {
 	RuntimeID    pgtype.UUID `json:"runtime_id"`
 	TotalSeconds int64       `json:"total_seconds"`
 	TaskCount    int32       `json:"task_count"`
@@ -268,15 +268,15 @@ type ListDashboardRuntimeRunTimeRow struct {
 // terminal-task filter (completed or failed with both timestamps) and
 // @since treatment (viewer's local start-of-day, passed through without
 // re-truncation).
-func (q *Queries) ListDashboardRuntimeRunTime(ctx context.Context, arg ListDashboardRuntimeRunTimeParams) ([]ListDashboardRuntimeRunTimeRow, error) {
-	rows, err := q.db.Query(ctx, listDashboardRuntimeRunTime, arg.WorkspaceID, arg.Since, arg.ProjectID)
+func (q *Queries) ListDashboardRuntimeDuration(ctx context.Context, arg ListDashboardRuntimeDurationParams) ([]ListDashboardRuntimeDurationRow, error) {
+	rows, err := q.db.Query(ctx, listDashboardRuntimeDuration, arg.WorkspaceID, arg.Since, arg.ProjectID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListDashboardRuntimeRunTimeRow{}
+	items := []ListDashboardRuntimeDurationRow{}
 	for rows.Next() {
-		var i ListDashboardRuntimeRunTimeRow
+		var i ListDashboardRuntimeDurationRow
 		if err := rows.Scan(
 			&i.RuntimeID,
 			&i.TotalSeconds,
@@ -626,7 +626,7 @@ func (q *Queries) ListDashboardModelRunTime(ctx context.Context, arg ListDashboa
 	return items, nil
 }
 
-const listDashboardRuntimeUsage = `-- name: ListDashboardRuntimeUsage :many
+const listDashboardUsageByRuntime = `-- name: ListDashboardUsageByRuntime :many
 SELECT
     atq.runtime_id,
     tu.model,
@@ -648,13 +648,13 @@ GROUP BY atq.runtime_id, tu.model
 ORDER BY atq.runtime_id, tu.model
 `
 
-type ListDashboardRuntimeUsageParams struct {
+type ListDashboardUsageByRuntimeParams struct {
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
 	Since       pgtype.Timestamptz `json:"since"`
 	ProjectID   pgtype.UUID        `json:"project_id"`
 }
 
-type ListDashboardRuntimeUsageRow struct {
+type ListDashboardUsageByRuntimeRow struct {
 	RuntimeID        pgtype.UUID `json:"runtime_id"`
 	Model            string      `json:"model"`
 	InputTokens      int64       `json:"input_tokens"`
@@ -671,15 +671,15 @@ type ListDashboardRuntimeUsageRow struct {
 // Agent/Model scopes roll up `task_usage_hourly` (no terminal filter,
 // bucket-windowed). Cross-scope totals will not reconcile; accepted
 // because `task_usage_hourly` has no `runtime_id` key.
-func (q *Queries) ListDashboardRuntimeUsage(ctx context.Context, arg ListDashboardRuntimeUsageParams) ([]ListDashboardRuntimeUsageRow, error) {
-	rows, err := q.db.Query(ctx, listDashboardRuntimeUsage, arg.WorkspaceID, arg.Since, arg.ProjectID)
+func (q *Queries) ListDashboardUsageByRuntime(ctx context.Context, arg ListDashboardUsageByRuntimeParams) ([]ListDashboardUsageByRuntimeRow, error) {
+	rows, err := q.db.Query(ctx, listDashboardUsageByRuntime, arg.WorkspaceID, arg.Since, arg.ProjectID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListDashboardRuntimeUsageRow{}
+	items := []ListDashboardUsageByRuntimeRow{}
 	for rows.Next() {
-		var i ListDashboardRuntimeUsageRow
+		var i ListDashboardUsageByRuntimeRow
 		if err := rows.Scan(
 			&i.RuntimeID,
 			&i.Model,

@@ -459,14 +459,14 @@ const DashboardUsageByModelSchema = z.object({
 
 export const DashboardUsageByModelListSchema = z.array(DashboardUsageByModelSchema);
 
-const DashboardRuntimeRunTimeSchema = z.object({
+const DashboardRuntimeDurationSchema = z.object({
   runtime_id: z.string().default(""),
   total_seconds: z.number().default(0),
   task_count: z.number().default(0),
   failed_count: z.number().default(0),
 }).loose();
 
-export const DashboardRuntimeRunTimeListSchema = z.array(DashboardRuntimeRunTimeSchema);
+export const DashboardRuntimeDurationListSchema = z.array(DashboardRuntimeDurationSchema);
 
 const DashboardModelRunTimeSchema = z.object({
   model: z.string().default(""),
@@ -477,7 +477,7 @@ const DashboardModelRunTimeSchema = z.object({
 
 export const DashboardModelRunTimeListSchema = z.array(DashboardModelRunTimeSchema);
 
-const DashboardRuntimeUsageSchema = z.object({
+const DashboardUsageByRuntimeSchema = z.object({
   runtime_id: z.string().default(""),
   model: z.string().default(""),
   input_tokens: z.number().default(0),
@@ -486,7 +486,7 @@ const DashboardRuntimeUsageSchema = z.object({
   cache_write_tokens: z.number().default(0),
 }).loose();
 
-export const DashboardRuntimeUsageListSchema = z.array(DashboardRuntimeUsageSchema);
+export const DashboardUsageByRuntimeListSchema = z.array(DashboardUsageByRuntimeSchema);
 
 // ---------------------------------------------------------------------------
 // Runtime usage schemas — the runtime-detail page's four usage endpoints

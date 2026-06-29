@@ -33,24 +33,24 @@ export const dashboardKeys = {
     projectId: string | null,
     tz: string,
   ) => [...dashboardKeys.all(wsId), "runtime-daily", days, projectId, tz] as const,
-  runtimeRunTime: (
+  runtimeDuration: (
     wsId: string,
     days: number,
     projectId: string | null,
     tz: string,
-  ) => [...dashboardKeys.all(wsId), "runtime-runtime", days, projectId, tz] as const,
+  ) => [...dashboardKeys.all(wsId), "runtime-duration", days, projectId, tz] as const,
   modelRunTime: (
     wsId: string,
     days: number,
     projectId: string | null,
     tz: string,
   ) => [...dashboardKeys.all(wsId), "model-runtime", days, projectId, tz] as const,
-  runtimeUsage: (
+  usageByRuntime: (
     wsId: string,
     days: number,
     projectId: string | null,
     tz: string,
-  ) => [...dashboardKeys.all(wsId), "runtime-usage", days, projectId, tz] as const,
+  ) => [...dashboardKeys.all(wsId), "by-runtime", days, projectId, tz] as const,
 };
 
 // 5-min rollup cadence on the server, 60s background refetch on the client.
@@ -155,16 +155,16 @@ export function dashboardUsageByModelOptions(
   });
 }
 
-export function dashboardRuntimeRunTimeOptions(
+export function dashboardRuntimeDurationOptions(
   wsId: string,
   days: number,
   projectId: string | null,
   tz: string,
 ) {
   return queryOptions({
-    queryKey: dashboardKeys.runtimeRunTime(wsId, days, projectId, tz),
+    queryKey: dashboardKeys.runtimeDuration(wsId, days, projectId, tz),
     queryFn: () =>
-      api.getDashboardRuntimeRunTime({
+      api.getDashboardRuntimeDuration({
         days,
         project_id: projectId ?? undefined,
         tz,
@@ -193,16 +193,16 @@ export function dashboardModelRunTimeOptions(
   });
 }
 
-export function dashboardRuntimeUsageOptions(
+export function dashboardUsageByRuntimeOptions(
   wsId: string,
   days: number,
   projectId: string | null,
   tz: string,
 ) {
   return queryOptions({
-    queryKey: dashboardKeys.runtimeUsage(wsId, days, projectId, tz),
+    queryKey: dashboardKeys.usageByRuntime(wsId, days, projectId, tz),
     queryFn: () =>
-      api.getDashboardRuntimeUsage({
+      api.getDashboardUsageByRuntime({
         days,
         project_id: projectId ?? undefined,
         tz,
