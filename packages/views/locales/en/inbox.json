@@ -9,6 +9,14 @@
     "archive_all_read": "Archive all read",
     "archive_completed": "Archive completed"
   },
+  "sort": {
+    "sort_by": "Sort by",
+    "date": "Date",
+    "priority": "Priority",
+    "unread": "Unread first",
+    "asc": "Ascending",
+    "desc": "Descending"
+  },
   "list": {
     "empty": "No notifications",
     "mark_done_tooltip": "Mark as done",

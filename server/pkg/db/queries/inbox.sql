@@ -1,6 +1,7 @@
 -- name: ListInboxItems :many
 SELECT i.*,
-       iss.status as issue_status
+       iss.status as issue_status,
+       iss.priority as issue_priority
 FROM inbox_item i
 LEFT JOIN issue iss ON iss.id = i.issue_id
 WHERE i.workspace_id = $1 AND i.recipient_type = $2 AND i.recipient_id = $3 AND i.archived = false

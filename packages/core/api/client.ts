@@ -266,6 +266,8 @@ import {
   EMPTY_CREATE_FEEDBACK_RESPONSE,
   InboxUnreadSummarySchema,
   EMPTY_INBOX_UNREAD_SUMMARY,
+  InboxListSchema,
+  EMPTY_INBOX_LIST,
   InboxItemListSchema,
   EMPTY_INBOX_ITEMS,
   NotificationPreferenceResponseSchema,
@@ -1756,7 +1758,10 @@ export class ApiClient {
 
   // Inbox
   async listInbox(): Promise<InboxItem[]> {
-    return this.fetch("/api/inbox");
+    const raw = await this.fetch<unknown>("/api/inbox");
+    return parseWithFallback(raw, InboxListSchema, EMPTY_INBOX_LIST, {
+      endpoint: "GET /api/inbox",
+    });
   }
 
   async markInboxRead(id: string): Promise<InboxItem> {

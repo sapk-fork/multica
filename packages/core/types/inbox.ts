@@ -1,4 +1,4 @@
-import type { IssueStatus } from "./issue";
+import type { IssuePriority, IssueStatus } from "./issue";
 
 export type InboxSeverity = "action_required" | "attention" | "info";
 
@@ -46,6 +46,7 @@ export interface InboxItem {
   title: string;
   body: string | null;
   issue_status: IssueStatus | null;
+  issue_priority: IssuePriority | null;
   read: boolean;
   archived: boolean;
   created_at: string;

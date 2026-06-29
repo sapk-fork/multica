@@ -9,6 +9,14 @@
     "archive_all_read": "既読の項目をすべてアーカイブ",
     "archive_completed": "完了した項目をアーカイブ"
   },
+  "sort": {
+    "sort_by": "並べ替え",
+    "date": "日付",
+    "priority": "優先度",
+    "unread": "未読を優先",
+    "asc": "昇順",
+    "desc": "降順"
+  },
   "list": {
     "empty": "通知はありません",
     "mark_done_tooltip": "完了にする",
