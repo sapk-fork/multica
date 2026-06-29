@@ -1,6 +1,7 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import type { InboxItem, InboxWorkspaceUnread } from "../types";
+import type { InboxSortDirection, InboxSortField } from "./store";
 
 export const inboxKeys = {
   all: (wsId: string) => ["inbox", wsId] as const,
@@ -109,4 +110,55 @@ export function deduplicateInboxItems(items: InboxItem[]): InboxItem[] {
     (a, b) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   );
+}
+
+// Higher rank sorts first under the default (desc) direction. Items with no
+// linked issue have a null priority and rank below "none", so they land at the
+// bottom of a priority-desc list.
+const INBOX_PRIORITY_RANK: Record<string, number> = {
+  urgent: 5,
+  high: 4,
+  medium: 3,
+  low: 2,
+  none: 1,
+};
+
+function inboxDateMillis(item: InboxItem): number {
+  return new Date(item.created_at).getTime();
+}
+
+// Per-field score where a HIGHER value sorts first under "desc" (the default
+// direction for every field). "asc" inverts the comparison.
+function inboxSortScore(item: InboxItem, field: InboxSortField): number {
+  switch (field) {
+    case "priority":
+      return item.issue_priority
+        ? (INBOX_PRIORITY_RANK[item.issue_priority] ?? 0)
+        : 0;
+    case "unread":
+      // Unread (read === false) outranks read.
+      return item.read ? 0 : 1;
+    default:
+      return inboxDateMillis(item);
+  }
+}
+
+/**
+ * Sort the (already deduplicated) inbox list by the chosen field/direction.
+ * Pure and non-mutating — returns a new array. Date is the secondary key for
+ * every field, so within an equal priority/read group items stay newest-first.
+ */
+export function sortInboxItems(
+  items: InboxItem[],
+  field: InboxSortField,
+  direction: InboxSortDirection,
+): InboxItem[] {
+  const factor = direction === "asc" ? -1 : 1;
+  return [...items].sort((a, b) => {
+    const primary =
+      factor * (inboxSortScore(b, field) - inboxSortScore(a, field));
+    if (primary !== 0) return primary;
+    // Stable secondary key: newest first.
+    return inboxDateMillis(b) - inboxDateMillis(a);
+  });
 }

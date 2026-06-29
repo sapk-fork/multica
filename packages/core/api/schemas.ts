@@ -15,6 +15,7 @@ import type {
   CreateBillingCheckoutSessionResponse,
   CreateBillingPortalSessionResponse,
   GroupedIssuesResponse,
+  InboxItem,
   InboxWorkspaceUnread,
   ListIssuesResponse,
   ListWebhookDeliveriesResponse,
@@ -933,6 +934,41 @@ export const InboxUnreadSummarySchema = z.array(
 );
 
 export const EMPTY_INBOX_UNREAD_SUMMARY: InboxWorkspaceUnread[] = [];
+
+// ---------------------------------------------------------------------------
+// Inbox list (`/api/inbox` GET). Lenient per the usual rules: enums stay as
+// plain strings so an unknown notification type / severity / status / priority
+// from a newer backend still parses, and the object is loose so an added field
+// can't blank the list. On malformed JSON parseWithFallback returns the empty
+// list, so the inbox renders empty rather than white-screening an installed
+// desktop build talking to a drifted backend.
+// ---------------------------------------------------------------------------
+
+export const InboxItemSchema = z
+  .object({
+    id: z.string(),
+    workspace_id: z.string(),
+    recipient_type: z.string(),
+    recipient_id: z.string(),
+    actor_type: z.string().nullable(),
+    actor_id: z.string().nullable(),
+    type: z.string(),
+    severity: z.string(),
+    issue_id: z.string().nullable(),
+    title: z.string(),
+    body: z.string().nullable(),
+    issue_status: z.string().nullable(),
+    issue_priority: z.string().nullable(),
+    read: z.boolean(),
+    archived: z.boolean(),
+    created_at: z.string(),
+    details: z.record(z.string(), z.string()).nullable(),
+  })
+  .loose();
+
+export const InboxListSchema = z.array(InboxItemSchema);
+
+export const EMPTY_INBOX_LIST: InboxItem[] = [];
 
 // ---------------------------------------------------------------------------
 // Billing schemas (cloud-billing proxy surface)

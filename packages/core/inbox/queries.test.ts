@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { InboxItem, InboxWorkspaceUnread } from "../types";
-import { deduplicateInboxItems, hasOtherWorkspaceUnread, inboxKeys, unreadWorkspaceIds } from "./queries";
+import {
+  deduplicateInboxItems,
+  hasOtherWorkspaceUnread,
+  inboxKeys,
+  sortInboxItems,
+  unreadWorkspaceIds,
+} from "./queries";
 
 function item(overrides: Partial<InboxItem>): InboxItem {
   return {
@@ -16,6 +22,7 @@ function item(overrides: Partial<InboxItem>): InboxItem {
     title: "Issue title",
     body: null,
     issue_status: null,
+    issue_priority: null,
     read: false,
     archived: false,
     created_at: "2026-06-15T08:00:00Z",
@@ -150,5 +157,118 @@ describe("unreadWorkspaceIds", () => {
 describe("inboxKeys.unreadSummary", () => {
   it("is a stable account-level key independent of any workspace", () => {
     expect(inboxKeys.unreadSummary()).toEqual(["inbox", "unread-summary"]);
+  });
+});
+
+describe("sortInboxItems", () => {
+  const ids = (items: InboxItem[]) => items.map((i) => i.id);
+
+  it("does not mutate the input array", () => {
+    const input = [
+      item({ id: "a", created_at: "2026-06-15T08:00:00Z" }),
+      item({ id: "b", created_at: "2026-06-15T09:00:00Z" }),
+    ];
+    const snapshot = ids(input);
+    sortInboxItems(input, "date", "desc");
+    expect(ids(input)).toEqual(snapshot);
+  });
+
+  it("date desc puts newest first", () => {
+    const sorted = sortInboxItems(
+      [
+        item({ id: "old", created_at: "2026-06-15T08:00:00Z" }),
+        item({ id: "new", created_at: "2026-06-15T10:00:00Z" }),
+        item({ id: "mid", created_at: "2026-06-15T09:00:00Z" }),
+      ],
+      "date",
+      "desc",
+    );
+    expect(ids(sorted)).toEqual(["new", "mid", "old"]);
+  });
+
+  it("date asc puts oldest first", () => {
+    const sorted = sortInboxItems(
+      [
+        item({ id: "new", created_at: "2026-06-15T10:00:00Z" }),
+        item({ id: "old", created_at: "2026-06-15T08:00:00Z" }),
+      ],
+      "date",
+      "asc",
+    );
+    expect(ids(sorted)).toEqual(["old", "new"]);
+  });
+
+  it("priority desc orders urgent→none and sinks items with no linked issue", () => {
+    const sorted = sortInboxItems(
+      [
+        item({ id: "low", issue_priority: "low" }),
+        item({ id: "none", issue_priority: "none" }),
+        item({ id: "no-issue", issue_id: null, issue_priority: null }),
+        item({ id: "urgent", issue_priority: "urgent" }),
+        item({ id: "high", issue_priority: "high" }),
+        item({ id: "medium", issue_priority: "medium" }),
+      ],
+      "priority",
+      "desc",
+    );
+    expect(ids(sorted)).toEqual([
+      "urgent",
+      "high",
+      "medium",
+      "low",
+      "none",
+      "no-issue",
+    ]);
+  });
+
+  it("priority asc reverses the order", () => {
+    const sorted = sortInboxItems(
+      [
+        item({ id: "urgent", issue_priority: "urgent" }),
+        item({ id: "low", issue_priority: "low" }),
+        item({ id: "no-issue", issue_id: null, issue_priority: null }),
+      ],
+      "priority",
+      "asc",
+    );
+    expect(ids(sorted)).toEqual(["no-issue", "low", "urgent"]);
+  });
+
+  it("priority desc breaks ties by newest first", () => {
+    const sorted = sortInboxItems(
+      [
+        item({ id: "high-old", issue_priority: "high", created_at: "2026-06-15T08:00:00Z" }),
+        item({ id: "high-new", issue_priority: "high", created_at: "2026-06-15T10:00:00Z" }),
+      ],
+      "priority",
+      "desc",
+    );
+    expect(ids(sorted)).toEqual(["high-new", "high-old"]);
+  });
+
+  it("unread desc puts unread first, newest within each group", () => {
+    const sorted = sortInboxItems(
+      [
+        item({ id: "read-new", read: true, created_at: "2026-06-15T10:00:00Z" }),
+        item({ id: "unread-old", read: false, created_at: "2026-06-15T08:00:00Z" }),
+        item({ id: "unread-new", read: false, created_at: "2026-06-15T09:00:00Z" }),
+        item({ id: "read-old", read: true, created_at: "2026-06-15T07:00:00Z" }),
+      ],
+      "unread",
+      "desc",
+    );
+    expect(ids(sorted)).toEqual(["unread-new", "unread-old", "read-new", "read-old"]);
+  });
+
+  it("unread asc puts read first", () => {
+    const sorted = sortInboxItems(
+      [
+        item({ id: "unread", read: false }),
+        item({ id: "read", read: true }),
+      ],
+      "unread",
+      "asc",
+    );
+    expect(ids(sorted)).toEqual(["read", "unread"]);
   });
 });

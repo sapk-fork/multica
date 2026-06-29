@@ -24,6 +24,7 @@ function makeItem(
     title: `item ${id}`,
     body: null,
     issue_status: null,
+    issue_priority: null,
     read: false,
     archived: false,
     created_at: "2025-01-01T00:00:00Z",

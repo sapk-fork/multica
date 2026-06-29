@@ -5,8 +5,10 @@ import {
   DashboardUsageByAgentListSchema,
   DashboardUsageDailyListSchema,
   DuplicateIssueErrorBodySchema,
+  EMPTY_INBOX_LIST,
   EMPTY_INBOX_UNREAD_SUMMARY,
   EMPTY_USER,
+  InboxListSchema,
   InboxUnreadSummarySchema,
   IssueTriggerPreviewSchema,
   ListIssuesResponseSchema,
@@ -455,5 +457,70 @@ describe("InboxUnreadSummarySchema", () => {
         ENDPOINT,
       ),
     ).toBe(EMPTY_INBOX_UNREAD_SUMMARY);
+  });
+});
+
+describe("InboxListSchema", () => {
+  const ENDPOINT = { endpoint: "GET /api/inbox" };
+
+  const item = {
+    id: "in-1",
+    workspace_id: "ws-1",
+    recipient_type: "member",
+    recipient_id: "user-1",
+    actor_type: "member",
+    actor_id: "user-2",
+    type: "new_comment",
+    severity: "info",
+    issue_id: "iss-1",
+    title: "New comment",
+    body: "hello",
+    issue_status: "in_progress",
+    issue_priority: "high",
+    read: false,
+    archived: false,
+    created_at: "2026-06-29T00:00:00Z",
+    details: { foo: "bar" },
+  };
+
+  it("parses well-formed items, including null issue_priority and extra fields", () => {
+    const parsed = parseWithFallback(
+      [
+        item,
+        { ...item, id: "in-2", issue_id: null, issue_status: null, issue_priority: null },
+        { ...item, id: "in-3", future_field: "ignored" },
+      ],
+      InboxListSchema,
+      EMPTY_INBOX_LIST,
+      ENDPOINT,
+    );
+    expect(parsed).toHaveLength(3);
+    expect(parsed[1]?.issue_priority).toBeNull();
+  });
+
+  it("tolerates an unknown issue_priority enum from a newer backend", () => {
+    const parsed = parseWithFallback(
+      [{ ...item, issue_priority: "critical" }],
+      InboxListSchema,
+      EMPTY_INBOX_LIST,
+      ENDPOINT,
+    );
+    expect(parsed[0]?.issue_priority).toBe("critical");
+  });
+
+  it("returns the empty fallback for a non-array body", () => {
+    expect(
+      parseWithFallback({ items: [] }, InboxListSchema, EMPTY_INBOX_LIST, ENDPOINT),
+    ).toBe(EMPTY_INBOX_LIST);
+    expect(parseWithFallback(null, InboxListSchema, EMPTY_INBOX_LIST, ENDPOINT)).toBe(
+      EMPTY_INBOX_LIST,
+    );
+  });
+
+  it("returns the empty fallback when an item is missing a required field", () => {
+    const { title: _omitted, ...withoutTitle } = item;
+    expect(
+      parseWithFallback([withoutTitle], InboxListSchema, EMPTY_INBOX_LIST, ENDPOINT),
+    ).toBe(EMPTY_INBOX_LIST);
   });
 });

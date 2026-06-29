@@ -27,6 +27,7 @@ type InboxItemResponse struct {
 	Archived      bool            `json:"archived"`
 	CreatedAt     string          `json:"created_at"`
 	IssueStatus   *string         `json:"issue_status"`
+	IssuePriority *string         `json:"issue_priority"`
 	ActorType     *string         `json:"actor_type"`
 	ActorID       *string         `json:"actor_id"`
 	Details       json.RawMessage `json:"details"`
@@ -67,6 +68,7 @@ func inboxRowToResponse(r db.ListInboxItemsRow) InboxItemResponse {
 		Archived:      r.Archived,
 		CreatedAt:     timestampToString(r.CreatedAt),
 		IssueStatus:   textToPtr(r.IssueStatus),
+		IssuePriority: textToPtr(r.IssuePriority),
 		ActorType:     textToPtr(r.ActorType),
 		ActorID:       uuidToPtr(r.ActorID),
 		Details:       json.RawMessage(r.Details),
@@ -81,6 +83,8 @@ func (h *Handler) enrichInboxResponse(ctx context.Context, resp InboxItemRespons
 	if err == nil {
 		s := issue.Status
 		resp.IssueStatus = &s
+		p := issue.Priority
+		resp.IssuePriority = &p
 	}
 	return resp
 }

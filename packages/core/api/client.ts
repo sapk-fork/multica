@@ -208,6 +208,8 @@ import {
   EMPTY_CANCEL_TASK_RESPONSE,
   InboxUnreadSummarySchema,
   EMPTY_INBOX_UNREAD_SUMMARY,
+  InboxListSchema,
+  EMPTY_INBOX_LIST,
 } from "./schemas";
 
 /** Identifies the calling client to the server.
@@ -1463,7 +1465,10 @@ export class ApiClient {
 
   // Inbox
   async listInbox(): Promise<InboxItem[]> {
-    return this.fetch("/api/inbox");
+    const raw = await this.fetch<unknown>("/api/inbox");
+    return parseWithFallback(raw, InboxListSchema, EMPTY_INBOX_LIST, {
+      endpoint: "GET /api/inbox",
+    });
   }
 
   async markInboxRead(id: string): Promise<InboxItem> {

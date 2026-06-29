@@ -10,8 +10,14 @@ import { useIssueDraftStore } from "@multica/core/issues/stores/draft-store";
 import {
   inboxListOptions,
   deduplicateInboxItems,
+  sortInboxItems,
   useInboxUnreadCount,
 } from "@multica/core/inbox/queries";
+import {
+  useInboxSortStore,
+  type InboxSortField,
+  type InboxSortDirection,
+} from "@multica/core/inbox/store";
 import {
   useMarkInboxRead,
   useArchiveInbox,
@@ -33,6 +39,7 @@ import {
   BookCheck,
   ListChecks,
   ArrowLeft,
+  ArrowUpDown,
 } from "lucide-react";
 import type { InboxItem } from "@multica/core/types";
 import { Button } from "@multica/ui/components/ui/button";
@@ -48,6 +55,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
 } from "@multica/ui/components/ui/dropdown-menu";
 import { useIsMobile } from "@multica/ui/hooks/use-mobile";
 import { PageHeader } from "../../layout/page-header";
@@ -71,7 +81,18 @@ export function InboxPage() {
 
   const wsId = useWorkspaceId();
   const { data: rawItems = [], isLoading: loading } = useQuery(inboxListOptions(wsId));
-  const items = useMemo(() => deduplicateInboxItems(rawItems), [rawItems]);
+
+  // Sort preference (persisted, workspace-aware). Select primitives
+  // individually so each selector returns a stable reference.
+  const sortField = useInboxSortStore((s) => s.sortField);
+  const sortDirection = useInboxSortStore((s) => s.sortDirection);
+  const setSortField = useInboxSortStore((s) => s.setSortField);
+  const setSortDirection = useInboxSortStore((s) => s.setSortDirection);
+
+  const items = useMemo(
+    () => sortInboxItems(deduplicateInboxItems(rawItems), sortField, sortDirection),
+    [rawItems, sortField, sortDirection],
+  );
 
   const selected = items.find((i) => (i.issue_id ?? i.id) === selectedKey) ?? null;
 
@@ -232,6 +253,51 @@ export function InboxPage() {
           </span>
         )}
       </div>
+      <div className="flex items-center gap-0.5">
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground"
+            />
+          }
+        >
+          <ArrowUpDown className="h-4 w-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-auto">
+          <DropdownMenuLabel>{t(($) => $.sort.sort_by)}</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={sortField}
+            onValueChange={(value) => setSortField(value as InboxSortField)}
+          >
+            <DropdownMenuRadioItem value="date">
+              {t(($) => $.sort.date)}
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="priority">
+              {t(($) => $.sort.priority)}
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="unread">
+              {t(($) => $.sort.unread)}
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuRadioGroup
+            value={sortDirection}
+            onValueChange={(value) =>
+              setSortDirection(value as InboxSortDirection)
+            }
+          >
+            <DropdownMenuRadioItem value="desc">
+              {t(($) => $.sort.desc)}
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="asc">
+              {t(($) => $.sort.asc)}
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
@@ -264,6 +330,7 @@ export function InboxPage() {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      </div>
     </PageHeader>
   );
 
