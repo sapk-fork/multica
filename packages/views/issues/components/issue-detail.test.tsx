@@ -706,10 +706,9 @@ describe("IssueDetail (shared)", () => {
     expect(screen.queryByText("pipeline_status")).not.toBeInTheDocument();
   });
 
-  it("renders the Git section in the sidebar when both branches are set", async () => {
-    // M-44: an issue pinned to specific work/base branches must surface them
-    // read-only in the properties sidebar. Editing from the UI is deferred —
-    // the values come from `multica issue create/update --git-work-branch`.
+  it("renders editable work/base branch rows in the sidebar when both branches are set", async () => {
+    // M-59: an issue pinned to specific work/base branches surfaces them as
+    // editable property rows (each a BranchPicker showing the current value).
     mockApiObj.getIssue.mockResolvedValue({
       ...mockIssue,
       git_work_branch: "feature/m-44-thing",
@@ -719,17 +718,20 @@ describe("IssueDetail (shared)", () => {
     renderIssueDetail();
 
     await waitFor(() => {
-      expect(screen.getByTestId("issue-git-branches")).toBeInTheDocument();
+      expect(screen.getByText("feature/m-44-thing")).toBeInTheDocument();
     });
 
-    // Both branch names render as monospace text. The "Git" header is the
-    // section anchor; the two label cells are "Work branch" / "Base branch".
-    expect(screen.getByText("feature/m-44-thing")).toBeInTheDocument();
+    // The two property rows are labelled "Work branch" / "Base branch" and
+    // each picker trigger shows its current value.
+    expect(screen.getByText("Work branch")).toBeInTheDocument();
+    expect(screen.getByText("Base branch")).toBeInTheDocument();
     expect(screen.getByText("main")).toBeInTheDocument();
   });
 
-  it("hides the Git section when neither branch is set", async () => {
-    // No pinning on the issue → no Git block in the sidebar.
+  it("does not show the git branch rows when neither branch is set", async () => {
+    // No pinning on the issue → the rows stay hidden until added via the
+    // "+ Add property" picker (the popover is closed by default, so its
+    // option labels are not in the DOM either).
     mockApiObj.getIssue.mockResolvedValue({
       ...mockIssue,
       git_work_branch: null,
@@ -742,7 +744,8 @@ describe("IssueDetail (shared)", () => {
       expect(screen.getByText("Properties")).toBeInTheDocument();
     });
 
-    expect(screen.queryByTestId("issue-git-branches")).not.toBeInTheDocument();
+    expect(screen.queryByText("Work branch")).not.toBeInTheDocument();
+    expect(screen.queryByText("Base branch")).not.toBeInTheDocument();
   });
 
   it("opens a dialog with formatted JSON when the Metadata button is clicked", async () => {
