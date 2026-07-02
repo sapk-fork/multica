@@ -1769,6 +1769,8 @@ describe("SwimLaneView", () => {
       stage: null,
       start_date: null,
       due_date: null,
+      git_work_branch: null,
+      git_base_branch: null,
       metadata: {},
       properties: {},
       created_at: "2026-01-01T00:00:00Z",
