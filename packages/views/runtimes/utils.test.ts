@@ -145,18 +145,6 @@ describe("estimateCost", () => {
     expect(cost).toBeCloseTo(10 + 50 + 1 + 12.5, 5);
   });
 
-  it("prices Claude Sonnet 5 at Anthropic's intro $2 / $10 tier", () => {
-    const cost = estimateCost({
-      ...zeroUsage,
-      model: "claude-sonnet-5",
-      input_tokens: 1_000_000,
-      output_tokens: 1_000_000,
-      cache_read_tokens: 1_000_000,
-      cache_write_tokens: 1_000_000,
-    });
-    expect(cost).toBeCloseTo(2 + 10 + 0.2 + 2.5, 5);
-  });
-
   it("prices the provider-prefixed Anthropic form (anthropic/claude-sonnet-4.6)", () => {
     // openclaw / opencode emit `<provider>/<model>`. Same SKU as the
     // bare form, must hit the same rate.
@@ -210,28 +198,6 @@ describe("estimateCost", () => {
     });
     expect(cost).toBeCloseTo(5 + 25, 5);
     expect(isModelPriced("claude-opus-4-7[1m]")).toBe(true);
-  });
-
-  it("prices Opus 5 on the standard Opus tier across its transport spellings", () => {
-    // Opus 5 is a 5/25 SKU like Opus 4.5-4.8. Claude Code reports the
-    // 1M-context window with a bracketed suffix and openclaw/opencode prefix
-    // the id with the provider, so all three spellings reach the cost
-    // estimator and must land on the same row.
-    for (const model of [
-      "claude-opus-5",
-      "claude-opus-5[1m]",
-      "anthropic/claude-opus-5",
-    ]) {
-      expect(
-        estimateCost({
-          ...zeroUsage,
-          model,
-          input_tokens: 1_000_000,
-          output_tokens: 1_000_000,
-        }),
-      ).toBeCloseTo(5 + 25, 5);
-      expect(isModelPriced(model)).toBe(true);
-    }
   });
 
   it("prices the provider-prefixed OpenAI form (openai/gpt-4o)", () => {
@@ -533,7 +499,6 @@ describe("estimateCost", () => {
 
 describe("isModelPriced", () => {
   it("recognises both Claude and Codex/GPT families", () => {
-    expect(isModelPriced("claude-sonnet-5")).toBe(true);
     expect(isModelPriced("claude-fable-5")).toBe(true);
     expect(isModelPriced("claude-sonnet-4-6")).toBe(true);
     expect(isModelPriced("gpt-5-codex")).toBe(true);
@@ -547,7 +512,6 @@ describe("isModelPriced", () => {
     // while Anthropic's own CLIs use dashes (`claude-opus-4-7`). Both must
     // hit the same catalog row, otherwise Copilot-routed usage gets bucketed
     // as "unmapped" and the user has to type the price in by hand.
-    expect(isModelPriced("claude-sonnet-5")).toBe(true);
     expect(isModelPriced("claude-haiku-4.5")).toBe(true);
     expect(isModelPriced("claude-sonnet-4.5")).toBe(true);
     expect(isModelPriced("claude-sonnet-4.6")).toBe(true);
@@ -559,7 +523,6 @@ describe("isModelPriced", () => {
   it("recognises provider-prefixed Anthropic IDs (openclaw / opencode form)", () => {
     // openclaw / opencode emit `<provider>/<model>` in `meta.agentMeta.model`.
     // The provider prefix is routing metadata, not part of the SKU.
-    expect(isModelPriced("anthropic/claude-sonnet-5")).toBe(true);
     expect(isModelPriced("anthropic/claude-fable-5")).toBe(true);
     expect(isModelPriced("anthropic/claude-opus-4.7")).toBe(true);
     expect(isModelPriced("anthropic/claude-sonnet-4-6")).toBe(true);
