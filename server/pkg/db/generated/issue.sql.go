@@ -532,7 +532,7 @@ func (q *Queries) FindActiveIssueByWorkBranch(ctx context.Context, arg FindActiv
 }
 
 const findRecentAutopilotDuplicateIssue = `-- name: FindRecentAutopilotDuplicateIssue :one
-SELECT i.id, i.workspace_id, i.title, i.description, i.status, i.priority, i.assignee_type, i.assignee_id, i.creator_type, i.creator_id, i.parent_issue_id, i.acceptance_criteria, i.context_refs, i.position, i.due_date, i.created_at, i.updated_at, i.number, i.project_id, i.origin_type, i.origin_id, i.first_executed_at, i.start_date, i.metadata, i.stage FROM issue i
+SELECT i.id, i.workspace_id, i.title, i.description, i.status, i.priority, i.assignee_type, i.assignee_id, i.creator_type, i.creator_id, i.parent_issue_id, i.acceptance_criteria, i.context_refs, i.position, i.due_date, i.created_at, i.updated_at, i.number, i.project_id, i.origin_type, i.origin_id, i.first_executed_at, i.start_date, i.metadata, i.git_work_branch, i.git_base_branch, i.stage FROM issue i
 WHERE i.workspace_id = $1
   AND i.status NOT IN ('done', 'cancelled')
   AND i.origin_type = 'autopilot'
@@ -593,6 +593,8 @@ func (q *Queries) FindRecentAutopilotDuplicateIssue(ctx context.Context, arg Fin
 		&i.FirstExecutedAt,
 		&i.StartDate,
 		&i.Metadata,
+		&i.GitWorkBranch,
+		&i.GitBaseBranch,
 		&i.Stage,
 	)
 	return i, err
