@@ -139,7 +139,7 @@ const clearRuntimeHold = `-- name: ClearRuntimeHold :one
 UPDATE agent_runtime
 SET hold_until = NULL, hold_reason = NULL, updated_at = now()
 WHERE id = $1
-RETURNING id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id, visibility, hold_until, hold_reason, profile_id
+RETURNING id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id, visibility, profile_id, hold_until, hold_reason
 `
 
 func (q *Queries) ClearRuntimeHold(ctx context.Context, id pgtype.UUID) (AgentRuntime, error) {
@@ -161,9 +161,9 @@ func (q *Queries) ClearRuntimeHold(ctx context.Context, id pgtype.UUID) (AgentRu
 		&i.OwnerID,
 		&i.LegacyDaemonID,
 		&i.Visibility,
+		&i.ProfileID,
 		&i.HoldUntil,
 		&i.HoldReason,
-		&i.ProfileID,
 	)
 	return i, err
 }
@@ -392,9 +392,9 @@ func (q *Queries) FindLegacyRuntimesByDaemonID(ctx context.Context, arg FindLega
 			&i.OwnerID,
 			&i.LegacyDaemonID,
 			&i.Visibility,
+			&i.ProfileID,
 			&i.HoldUntil,
 			&i.HoldReason,
-			&i.ProfileID,
 			&i.CustomName,
 		); err != nil {
 			return nil, err
@@ -478,9 +478,9 @@ func (q *Queries) GetAgentRuntime(ctx context.Context, id pgtype.UUID) (AgentRun
 		&i.OwnerID,
 		&i.LegacyDaemonID,
 		&i.Visibility,
+		&i.ProfileID,
 		&i.HoldUntil,
 		&i.HoldReason,
-		&i.ProfileID,
 		&i.CustomName,
 	)
 	return i, err
@@ -515,9 +515,9 @@ func (q *Queries) GetAgentRuntimeForWorkspace(ctx context.Context, arg GetAgentR
 		&i.OwnerID,
 		&i.LegacyDaemonID,
 		&i.Visibility,
+		&i.ProfileID,
 		&i.HoldUntil,
 		&i.HoldReason,
-		&i.ProfileID,
 		&i.CustomName,
 	)
 	return i, err
@@ -554,9 +554,9 @@ func (q *Queries) ListAgentRuntimes(ctx context.Context, workspaceID pgtype.UUID
 			&i.OwnerID,
 			&i.LegacyDaemonID,
 			&i.Visibility,
+			&i.ProfileID,
 			&i.HoldUntil,
 			&i.HoldReason,
-			&i.ProfileID,
 			&i.CustomName,
 		); err != nil {
 			return nil, err
@@ -605,9 +605,9 @@ func (q *Queries) ListAgentRuntimesByOwner(ctx context.Context, arg ListAgentRun
 			&i.OwnerID,
 			&i.LegacyDaemonID,
 			&i.Visibility,
+			&i.ProfileID,
 			&i.HoldUntil,
 			&i.HoldReason,
-			&i.ProfileID,
 			&i.CustomName,
 		); err != nil {
 			return nil, err
@@ -726,9 +726,9 @@ func (q *Queries) LockAgentRuntime(ctx context.Context, id pgtype.UUID) (AgentRu
 		&i.OwnerID,
 		&i.LegacyDaemonID,
 		&i.Visibility,
+		&i.ProfileID,
 		&i.HoldUntil,
 		&i.HoldReason,
-		&i.ProfileID,
 		&i.CustomName,
 	)
 	return i, err
@@ -763,9 +763,9 @@ func (q *Queries) MarkAgentRuntimeOnline(ctx context.Context, id pgtype.UUID) (A
 		&i.OwnerID,
 		&i.LegacyDaemonID,
 		&i.Visibility,
+		&i.ProfileID,
 		&i.HoldUntil,
 		&i.HoldReason,
-		&i.ProfileID,
 		&i.CustomName,
 	)
 	return i, err
@@ -970,7 +970,7 @@ const setRuntimeHold = `-- name: SetRuntimeHold :one
 UPDATE agent_runtime
 SET hold_until = $1, hold_reason = $2, updated_at = now()
 WHERE id = $3
-RETURNING id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id, visibility, hold_until, hold_reason, profile_id
+RETURNING id, workspace_id, daemon_id, name, runtime_mode, provider, status, device_info, metadata, last_seen_at, created_at, updated_at, owner_id, legacy_daemon_id, visibility, profile_id, hold_until, hold_reason
 `
 
 type SetRuntimeHoldParams struct {
@@ -998,9 +998,9 @@ func (q *Queries) SetRuntimeHold(ctx context.Context, arg SetRuntimeHoldParams) 
 		&i.OwnerID,
 		&i.LegacyDaemonID,
 		&i.Visibility,
+		&i.ProfileID,
 		&i.HoldUntil,
 		&i.HoldReason,
-		&i.ProfileID,
 	)
 	return i, err
 }
@@ -1196,9 +1196,9 @@ func (q *Queries) UpdateAgentRuntimeVisibility(ctx context.Context, arg UpdateAg
 		&i.OwnerID,
 		&i.LegacyDaemonID,
 		&i.Visibility,
+		&i.ProfileID,
 		&i.HoldUntil,
 		&i.HoldReason,
-		&i.ProfileID,
 		&i.CustomName,
 	)
 	return i, err
@@ -1258,9 +1258,9 @@ type UpsertAgentRuntimeRow struct {
 	OwnerID        pgtype.UUID        `json:"owner_id"`
 	LegacyDaemonID pgtype.Text        `json:"legacy_daemon_id"`
 	Visibility     string             `json:"visibility"`
+	ProfileID      pgtype.UUID        `json:"profile_id"`
 	HoldUntil      pgtype.Timestamptz `json:"hold_until"`
 	HoldReason     pgtype.Text        `json:"hold_reason"`
-	ProfileID      pgtype.UUID        `json:"profile_id"`
 	CustomName     pgtype.Text        `json:"custom_name"`
 	Inserted       bool               `json:"inserted"`
 }
@@ -1301,9 +1301,9 @@ func (q *Queries) UpsertAgentRuntime(ctx context.Context, arg UpsertAgentRuntime
 		&i.OwnerID,
 		&i.LegacyDaemonID,
 		&i.Visibility,
+		&i.ProfileID,
 		&i.HoldUntil,
 		&i.HoldReason,
-		&i.ProfileID,
 		&i.CustomName,
 		&i.Inserted,
 	)
@@ -1367,9 +1367,9 @@ type UpsertAgentRuntimeWithProfileRow struct {
 	OwnerID        pgtype.UUID        `json:"owner_id"`
 	LegacyDaemonID pgtype.Text        `json:"legacy_daemon_id"`
 	Visibility     string             `json:"visibility"`
+	ProfileID      pgtype.UUID        `json:"profile_id"`
 	HoldUntil      pgtype.Timestamptz `json:"hold_until"`
 	HoldReason     pgtype.Text        `json:"hold_reason"`
-	ProfileID      pgtype.UUID        `json:"profile_id"`
 	CustomName     pgtype.Text        `json:"custom_name"`
 	Inserted       bool               `json:"inserted"`
 }
@@ -1411,9 +1411,9 @@ func (q *Queries) UpsertAgentRuntimeWithProfile(ctx context.Context, arg UpsertA
 		&i.OwnerID,
 		&i.LegacyDaemonID,
 		&i.Visibility,
+		&i.ProfileID,
 		&i.HoldUntil,
 		&i.HoldReason,
-		&i.ProfileID,
 		&i.CustomName,
 		&i.Inserted,
 	)
