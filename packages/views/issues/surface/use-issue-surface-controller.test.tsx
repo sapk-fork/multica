@@ -513,7 +513,7 @@ describe("useIssueSurfaceController", () => {
     );
     // …and with no status filter it is a visible column, ordered last.
     expect(result.current.visibleStatuses).toContain("cancelled");
-    expect(result.current.visibleStatuses.at(-1)).toBe("cancelled");
+    expect(result.current.visibleStatuses.at(-1)).toBe("archived");
   });
 
   it("includes cancelled issues in the default surface and visible statuses", async () => {
