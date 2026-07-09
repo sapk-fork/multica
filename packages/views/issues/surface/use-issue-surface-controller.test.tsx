@@ -1224,6 +1224,10 @@ describe("useIssueSurfaceController", () => {
     );
     expect(result.current.visibleStatuses).not.toContain("cancelled");
     expect(result.current.hiddenStatuses).toContain("cancelled");
+    // …while the fork's `archived` is NOT hidden by default
+    // (DEFAULT_HIDDEN_STATUS_CATEGORIES is `["cancelled"]` only), so it stays
+    // a visible column and STATUS_ORDER places it last.
+    expect(result.current.visibleStatuses.at(-1)).toBe("archived");
   });
 
   it("keeps cancelled issues out of the default visible surface", async () => {
