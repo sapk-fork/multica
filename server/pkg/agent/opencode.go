@@ -308,10 +308,15 @@ func (b *opencodeBackend) processEvents(r io.Reader, ch chan<- Message) eventRes
 			if t := event.Part.Tokens; t != nil {
 				usage.InputTokens += t.Input
 				usage.OutputTokens += t.Output
+				callWindow := t.Input
 				if t.Cache != nil {
 					usage.CacheReadTokens += t.Cache.Read
 					usage.CacheWriteTokens += t.Cache.Write
+					callWindow += t.Cache.Read + t.Cache.Write
 				}
+				// This step's input-side total is the context sent on that
+				// call; keep the peak. OpenCode does not report the window max.
+				usage.observeContextWindow(callWindow, 0)
 			}
 		}
 	}

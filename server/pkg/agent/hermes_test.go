@@ -24,6 +24,32 @@ func TestNewReturnsHermesBackend(t *testing.T) {
 	}
 }
 
+func TestParseACPTokenUsageContextWindow(t *testing.T) {
+	t.Parallel()
+
+	usage := parseACPTokenUsage(json.RawMessage(
+		`{"inputTokens":1200,"outputTokens":300,"contextWindow":45000,"maxContextWindow":200000}`,
+	))
+	if usage.ContextWindowTokens != 45000 {
+		t.Errorf("context window tokens = %d, want 45000", usage.ContextWindowTokens)
+	}
+	if usage.ContextWindowMaxTokens != 200000 {
+		t.Errorf("context window max = %d, want 200000", usage.ContextWindowMaxTokens)
+	}
+}
+
+func TestParseACPTokenUsageNoContextWindow(t *testing.T) {
+	t.Parallel()
+
+	// Absent context-window fields must leave the gauge at 0 rather than
+	// borrowing the cumulative token counters.
+	usage := parseACPTokenUsage(json.RawMessage(`{"inputTokens":1200,"outputTokens":300}`))
+	if usage.ContextWindowTokens != 0 || usage.ContextWindowMaxTokens != 0 {
+		t.Errorf("context window = %d/%d, want 0/0 when unreported",
+			usage.ContextWindowTokens, usage.ContextWindowMaxTokens)
+	}
+}
+
 // ── extractACPSessionID ──
 
 func TestExtractACPSessionID(t *testing.T) {

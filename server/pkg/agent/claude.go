@@ -281,6 +281,12 @@ func (b *claudeBackend) handleAssistant(msg claudeSDKMessage, ch chan<- Message,
 		u.OutputTokens += content.Usage.OutputTokens
 		u.CacheReadTokens += content.Usage.CacheReadInputTokens
 		u.CacheWriteTokens += content.Usage.CacheCreationInputTokens
+		// The input-side total of this single message is the context sent on
+		// that call; keep the peak as the context-window gauge.
+		callWindow := content.Usage.InputTokens +
+			content.Usage.CacheReadInputTokens +
+			content.Usage.CacheCreationInputTokens
+		u.observeContextWindow(callWindow, 0)
 		usage[content.Model] = u
 	}
 

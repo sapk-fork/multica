@@ -930,6 +930,29 @@ func TestMergeUsage(t *testing.T) {
 	}
 }
 
+func TestMergeUsageContextWindowTakesPeak(t *testing.T) {
+	t.Parallel()
+
+	// Context window is a gauge, not a counter: merging two runs of the same
+	// model must keep the high-water mark, never sum.
+	a := map[string]agent.TokenUsage{
+		"model-a": {InputTokens: 10, ContextWindowTokens: 8000, ContextWindowMaxTokens: 200000},
+	}
+	b := map[string]agent.TokenUsage{
+		"model-a": {InputTokens: 20, ContextWindowTokens: 5000, ContextWindowMaxTokens: 200000},
+	}
+	got := mergeUsage(a, b)["model-a"]
+	if got.InputTokens != 30 {
+		t.Fatalf("InputTokens should still sum: got %d, want 30", got.InputTokens)
+	}
+	if got.ContextWindowTokens != 8000 {
+		t.Fatalf("ContextWindowTokens = %d, want peak 8000", got.ContextWindowTokens)
+	}
+	if got.ContextWindowMaxTokens != 200000 {
+		t.Fatalf("ContextWindowMaxTokens = %d, want 200000", got.ContextWindowMaxTokens)
+	}
+}
+
 // fakeBackend is a test double for agent.Backend that returns preconfigured
 // results. Each call to Execute pops the next entry from the results slice.
 type fakeBackend struct {

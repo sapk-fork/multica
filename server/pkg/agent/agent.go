@@ -108,11 +108,41 @@ type Message struct {
 }
 
 // TokenUsage tracks token consumption for a single model.
+//
+// InputTokens/OutputTokens/Cache* accumulate across every API call in a run —
+// they measure total tokens burned. ContextWindow* are a per-call gauge
+// instead: how full the model's context window got, which the frontend renders
+// to warn about context rot before it degrades output.
 type TokenUsage struct {
 	InputTokens      int64
 	OutputTokens     int64
 	CacheReadTokens  int64
 	CacheWriteTokens int64
+
+	// ContextWindowTokens is the peak size of a single request's prompt
+	// (input + cache tokens) observed during the run. Unlike the cumulative
+	// counters above it does not sum across calls; it tracks the high-water
+	// mark, since context grows as conversation history accumulates. 0 means
+	// the agent CLI did not report per-call context data.
+	ContextWindowTokens int64
+	// ContextWindowMaxTokens is the model's total context window size when the
+	// CLI reports it. 0 means unknown — the frontend can fall back to a
+	// model->window lookup.
+	ContextWindowMaxTokens int64
+}
+
+// observeContextWindow records a single API call's context-window occupancy,
+// keeping the peak. callTokens is that call's input-side size (input + cache);
+// maxTokens is the model's window (0 when the CLI does not report it). Both
+// fields keep their high-water mark so a mid-run compaction that shrinks the
+// prompt does not lower the reported peak.
+func (u *TokenUsage) observeContextWindow(callTokens, maxTokens int64) {
+	if callTokens > u.ContextWindowTokens {
+		u.ContextWindowTokens = callTokens
+	}
+	if maxTokens > u.ContextWindowMaxTokens {
+		u.ContextWindowMaxTokens = maxTokens
+	}
 }
 
 // Result is the final outcome after an agent session completes.

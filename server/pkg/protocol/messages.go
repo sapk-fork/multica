@@ -43,6 +43,11 @@ type TaskProgressPayload struct {
 	Summary string `json:"summary"`
 	Step    int    `json:"step,omitempty"`
 	Total   int    `json:"total,omitempty"`
+	// ContextWindowTokens/ContextWindowMaxTokens carry the live context-window
+	// gauge so the UI can render occupancy mid-run. Both optional and 0 when
+	// the agent CLI does not expose per-call context data.
+	ContextWindowTokens    int64 `json:"context_window_tokens,omitempty"`
+	ContextWindowMaxTokens int64 `json:"context_window_max_tokens,omitempty"`
 }
 
 // TaskCompletedPayload is sent from daemon to server when a task finishes.

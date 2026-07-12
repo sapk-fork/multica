@@ -3011,6 +3011,11 @@ type TaskUsagePayload struct {
 	OutputTokens     int64  `json:"output_tokens"`
 	CacheReadTokens  int64  `json:"cache_read_tokens"`
 	CacheWriteTokens int64  `json:"cache_write_tokens"`
+	// Peak context-window occupancy for the run and the model's window size.
+	// Both optional: older daemons omit them and they default to 0 ("not
+	// reported"). See task_usage migration 163.
+	ContextWindowTokens    int64 `json:"context_window_tokens"`
+	ContextWindowMaxTokens int64 `json:"context_window_max_tokens"`
 }
 
 func (h *Handler) ReportTaskUsage(w http.ResponseWriter, r *http.Request) {
@@ -3051,13 +3056,15 @@ func (h *Handler) ReportTaskUsage(w http.ResponseWriter, r *http.Request) {
 			provider = runtimeProvider
 		}
 		if err := h.Queries.UpsertTaskUsage(r.Context(), db.UpsertTaskUsageParams{
-			TaskID:           parseUUID(taskID),
-			Provider:         provider,
-			Model:            u.Model,
-			InputTokens:      u.InputTokens,
-			OutputTokens:     u.OutputTokens,
-			CacheReadTokens:  u.CacheReadTokens,
-			CacheWriteTokens: u.CacheWriteTokens,
+			TaskID:                 parseUUID(taskID),
+			Provider:               provider,
+			Model:                  u.Model,
+			InputTokens:            u.InputTokens,
+			OutputTokens:           u.OutputTokens,
+			CacheReadTokens:        u.CacheReadTokens,
+			CacheWriteTokens:       u.CacheWriteTokens,
+			ContextWindowTokens:    u.ContextWindowTokens,
+			ContextWindowMaxTokens: u.ContextWindowMaxTokens,
 		}); err != nil {
 			slog.Warn("upsert task usage failed", "task_id", taskID, "model", u.Model, "error", err)
 			continue

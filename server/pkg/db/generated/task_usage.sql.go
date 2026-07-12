@@ -45,7 +45,7 @@ func (q *Queries) GetIssueUsageSummary(ctx context.Context, issueID pgtype.UUID)
 }
 
 const getTaskUsage = `-- name: GetTaskUsage :many
-SELECT id, task_id, provider, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, created_at, updated_at FROM task_usage
+SELECT id, task_id, provider, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, created_at, updated_at, context_window_tokens, context_window_max_tokens FROM task_usage
 WHERE task_id = $1
 ORDER BY model
 `
@@ -70,6 +70,8 @@ func (q *Queries) GetTaskUsage(ctx context.Context, taskID pgtype.UUID) ([]TaskU
 			&i.CacheWriteTokens,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ContextWindowTokens,
+			&i.ContextWindowMaxTokens,
 		); err != nil {
 			return nil, err
 		}
@@ -394,25 +396,29 @@ func (q *Queries) ListDashboardUsageDaily(ctx context.Context, arg ListDashboard
 }
 
 const upsertTaskUsage = `-- name: UpsertTaskUsage :exec
-INSERT INTO task_usage (task_id, provider, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+INSERT INTO task_usage (task_id, provider, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, context_window_tokens, context_window_max_tokens, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
 ON CONFLICT (task_id, provider, model)
 DO UPDATE SET
     input_tokens = EXCLUDED.input_tokens,
     output_tokens = EXCLUDED.output_tokens,
     cache_read_tokens = EXCLUDED.cache_read_tokens,
     cache_write_tokens = EXCLUDED.cache_write_tokens,
+    context_window_tokens = EXCLUDED.context_window_tokens,
+    context_window_max_tokens = EXCLUDED.context_window_max_tokens,
     updated_at = now()
 `
 
 type UpsertTaskUsageParams struct {
-	TaskID           pgtype.UUID `json:"task_id"`
-	Provider         string      `json:"provider"`
-	Model            string      `json:"model"`
-	InputTokens      int64       `json:"input_tokens"`
-	OutputTokens     int64       `json:"output_tokens"`
-	CacheReadTokens  int64       `json:"cache_read_tokens"`
-	CacheWriteTokens int64       `json:"cache_write_tokens"`
+	TaskID                 pgtype.UUID `json:"task_id"`
+	Provider               string      `json:"provider"`
+	Model                  string      `json:"model"`
+	InputTokens            int64       `json:"input_tokens"`
+	OutputTokens           int64       `json:"output_tokens"`
+	CacheReadTokens        int64       `json:"cache_read_tokens"`
+	CacheWriteTokens       int64       `json:"cache_write_tokens"`
+	ContextWindowTokens    int64       `json:"context_window_tokens"`
+	ContextWindowMaxTokens int64       `json:"context_window_max_tokens"`
 }
 
 // Bumps `updated_at` on INSERT and on conflict so the hourly-rollup worker
@@ -428,6 +434,8 @@ func (q *Queries) UpsertTaskUsage(ctx context.Context, arg UpsertTaskUsageParams
 		arg.OutputTokens,
 		arg.CacheReadTokens,
 		arg.CacheWriteTokens,
+		arg.ContextWindowTokens,
+		arg.ContextWindowMaxTokens,
 	)
 	return err
 }

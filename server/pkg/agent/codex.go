@@ -1985,10 +1985,17 @@ func (c *codexClient) extractUsageFromMap(data map[string]any) {
 	// dashboard cost math does not charge cached input twice.
 	inputTokens := codexInt64(usageMap, "input_tokens", "input", "prompt_tokens")
 	cacheReadTokens := codexInt64(usageMap, "cached_input_tokens", "cache_read_tokens", "cache_read_input_tokens")
+	cacheWriteTokens := codexInt64(usageMap, "cache_write_tokens", "cache_creation_input_tokens")
 	c.usage.InputTokens += codexUncachedInputTokens(inputTokens, cacheReadTokens)
 	c.usage.OutputTokens += codexInt64(usageMap, "output_tokens", "output", "completion_tokens")
 	c.usage.CacheReadTokens += cacheReadTokens
-	c.usage.CacheWriteTokens += codexInt64(usageMap, "cache_write_tokens", "cache_creation_input_tokens")
+	c.usage.CacheWriteTokens += cacheWriteTokens
+
+	// Codex's input_tokens already includes cached input, so it is the prompt
+	// size sent on this call. Keep the peak as the context-window gauge, and
+	// pick up the model window if this notification carries it.
+	maxWindow := codexInt64(usageMap, "model_context_window", "context_window", "max_context_window")
+	c.usage.observeContextWindow(inputTokens+cacheWriteTokens, maxWindow)
 }
 
 func codexUncachedInputTokens(inputTokens, cachedInputTokens int64) int64 {
@@ -2105,7 +2112,8 @@ type codexSessionTokenCount struct {
 				CacheReadInputTokens  int64 `json:"cache_read_input_tokens"`
 				ReasoningOutputTokens int64 `json:"reasoning_output_tokens"`
 			} `json:"last_token_usage"`
-			Model string `json:"model"`
+			ModelContextWindow int64  `json:"model_context_window"`
+			Model              string `json:"model"`
 		} `json:"info"`
 		Model string `json:"model"`
 	} `json:"payload"`
@@ -2121,6 +2129,9 @@ func parseCodexSessionFile(path string) *codexSessionUsage {
 
 	var result codexSessionUsage
 	found := false
+	// Peak per-call context-window occupancy and the model window, tracked
+	// separately from result.usage (which is reassigned on every event).
+	var peakWindow, maxWindow int64
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 256*1024), 1024*1024)
@@ -2146,9 +2157,10 @@ func parseCodexSessionFile(path string) *codexSessionUsage {
 
 		// Extract token usage from token_count events.
 		if evt.Payload.Type == "token_count" && evt.Payload.Info != nil {
-			usage := evt.Payload.Info.TotalTokenUsage
+			info := evt.Payload.Info
+			usage := info.TotalTokenUsage
 			if usage == nil {
-				usage = evt.Payload.Info.LastTokenUsage
+				usage = info.LastTokenUsage
 			}
 			if usage != nil {
 				cachedTokens := usage.CachedInputTokens
@@ -2160,17 +2172,29 @@ func parseCodexSessionFile(path string) *codexSessionUsage {
 					OutputTokens:    usage.OutputTokens + usage.ReasoningOutputTokens,
 					CacheReadTokens: cachedTokens,
 				}
-				if evt.Payload.Info.Model != "" {
-					result.model = evt.Payload.Info.Model
+				if info.Model != "" {
+					result.model = info.Model
 				}
 				found = true
 			}
+
+			// Context window is a per-call gauge, so read last_token_usage
+			// (this turn's prompt), not the cumulative total. Codex's
+			// input_tokens already includes cached input, so it is the full
+			// prompt size. Track the peak and the model window separately from
+			// result.usage, which is overwritten each event above.
+			if last := info.LastTokenUsage; last != nil {
+				peakWindow = max(peakWindow, last.InputTokens)
+			}
+			maxWindow = max(maxWindow, info.ModelContextWindow)
 		}
 	}
 
 	if !found {
 		return nil
 	}
+	result.usage.ContextWindowTokens = peakWindow
+	result.usage.ContextWindowMaxTokens = maxWindow
 	return &result
 }
 

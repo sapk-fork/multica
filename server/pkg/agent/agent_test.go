@@ -236,3 +236,27 @@ func TestRunContextPositiveTimeoutHasDeadline(t *testing.T) {
 		t.Fatalf("unexpected deadline remaining: %s", remaining)
 	}
 }
+
+func TestObserveContextWindowKeepsPeak(t *testing.T) {
+	t.Parallel()
+
+	var u TokenUsage
+	u.observeContextWindow(5000, 200000)
+	u.observeContextWindow(12000, 200000) // grows as history accumulates
+	u.observeContextWindow(9000, 200000)  // a compaction shrinks the prompt
+	if u.ContextWindowTokens != 12000 {
+		t.Errorf("ContextWindowTokens = %d, want peak 12000", u.ContextWindowTokens)
+	}
+	if u.ContextWindowMaxTokens != 200000 {
+		t.Errorf("ContextWindowMaxTokens = %d, want 200000", u.ContextWindowMaxTokens)
+	}
+
+	// A zero max (CLI did not report it) must not clobber a known max.
+	u.observeContextWindow(13000, 0)
+	if u.ContextWindowTokens != 13000 {
+		t.Errorf("ContextWindowTokens = %d, want 13000", u.ContextWindowTokens)
+	}
+	if u.ContextWindowMaxTokens != 200000 {
+		t.Errorf("ContextWindowMaxTokens = %d, want preserved 200000", u.ContextWindowMaxTokens)
+	}
+}

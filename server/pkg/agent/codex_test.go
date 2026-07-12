@@ -715,6 +715,35 @@ func TestParseCodexSessionFileSubtractsCachedInput(t *testing.T) {
 	}
 }
 
+func TestParseCodexSessionFileContextWindow(t *testing.T) {
+	t.Parallel()
+
+	// Two token_count events: context window must track the peak of
+	// last_token_usage (the per-call prompt), not the cumulative total, and
+	// pick up model_context_window as the max.
+	path := filepath.Join(t.TempDir(), "session.jsonl")
+	content := strings.Join([]string{
+		`{"timestamp":"2026-06-12T17:29:27.587Z","type":"turn_context","payload":{"model":"gpt-5.5"}}`,
+		`{"timestamp":"2026-06-12T17:30:00.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1000,"output_tokens":40},"last_token_usage":{"input_tokens":1000,"output_tokens":40},"model_context_window":200000,"model":"gpt-5.5"}}}`,
+		`{"timestamp":"2026-06-12T17:35:00.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":5000,"output_tokens":120},"last_token_usage":{"input_tokens":4200,"output_tokens":80},"model_context_window":200000,"model":"gpt-5.5"}}}`,
+		"",
+	}, "\n")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	got := parseCodexSessionFile(path)
+	if got == nil {
+		t.Fatal("expected usage")
+	}
+	if got.usage.ContextWindowTokens != 4200 {
+		t.Fatalf("context window tokens = %d, want peak last_token_usage 4200", got.usage.ContextWindowTokens)
+	}
+	if got.usage.ContextWindowMaxTokens != 200000 {
+		t.Fatalf("context window max = %d, want 200000", got.usage.ContextWindowMaxTokens)
+	}
+}
+
 func TestCodexRawItemCommandExecution(t *testing.T) {
 	t.Parallel()
 

@@ -1201,6 +1201,10 @@ func (c *hermesClient) handleUsageUpdate(data json.RawMessage) {
 	if usage.CacheWriteTokens > c.usage.CacheWriteTokens {
 		c.usage.CacheWriteTokens = usage.CacheWriteTokens
 	}
+	// Context window is only meaningful if the ACP payload reports it directly
+	// (the cumulative token counters above cannot stand in for per-call
+	// occupancy). Keep the peak; absent fields stay 0.
+	c.usage.observeContextWindow(usage.ContextWindowTokens, usage.ContextWindowMaxTokens)
 	c.usageMu.Unlock()
 }
 
@@ -1227,6 +1231,21 @@ func parseACPTokenUsage(data json.RawMessage) TokenUsage {
 			"cacheWriteTokens",
 			"cache_write_tokens",
 			"cache_creation_input_tokens",
+		),
+		ContextWindowTokens: acpUsageInt64(fields,
+			"contextWindow",
+			"context_window",
+			"contextWindowTokens",
+			"context_window_tokens",
+			"usedContextWindow",
+		),
+		ContextWindowMaxTokens: acpUsageInt64(fields,
+			"maxContextWindow",
+			"max_context_window",
+			"contextWindowMax",
+			"context_window_max",
+			"contextWindowSize",
+			"context_window_size",
 		),
 	}
 }

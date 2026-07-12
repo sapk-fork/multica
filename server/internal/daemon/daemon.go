@@ -4005,12 +4005,14 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 			continue
 		}
 		usageEntries = append(usageEntries, TaskUsageEntry{
-			Provider:         provider,
-			Model:            model,
-			InputTokens:      u.InputTokens,
-			OutputTokens:     u.OutputTokens,
-			CacheReadTokens:  u.CacheReadTokens,
-			CacheWriteTokens: u.CacheWriteTokens,
+			Provider:               provider,
+			Model:                  model,
+			InputTokens:            u.InputTokens,
+			OutputTokens:           u.OutputTokens,
+			CacheReadTokens:        u.CacheReadTokens,
+			CacheWriteTokens:       u.CacheWriteTokens,
+			ContextWindowTokens:    u.ContextWindowTokens,
+			ContextWindowMaxTokens: u.ContextWindowMaxTokens,
 		})
 	}
 
@@ -4583,6 +4585,10 @@ func mergeUsage(a, b map[string]agent.TokenUsage) map[string]agent.TokenUsage {
 		existing.OutputTokens += u.OutputTokens
 		existing.CacheReadTokens += u.CacheReadTokens
 		existing.CacheWriteTokens += u.CacheWriteTokens
+		// Context window is a peak gauge, not a cumulative counter, so take the
+		// high-water mark across the merged runs rather than summing.
+		existing.ContextWindowTokens = max(existing.ContextWindowTokens, u.ContextWindowTokens)
+		existing.ContextWindowMaxTokens = max(existing.ContextWindowMaxTokens, u.ContextWindowMaxTokens)
 		merged[model] = existing
 	}
 	return merged

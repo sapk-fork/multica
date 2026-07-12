@@ -3,14 +3,16 @@
 -- detects the row as dirty and re-aggregates its bucket.
 -- Without the conflict-side bump, a correction to historical token counts
 -- would never propagate to the rollup.
-INSERT INTO task_usage (task_id, provider, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+INSERT INTO task_usage (task_id, provider, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, context_window_tokens, context_window_max_tokens, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
 ON CONFLICT (task_id, provider, model)
 DO UPDATE SET
     input_tokens = EXCLUDED.input_tokens,
     output_tokens = EXCLUDED.output_tokens,
     cache_read_tokens = EXCLUDED.cache_read_tokens,
     cache_write_tokens = EXCLUDED.cache_write_tokens,
+    context_window_tokens = EXCLUDED.context_window_tokens,
+    context_window_max_tokens = EXCLUDED.context_window_max_tokens,
     updated_at = now();
 
 -- name: GetTaskUsage :many
