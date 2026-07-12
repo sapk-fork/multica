@@ -26,10 +26,10 @@ export const HOLD_EXPIRY_MARGIN_MS = 5 * 60_000;
 // ---------------------------------------------------------------------------
 // Locale-aware relative-time formatting
 //
-// formatHoldUntil / formatLastSeen render compact compound countdowns
-// ("6d 19h ago", "in 5h 23m") in the active UI locale. Intl.RelativeTimeFormat
-// only speaks single units, so the compound case formats each unit on its own
-// and splices them into one shared direction frame — see formatRelativeParts.
+// formatHoldUntil renders a compact compound countdown ("in 5h 23m") in the
+// active UI locale. Intl.RelativeTimeFormat only speaks single units, so the
+// compound case formats each unit on its own and splices them into one shared
+// direction frame — see formatRelativeParts.
 // ---------------------------------------------------------------------------
 
 // RelativeTimeFormat instances aren't free to build and these formatters run

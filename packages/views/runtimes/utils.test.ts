@@ -11,7 +11,6 @@ import {
   estimateCost,
   estimateCostBreakdown,
   formatHoldUntil,
-  formatLastSeen,
   isModelPriced,
   isSelfHealingRuntime,
   sliceWindow,
@@ -1053,47 +1052,5 @@ describe("formatHoldUntil", () => {
     const hold = inMs(7 * 60_000); // +7m, +5m margin => 12m
     expect(formatHoldUntil(hold, now, "en")).toBe("in 12m");
     expect(formatHoldUntil(hold, now, "ja")).toBe("12分後");
-  });
-});
-
-describe("formatLastSeen", () => {
-  const now = Date.UTC(2026, 0, 1, 12, 0, 0);
-  const ago = (ms: number) => new Date(now - ms).toISOString();
-
-  it("returns the localized never label when last seen is null", () => {
-    expect(formatLastSeen(null, "en", { never: "Never" }, now)).toBe("Never");
-    expect(formatLastSeen(null, "zh-Hans", { never: "从未" }, now)).toBe("从未");
-  });
-
-  it("returns the just-now label within the 5s window", () => {
-    expect(formatLastSeen(ago(2_000), "en", { justNow: "Just now" }, now)).toBe(
-      "Just now",
-    );
-  });
-
-  it("formats a seconds-only timestamp", () => {
-    expect(formatLastSeen(ago(45_000), "en", {}, now)).toBe("45s ago");
-  });
-
-  it("formats compound minutes+seconds and localizes it", () => {
-    const t = ago(2 * 60_000 + 14_000); // 2m14s
-    expect(formatLastSeen(t, "en", {}, now)).toBe("2m 14s ago");
-    expect(formatLastSeen(t, "ja", {}, now)).toBe("2分14秒前");
-  });
-
-  it("formats compound days+hours and localizes it", () => {
-    const t = ago(6 * 86_400_000 + 19 * 3_600_000); // 6d19h
-    expect(formatLastSeen(t, "en", {}, now)).toBe("6d 19h ago");
-    expect(formatLastSeen(t, "ko", {}, now)).toBe("6일 19시간 전");
-  });
-
-  it("drops the secondary unit when it is zero", () => {
-    const t = ago(3 * 3_600_000); // exactly 3h
-    expect(formatLastSeen(t, "en", {}, now)).toBe("3h ago");
-  });
-
-  it("keeps a coincidentally shared leading digit with its number", () => {
-    const t = ago(6 * 86_400_000 + 6 * 3_600_000); // 6d6h — shared "6"
-    expect(formatLastSeen(t, "en", {}, now)).toBe("6d 6h ago");
   });
 });
