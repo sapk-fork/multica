@@ -65,11 +65,21 @@ func (h *Handler) ExportIssue(w http.ResponseWriter, r *http.Request) {
 
 	prefix := h.getIssuePrefix(r.Context(), issue.WorkspaceID)
 	var issues []ExportIssueResponse
-	h.collectIssuesFlat(r, issue, prefix, &issues)
+	h.collectIssuesFlat(r, issue, prefix, &issues, map[string]bool{})
 	writeJSON(w, http.StatusOK, ExportResponse{Issues: issues})
 }
 
-func (h *Handler) collectIssuesFlat(r *http.Request, issue db.Issue, prefix string, issues *[]ExportIssueResponse) {
+// collectIssuesFlat appends issue and all of its descendants to issues in a
+// flat list. The visited set guards against cycles in the parent chain (a
+// corrupted row that is its own ancestor) so a malformed tree cannot drive
+// unbounded recursion and crash the server.
+func (h *Handler) collectIssuesFlat(r *http.Request, issue db.Issue, prefix string, issues *[]ExportIssueResponse, visited map[string]bool) {
+	issueID := uuidToString(issue.ID)
+	if visited[issueID] {
+		return
+	}
+	visited[issueID] = true
+
 	ctx := r.Context()
 	resp := ExportIssueResponse{
 		ID:            uuidToString(issue.ID),
@@ -171,7 +181,7 @@ func (h *Handler) collectIssuesFlat(r *http.Request, issue db.Issue, prefix stri
 	children, err := h.Queries.ListChildIssues(ctx, issue.ID)
 	if err == nil {
 		for _, child := range children {
-			h.collectIssuesFlat(r, child, prefix, issues)
+			h.collectIssuesFlat(r, child, prefix, issues, visited)
 		}
 	}
 }
