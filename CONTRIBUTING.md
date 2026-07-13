@@ -298,6 +298,37 @@ Notes:
 - E2E tests create their own workspace and issue fixtures
 - the check flow starts backend/frontend only if they are not already running
 
+### CLI Test Environment Isolation
+
+`go test ./server/cmd/multica/...` inherits the process environment. If you
+run it from inside an agent-managed daemon task (an agent runtime, not a
+plain terminal), `MULTICA_AGENT_ID`, `MULTICA_TASK_ID`, and
+`MULTICA_DAEMON_PORT` are already set. `newAPIClient` in
+`server/cmd/multica/cmd_agent.go` treats any of those as a signal that the
+process is running inside a daemon-managed agent task, and then requires
+`MULTICA_TOKEN` to be a task-scoped `mat_...` token. A test that sets
+`MULTICA_TOKEN` to a plain placeholder like `"test-token"` fails that guard
+with `agent execution context requires MULTICA_TOKEN to be a task-scoped
+mat_ token` — not because the test is wrong, but because it didn't clear the
+inherited daemon signals first.
+
+This is a test isolation gap, not a bug in the guard: a clean CI shell has
+none of these variables set, so the tests pass there without changes.
+
+Any test that sets a non-`mat_` `MULTICA_TOKEN` must first clear the daemon
+context variables:
+
+```go
+t.Setenv("MULTICA_AGENT_ID", "")
+t.Setenv("MULTICA_TASK_ID", "")
+t.Setenv("MULTICA_DAEMON_PORT", "")
+```
+
+`cmd_agent_test.go` does this correctly — see the setup around
+`t.Setenv("MULTICA_AGENT_ID", "")` before it asserts on `resolveToken` /
+`newAPIClient`. Follow that pattern in any new CLI test that sets its own
+`MULTICA_TOKEN`.
+
 ## Local Codex Daemon
 
 Run the local daemon:
