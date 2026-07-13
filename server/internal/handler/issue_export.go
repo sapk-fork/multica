@@ -50,11 +50,10 @@ type ExportIssueResponse struct {
 	Metadata      map[string]any          `json:"metadata"`
 	Labels        []LabelResponse         `json:"labels"`
 	Comments      []ExportCommentResponse `json:"comments"`
-	Children      []ExportIssueResponse   `json:"children"`
 }
 
 type ExportResponse struct {
-	Issue ExportIssueResponse `json:"issue"`
+	Issues []ExportIssueResponse `json:"issues"`
 }
 
 func (h *Handler) ExportIssue(w http.ResponseWriter, r *http.Request) {
@@ -65,11 +64,12 @@ func (h *Handler) ExportIssue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	prefix := h.getIssuePrefix(r.Context(), issue.WorkspaceID)
-	exported := h.exportIssueRecursive(r, issue, prefix)
-	writeJSON(w, http.StatusOK, ExportResponse{Issue: exported})
+	var issues []ExportIssueResponse
+	h.collectIssuesFlat(r, issue, prefix, &issues)
+	writeJSON(w, http.StatusOK, ExportResponse{Issues: issues})
 }
 
-func (h *Handler) exportIssueRecursive(r *http.Request, issue db.Issue, prefix string) ExportIssueResponse {
+func (h *Handler) collectIssuesFlat(r *http.Request, issue db.Issue, prefix string, issues *[]ExportIssueResponse) {
 	ctx := r.Context()
 	resp := ExportIssueResponse{
 		ID:            uuidToString(issue.ID),
@@ -166,15 +166,12 @@ func (h *Handler) exportIssueRecursive(r *http.Request, issue db.Issue, prefix s
 		}
 	}
 
-	children, err := h.Queries.ListChildIssues(ctx, issue.ID)
-	if err == nil && len(children) > 0 {
-		resp.Children = make([]ExportIssueResponse, len(children))
-		for i, child := range children {
-			resp.Children[i] = h.exportIssueRecursive(r, child, prefix)
-		}
-	} else {
-		resp.Children = []ExportIssueResponse{}
-	}
+	*issues = append(*issues, resp)
 
-	return resp
+	children, err := h.Queries.ListChildIssues(ctx, issue.ID)
+	if err == nil {
+		for _, child := range children {
+			h.collectIssuesFlat(r, child, prefix, issues)
+		}
+	}
 }
