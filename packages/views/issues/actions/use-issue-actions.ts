@@ -25,6 +25,7 @@ export interface UseIssueActionsResult {
   removeParent: () => void;
   openAddChild: () => void;
   openDeleteConfirm: (opts?: { onDeletedNavigateTo?: string }) => void;
+  exportIssue: () => Promise<void>;
 }
 
 /**
@@ -196,6 +197,29 @@ export function useIssueActions(issue: Issue | null): UseIssueActionsResult {
     [openModal, issueId, issueIdentifier],
   );
 
+  const exportIssue = useCallback(async () => {
+    if (!issueId) return;
+    try {
+      const response = await fetch(`/api/issues/${issueId}/export`);
+      if (!response.ok) {
+        throw new Error("Export failed");
+      }
+      const data = await response.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${issueIdentifier ?? issueId}-export.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(t(($) => $.actions.export_success));
+    } catch (error) {
+      toast.error(t(($) => $.actions.export_failed));
+    }
+  }, [issueId, issueIdentifier, t]);
+
   return {
     isPinned,
     updateField,
@@ -206,5 +230,6 @@ export function useIssueActions(issue: Issue | null): UseIssueActionsResult {
     removeParent,
     openAddChild,
     openDeleteConfirm,
+    exportIssue,
   };
 }

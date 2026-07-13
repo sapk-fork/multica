@@ -8,6 +8,7 @@ import {
   ArrowUp,
   Calendar,
   CalendarClock,
+  Download,
   FolderOpen,
   Link2,
   Network,
@@ -108,6 +109,7 @@ export function IssueActionsMenuItems({
     removeParent,
     openAddChild,
     openDeleteConfirm,
+    exportIssue,
   } = actions;
 
   // Subscribe to the issue's task list so the cache is warm by the time the
@@ -262,6 +264,10 @@ export function IssueActionsMenuItems({
       <P.Item onClick={copyLink}>
         <Link2 className="h-3.5 w-3.5" />
         {t(($) => $.actions.copy_link)}
+      </P.Item>
+      <P.Item onClick={exportIssue}>
+        <Download className="h-3.5 w-3.5" />
+        {t(($) => $.actions.export_issue)}
       </P.Item>
       <P.Item onClick={handleCopyWorkdirPath}>
         <FolderOpen className="h-3.5 w-3.5" />
