@@ -1604,6 +1604,12 @@ WHERE id = (
                 now() - make_interval(secs => $4::double precision)
       )
       AND NOT EXISTS (
+          SELECT 1 FROM agent_runtime ar
+          WHERE ar.id = atq.runtime_id
+            AND ar.hold_until IS NOT NULL
+            AND ar.hold_until > now()
+      )
+      AND NOT EXISTS (
           SELECT 1 FROM agent_task_queue active
           WHERE active.agent_id = atq.agent_id
             AND active.status IN ('dispatched', 'running', 'waiting_local_directory')
@@ -5893,6 +5899,12 @@ WHERE atq.runtime_id = $1
             )
         )
   )
+  AND NOT EXISTS (
+      SELECT 1 FROM agent_runtime ar
+      WHERE ar.id = atq.runtime_id
+        AND ar.hold_until IS NOT NULL
+        AND ar.hold_until > now()
+  )
 ORDER BY atq.priority DESC, atq.created_at ASC
 `
 
@@ -5904,6 +5916,7 @@ ORDER BY atq.priority DESC, atq.created_at ASC
 // ClaimAgentTask, wasting CPU and a SELECT every poll cycle when the
 // runtime is busy on a long-running task. Backed by the partial index
 // idx_agent_task_queue_claim_candidates so the warm path is cheap.
+// Skips results when the runtime is on hold (hold_until > now()).
 func (q *Queries) ListQueuedClaimCandidatesByRuntime(ctx context.Context, runtimeID pgtype.UUID) ([]AgentTaskQueue, error) {
 	rows, err := q.db.Query(ctx, listQueuedClaimCandidatesByRuntime, runtimeID)
 	if err != nil {
