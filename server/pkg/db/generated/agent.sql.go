@@ -874,6 +874,12 @@ WHERE id = (
     SELECT atq.id FROM agent_task_queue atq
     WHERE atq.agent_id = $1 AND atq.status = 'queued'
       AND NOT EXISTS (
+          SELECT 1 FROM agent_runtime ar
+          WHERE ar.id = atq.runtime_id
+            AND ar.hold_until IS NOT NULL
+            AND ar.hold_until > now()
+      )
+      AND NOT EXISTS (
           SELECT 1 FROM agent_task_queue active
           WHERE active.agent_id = atq.agent_id
             AND active.status IN ('dispatched', 'running', 'waiting_local_directory')
@@ -3512,6 +3518,12 @@ func (q *Queries) ListPendingTasksByRuntime(ctx context.Context, runtimeID pgtyp
 const listQueuedClaimCandidatesByRuntime = `-- name: ListQueuedClaimCandidatesByRuntime :many
 SELECT id, agent_id, issue_id, status, priority, dispatched_at, started_at, completed_at, result, error, created_at, context, runtime_id, session_id, work_dir, trigger_comment_id, chat_session_id, autopilot_run_id, attempt, max_attempts, parent_task_id, failure_reason, trigger_summary, force_fresh_session, is_leader_task, wait_reason, initiator_user_id, handoff_note, prepare_lease_expires_at, squad_id, runtime_mcp_overlay, escalation_for_task_id, fire_at, originator_user_id, runtime_connected_apps, coalesced_comment_ids, delivered_comment_ids, chat_input_task_id, chat_finalize_deferred_at, originator_source, delegated_from_task_id, retry_of_task_id, rerun_of_task_id, rule_version_id, trigger_evidence_kind, trigger_evidence_ref_id, accountable_user_id FROM agent_task_queue
 WHERE runtime_id = $1 AND status = 'queued'
+  AND NOT EXISTS (
+      SELECT 1 FROM agent_runtime ar
+      WHERE ar.id = agent_task_queue.runtime_id
+        AND ar.hold_until IS NOT NULL
+        AND ar.hold_until > now()
+  )
 ORDER BY priority DESC, created_at ASC
 `
 
@@ -3523,6 +3535,7 @@ ORDER BY priority DESC, created_at ASC
 // ClaimAgentTask, wasting CPU and a SELECT every poll cycle when the
 // runtime is busy on a long-running task. Backed by the partial index
 // idx_agent_task_queue_claim_candidates so the warm path is cheap.
+// Skips results when the runtime is on hold (hold_until > now()).
 func (q *Queries) ListQueuedClaimCandidatesByRuntime(ctx context.Context, runtimeID pgtype.UUID) ([]AgentTaskQueue, error) {
 	rows, err := q.db.Query(ctx, listQueuedClaimCandidatesByRuntime, runtimeID)
 	if err != nil {
