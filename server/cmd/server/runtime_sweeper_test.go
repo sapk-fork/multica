@@ -1398,7 +1398,7 @@ func TestSweepExpiredHolds(t *testing.T) {
 	})
 
 	queries := db.New(testPool)
-	sweepExpiredHolds(ctx, queries, nil, bus)
+	sweepExpiredHolds(ctx, queries, bus)
 
 	// Hold should be cleared.
 	var holdAfter *string
@@ -1457,7 +1457,7 @@ func TestSweepExpiredHoldsLeavesActiveholdsUntouched(t *testing.T) {
 	})
 
 	queries := db.New(testPool)
-	sweepExpiredHolds(ctx, queries, nil, nil)
+	sweepExpiredHolds(ctx, queries, nil)
 
 	// Hold should still be set.
 	var holdUntilSet bool
