@@ -47,6 +47,8 @@ function makeIssue(idx: number, overrides: Partial<Issue> = {}): Issue {
     stage: null,
     start_date: "2026-05-01T00:00:00Z",
     due_date: null,
+    git_work_branch: null,
+    git_base_branch: null,
     labels: [],
     metadata: {},
   properties: {},

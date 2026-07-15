@@ -146,6 +146,24 @@ describe("IssueSchema (via ListIssuesResponseSchema)", () => {
     const parsed = ListIssuesResponseSchema.parse(payload);
     expect(parsed.issues[0]?.properties).toEqual({ "def-2": "opt-a" });
   });
+
+  it("parses issue with git_work_branch and git_base_branch", () => {
+    // M-44: agents read these from the parsed Issue to know which branch
+    // to commit to and which branch to target for the PR.
+    const payload = {
+      issues: [
+        {
+          ...baseIssue,
+          git_work_branch: "feature/add-thing",
+          git_base_branch: "main",
+        },
+      ],
+      total: 1,
+    };
+    const parsed = ListIssuesResponseSchema.parse(payload);
+    expect(parsed.issues[0]?.git_work_branch).toBe("feature/add-thing");
+    expect(parsed.issues[0]?.git_base_branch).toBe("main");
+  });
 });
 
 describe("IssuePropertySchema (via ListPropertiesResponseSchema)", () => {
@@ -189,6 +207,34 @@ describe("IssuePropertySchema (via ListPropertiesResponseSchema)", () => {
     const { config: _omit, ...withoutConfig } = baseProperty;
     const parsed = ListPropertiesResponseSchema.parse({ properties: [withoutConfig], total: 1 });
     expect(parsed.properties[0]?.config).toEqual({});
+=======
+    expect(parsed.issues[0]?.git_work_branch).toBe("feature/add-thing");
+    expect(parsed.issues[0]?.git_base_branch).toBe("main");
+  });
+
+  it("defaults git_work_branch and git_base_branch to null when the server omits them (backward compat)", () => {
+    // Older backend versions don't include these fields. The schema must
+    // still parse so older deployments don't break the frontend.
+    const {
+      git_work_branch: _omitWork,
+      git_base_branch: _omitBase,
+      ...issueWithoutGit
+    } = baseIssue;
+    const payload = { issues: [issueWithoutGit], total: 1 };
+    const parsed = ListIssuesResponseSchema.parse(payload);
+    expect(parsed.issues[0]?.git_work_branch).toBeNull();
+    expect(parsed.issues[0]?.git_base_branch).toBeNull();
+  });
+
+  it("preserves only one git branch when the issue has just work_branch set", () => {
+    const payload = {
+      issues: [{ ...baseIssue, git_work_branch: "fix/something" }],
+      total: 1,
+    };
+    const parsed = ListIssuesResponseSchema.parse(payload);
+    expect(parsed.issues[0]?.git_work_branch).toBe("fix/something");
+    expect(parsed.issues[0]?.git_base_branch).toBeNull();
+>>>>>>> bd7474237 (feat(core): add git_work_branch and git_base_branch to Issue type and Zod schema)
   });
 
   it("defaults icon for an older server response", () => {
