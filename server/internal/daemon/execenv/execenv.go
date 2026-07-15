@@ -118,7 +118,13 @@ type TaskContextForEnv struct {
 	ProjectTitle                  string                  // human-readable project title
 	ProjectDescription            string                  // durable project-level context, rendered into the brief's Project Context section
 	ProjectResources              []ProjectResourceForEnv // resources attached to the project
-	ChatSessionID                 string                  // non-empty for chat tasks
+	// MUL-44: optional issue-level branch pins. Empty when the issue
+	// has no pins; the brief omits the `## Git Branch` section in that
+	// case so the agent does not see a "follow this" block for a
+	// contract that does not apply.
+	GitWorkBranch             string
+	GitBaseBranch             string
+	ChatSessionID             string // non-empty for chat tasks
 	// ChatChannelType is the IM platform behind a chat session ("slack",
 	// "feishu"); empty for a web/mobile chat. The brief reads it for DELIVERY
 	// policy only: any non-empty value means the reply leaves Multica for an
