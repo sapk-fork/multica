@@ -42,3 +42,15 @@ SELECT project_id, count(*)::bigint AS resource_count
 FROM project_resource
 WHERE project_id = ANY(sqlc.arg('project_ids')::uuid[])
 GROUP BY project_id;
+
+-- name: CountGithubRepoResourcesForProject :one
+-- Returns the number of github_repo resources bound to a project. Used by
+-- the issue create / update handlers to enforce the MUL-44 multi-repo
+-- guard: setting git_work_branch or git_base_branch is forbidden when
+-- the issue's project has more than one github_repo resource (the
+-- metadata would otherwise need per-repo-id disambiguation, deferred
+-- to a follow-up). A project with zero or one github_repo resources
+-- permits the fields; the > 1 case returns a 422.
+SELECT count(*) FROM project_resource
+WHERE project_id = $1
+  AND resource_type = 'github_repo';
