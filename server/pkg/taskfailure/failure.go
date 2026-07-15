@@ -111,6 +111,11 @@ const (
 	// taskRunFailureReason in daemon/daemon.go.
 	ReasonSkillBundleUnavailable Reason = "skill_bundle_unavailable"
 
+	// ReasonSessionLimit: the runtime hit a session limit (e.g. Claude
+	// "You've hit your session limit"). The runtime is placed on hold
+	// until the reset time; tasks are auto-retried after the hold lifts.
+	ReasonSessionLimit Reason = "session_limit"
+
 	// Agent process side: failure surfaced by the agent CLI / SDK as
 	// an error string. Classify(rawError) is responsible for picking
 	// the right sub-reason from the string. IsAgentError returns true
@@ -205,6 +210,7 @@ var allReasons = []Reason{
 	ReasonAgentBlocked,
 	ReasonAPIInvalidRequest,
 	ReasonSkillBundleUnavailable,
+	ReasonSessionLimit,
 
 	// Agent process side: provider errors.
 	ReasonAgentProviderAuthOrAccess,
