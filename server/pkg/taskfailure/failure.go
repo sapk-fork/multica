@@ -143,6 +143,10 @@ const (
 	// launched and retrying the same issue remains non-actionable until the
 	// workspace policy changes.
 	ReasonIssueWindowRestricted Reason = "issue_window_restricted"
+	// ReasonSessionLimit: the runtime hit a session limit (e.g. Claude
+	// "You've hit your session limit"). The runtime is placed on hold
+	// until the reset time; tasks are auto-retried after the hold lifts.
+	ReasonSessionLimit Reason = "session_limit"
 
 	// Agent process side: failure surfaced by the agent CLI / SDK as
 	// an error string. Classify(rawError) is responsible for picking
@@ -242,6 +246,7 @@ var allReasons = []Reason{
 	ReasonRuntimeCLITimeout,
 	ReasonInvalidTaskIdentity,
 	ReasonIssueWindowRestricted,
+	ReasonSessionLimit,
 
 	// Agent process side: provider errors.
 	ReasonAgentProviderAuthOrAccess,
