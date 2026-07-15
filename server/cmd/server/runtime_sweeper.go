@@ -102,6 +102,7 @@ func runRuntimeSweeper(ctx context.Context, queries *db.Queries, liveness handle
 			sweepStaleTasks(ctx, queries, taskSvc, bus)
 			sweepExpiredQueuedTasks(ctx, queries, taskSvc)
 			sweepDeferredChatFinalizations(ctx, queries, taskSvc)
+			sweepExpiredHolds(ctx, queries, taskSvc, bus)
 			gcRuntimes(ctx, queries, bus)
 		}
 	}
@@ -334,6 +335,51 @@ func sweepDeferredChatFinalizations(ctx context.Context, queries *db.Queries, ta
 		taskSvc.FinalizeDeferredCancelledChat(ctx, t.ID)
 	}
 	slog.Info("chat finalize sweeper: settled deferred cancellations", "count", len(rows))
+}
+
+// sweepExpiredHolds clears holds on runtimes whose hold_until has passed.
+// After clearing, it broadcasts a daemon:register event so connected clients
+// refresh the runtime list and the daemon can pick up queued tasks.
+func sweepExpiredHolds(ctx context.Context, queries *db.Queries, taskSvc *service.TaskService, bus *events.Bus) {
+	released, err := queries.ClearExpiredHolds(ctx)
+	if err != nil {
+		slog.Warn("runtime sweeper: failed to clear expired holds", "error", err)
+		return
+	}
+	if len(released) == 0 {
+		return
+	}
+
+	workspaces := make(map[string]bool)
+	for _, row := range released {
+		slog.Info("runtime hold expired, resuming",
+			"runtime_id", util.UUIDToString(row.ID),
+		)
+		wsID := util.UUIDToString(row.WorkspaceID)
+		workspaces[wsID] = true
+		if bus != nil {
+			bus.Publish(events.Event{
+				Type:        protocol.EventRuntimeResumed,
+				WorkspaceID: wsID,
+				ActorType:   "system",
+				Payload: map[string]any{
+					"runtime_id": util.UUIDToString(row.ID),
+					"auto":       true,
+				},
+			})
+		}
+	}
+
+	for wsID := range workspaces {
+		bus.Publish(events.Event{
+			Type:        protocol.EventDaemonRegister,
+			WorkspaceID: wsID,
+			ActorType:   "system",
+			Payload: map[string]any{
+				"action": "hold_expired",
+			},
+		})
+	}
 }
 
 // broadcastFailedTasks is preserved as a thin shim for the integration tests
