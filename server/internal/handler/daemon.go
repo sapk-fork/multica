@@ -2319,6 +2319,19 @@ func (h *Handler) buildClaimedTaskResponse(r *http.Request, task *db.AgentTaskQu
 					"agent_id", uuidToString(task.AgentID),
 				)
 			}
+
+			// MUL-44: optional issue-level branch pins. Populate from
+			// the issue row at task-claim time. The daemon threads
+			// these into the agent brief as a `## Git Branch` section
+			// that the working agent must follow when committing /
+			// opening a PR. Empty when the issue has no pins — the
+			// section is omitted in that case.
+			if issue.GitWorkBranch.Valid {
+				resp.GitWorkBranch = issue.GitWorkBranch.String
+			}
+			if issue.GitBaseBranch.Valid {
+				resp.GitBaseBranch = issue.GitBaseBranch.String
+			}
 		}
 
 		projectCtx, projectErr := h.resolveClaimProjectContext(r.Context(), issue.ProjectID, issue.WorkspaceID)
