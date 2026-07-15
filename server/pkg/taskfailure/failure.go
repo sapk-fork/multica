@@ -27,7 +27,7 @@
 //     runtime_recovery, timeout, iteration_limit, agent_blocked,
 //     api_invalid_request, skill_bundle_unavailable,
 //     runtime_cli_timeout, environment_prepare_failed,
-//     invalid_task_identity, runtime_access_denied
+//     invalid_task_identity, runtime_access_denied, session_limit
 //
 //   - 14 agent-side values (with `agent_error.` prefix) produced by
 //     Classify(rawError) when the agent process surfaced an error string.
@@ -192,6 +192,12 @@ const (
 	// settlement failures surface the same recovery guidance.
 	ReasonRuntimeAccessDenied Reason = "runtime_access_denied"
 
+	// ReasonSessionLimit: the runtime hit a session limit (e.g. Claude
+	// "You've hit your session limit"). The runtime is placed on hold
+	// until the reset time; tasks are auto-retried after the hold lifts.
+	ReasonSessionLimit Reason = "session_limit"
+
+
 	// Agent process side: failure surfaced by the agent CLI / SDK as
 	// an error string. Classify(rawError) is responsible for picking
 	// the right sub-reason from the string. IsAgentError returns true
@@ -291,6 +297,7 @@ var allReasons = []Reason{
 	ReasonEnvironmentPrepareFailed,
 	ReasonInvalidTaskIdentity,
 	ReasonRuntimeAccessDenied,
+	ReasonSessionLimit,
 
 	// Agent process side: provider errors.
 	ReasonAgentProviderAuthOrAccess,
