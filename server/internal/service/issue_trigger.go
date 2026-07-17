@@ -105,7 +105,7 @@ func (s *IssueService) WillEnqueueRun(ctx context.Context, in IssueTriggerInput,
 		}
 		source = RunSourceAssign
 	case in.StatusChanged && in.PrevStatus == "backlog" &&
-		issue.Status != "done" && issue.Status != "cancelled":
+		issue.Status != "done" && issue.Status != "cancelled" && issue.Status != "archived":
 		if probe.IsSelfLoop != nil && probe.IsSelfLoop() {
 			return IssueRunTrigger{}, false
 		}

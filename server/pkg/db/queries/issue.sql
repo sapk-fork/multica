@@ -127,7 +127,7 @@ SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0));
 -- name: FindActiveDuplicateIssue :one
 SELECT * FROM issue
 WHERE workspace_id = $1
-  AND status NOT IN ('done', 'cancelled')
+  AND status NOT IN ('done', 'cancelled', 'archived')
   AND project_id IS NOT DISTINCT FROM sqlc.arg('project_id')::uuid
   AND parent_issue_id IS NOT DISTINCT FROM sqlc.arg('parent_issue_id')::uuid
   AND lower(btrim(regexp_replace(title, '[[:space:]]+', ' ', 'g'))) = sqlc.arg('normalized_title')
@@ -325,7 +325,7 @@ GROUP BY assignee_type, assignee_id;
 -- name: ChildIssueProgress :many
 SELECT parent_issue_id,
        COUNT(*)::bigint AS total,
-       COUNT(*) FILTER (WHERE status IN ('done', 'cancelled'))::bigint AS done
+       COUNT(*) FILTER (WHERE status IN ('done', 'cancelled', 'archived'))::bigint AS done
 FROM issue
 WHERE workspace_id = $1
   AND parent_issue_id IS NOT NULL
