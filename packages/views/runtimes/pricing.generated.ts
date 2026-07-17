@@ -2,7 +2,7 @@
 //
 // Source: https://models.dev/api.json (MIT, community-maintained,
 // the same dataset OpenCode uses internally).
-// Snapshot: 2026-07-16
+// Snapshot: 2026-07-17
 //
 // Regenerate with: node scripts/generate-pricing.mjs
 
@@ -135,6 +135,7 @@ export const MODEL_PRICING: Readonly<Record<string, {
   "kimi-k2.6": { input: 0.95, output: 4, cacheRead: 0.16, cacheWrite: 0.95 },
   "kimi-k2.7-code": { input: 0.95, output: 4, cacheRead: 0.19, cacheWrite: 0.95 },
   "kimi-k2.7-code-highspeed": { input: 1.9, output: 8, cacheRead: 0.38, cacheWrite: 1.9 },
+  "kimi-k3": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3 },
   "mai-code-1-flash-picker": { input: 0.75, output: 4.5, cacheRead: 0.075, cacheWrite: 0.75 },
   "mimo-v2-omni": { input: 0.4, output: 2, cacheRead: 0.08, cacheWrite: 0.4 },
   "mimo-v2-pro": { input: 1, output: 3, cacheRead: 0.2, cacheWrite: 1 },
