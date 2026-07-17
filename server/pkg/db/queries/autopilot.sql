@@ -48,11 +48,11 @@ WHERE id = $1 AND workspace_id = $2;
 INSERT INTO autopilot (
     workspace_id, title, description, assignee_type, assignee_id,
     status, execution_mode, issue_title_template, project_id,
-    created_by_type, created_by_id
+    created_by_type, created_by_id, max_concurrent_runs
 ) VALUES (
     $1, $2, sqlc.narg('description'), $3, $4,
     $5, $6, sqlc.narg('issue_title_template'), sqlc.narg('project_id'),
-    $7, $8
+    $7, $8, $9
 ) RETURNING *;
 
 -- name: UpdateAutopilot :one
@@ -65,6 +65,7 @@ UPDATE autopilot SET
     execution_mode = COALESCE(sqlc.narg('execution_mode'), execution_mode),
     issue_title_template = sqlc.narg('issue_title_template'),
     project_id = sqlc.narg('project_id'),
+    max_concurrent_runs = COALESCE(sqlc.narg('max_concurrent_runs'), max_concurrent_runs),
     updated_at = now()
 WHERE id = $1
 RETURNING *;
@@ -301,6 +302,16 @@ SELECT * FROM autopilot_run
 WHERE autopilot_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3;
+
+-- name: CountActiveAutopilotRuns :one
+-- Counts the in-flight runs for an autopilot — the runs that hold a
+-- concurrency slot. Backs the max_concurrent_runs admission gate (M-87):
+-- a new dispatch is skipped while this count already meets the limit. The
+-- two counted statuses match the partial index idx_autopilot_run_status,
+-- so the scan stays index-only.
+SELECT count(*) FROM autopilot_run
+WHERE autopilot_id = $1
+  AND status IN ('issue_created', 'running');
 
 -- name: UpdateAutopilotRunIssueCreated :one
 UPDATE autopilot_run

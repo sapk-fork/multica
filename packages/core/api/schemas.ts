@@ -1167,6 +1167,9 @@ const AutopilotListItemSchema = z.object({
   status: z.string(),
   execution_mode: z.string(),
   issue_title_template: z.string().nullable().optional(),
+  // Concurrency cap; 0 = unlimited. Optional so older servers that omit it
+  // degrade to "unlimited" in the UI (M-87).
+  max_concurrent_runs: z.number().optional(),
   created_by_type: z.string(),
   created_by_id: z.string(),
   last_run_at: z.string().nullable().optional(),

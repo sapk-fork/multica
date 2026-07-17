@@ -34,6 +34,9 @@ export interface Autopilot {
   status: AutopilotStatus;
   execution_mode: AutopilotExecutionMode;
   issue_title_template: string | null;
+  // Caps in-flight runs (issue_created / running); 0 means unlimited. Optional
+  // so older servers that omit it degrade to "unlimited" (M-87).
+  max_concurrent_runs?: number;
   created_by_type: string;
   created_by_id: string;
   last_run_at: string | null;
@@ -147,6 +150,8 @@ export interface CreateAutopilotRequest {
   assignee_id: string;
   execution_mode: AutopilotExecutionMode;
   issue_title_template?: string;
+  // Non-negative cap on in-flight runs; 0 (or omitted) means unlimited (M-87).
+  max_concurrent_runs?: number;
   subscribers?: AutopilotSubscriberInput[];
 }
 
@@ -161,6 +166,9 @@ export interface UpdateAutopilotRequest {
   status?: AutopilotStatus;
   execution_mode?: AutopilotExecutionMode;
   issue_title_template?: string | null;
+  // Non-negative cap on in-flight runs; 0 means unlimited. Omit to leave the
+  // current value untouched (M-87).
+  max_concurrent_runs?: number;
   // When present, fully replaces the autopilot's subscriber template;
   // omit to leave it untouched.
   subscribers?: AutopilotSubscriberInput[];

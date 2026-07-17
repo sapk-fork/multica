@@ -43,6 +43,12 @@ const (
 	// success: nothing new runs. (Named to avoid implying the NEW comment was
 	// already processed.)
 	ReasonSelfTriggerSuppressed ReasonCode = "self_trigger_suppressed"
+	// ReasonConcurrencyLimit: the autopilot's max_concurrent_runs cap is
+	// already met by its in-flight runs (issue_created / running), so this
+	// dispatch is skipped rather than piling a run past the configured limit
+	// (M-87). Not a permission block and not an error — the trigger was
+	// evaluated, but capacity was reached.
+	ReasonConcurrencyLimit ReasonCode = "concurrency_limit"
 	// ReasonInternalError: an unexpected server error prevented a clean decision.
 	ReasonInternalError ReasonCode = "internal_error"
 )

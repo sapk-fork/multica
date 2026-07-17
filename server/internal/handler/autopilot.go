@@ -42,11 +42,14 @@ type AutopilotResponse struct {
 	Status             string  `json:"status"`
 	ExecutionMode      string  `json:"execution_mode"`
 	IssueTitleTemplate *string `json:"issue_title_template"`
-	CreatedByType      string  `json:"created_by_type"`
-	CreatedByID        string  `json:"created_by_id"`
-	LastRunAt          *string `json:"last_run_at"`
-	CreatedAt          string  `json:"created_at"`
-	UpdatedAt          string  `json:"updated_at"`
+	// MaxConcurrentRuns caps in-flight runs (issue_created / running) per
+	// autopilot. 0 means unlimited (M-87).
+	MaxConcurrentRuns int     `json:"max_concurrent_runs"`
+	CreatedByType     string  `json:"created_by_type"`
+	CreatedByID       string  `json:"created_by_id"`
+	LastRunAt         *string `json:"last_run_at"`
+	CreatedAt         string  `json:"created_at"`
+	UpdatedAt         string  `json:"updated_at"`
 
 	// List-endpoint-only derived fields (absent on the detail/create/update
 	// responses and on older servers — clients must treat them as optional).
@@ -192,6 +195,7 @@ func autopilotToResponse(a db.Autopilot, subscribers []db.AutopilotSubscriber) A
 		Status:             a.Status,
 		ExecutionMode:      a.ExecutionMode,
 		IssueTitleTemplate: textToPtr(a.IssueTitleTemplate),
+		MaxConcurrentRuns:  int(a.MaxConcurrentRuns),
 		CreatedByType:      a.CreatedByType,
 		CreatedByID:        uuidToString(a.CreatedByID),
 		LastRunAt:          timestampToPtr(a.LastRunAt),
@@ -314,11 +318,14 @@ type CreateAutopilotRequest struct {
 	ProjectID   *string `json:"project_id"`
 	// AssigneeType is optional and defaults to "agent" — preserves backward
 	// compatibility with desktop clients shipped before MUL-2429.
-	AssigneeType       *string           `json:"assignee_type"`
-	AssigneeID         string            `json:"assignee_id"`
-	ExecutionMode      string            `json:"execution_mode"`
-	IssueTitleTemplate *string           `json:"issue_title_template"`
-	Subscribers        []SubscriberInput `json:"subscribers"`
+	AssigneeType       *string `json:"assignee_type"`
+	AssigneeID         string  `json:"assignee_id"`
+	ExecutionMode      string  `json:"execution_mode"`
+	IssueTitleTemplate *string `json:"issue_title_template"`
+	// MaxConcurrentRuns caps in-flight runs; 0 (or omitted) means unlimited.
+	// Must be a non-negative integer (M-87).
+	MaxConcurrentRuns *int              `json:"max_concurrent_runs"`
+	Subscribers       []SubscriberInput `json:"subscribers"`
 }
 
 type UpdateAutopilotRequest struct {
@@ -330,8 +337,21 @@ type UpdateAutopilotRequest struct {
 	Status             *string `json:"status"`
 	ExecutionMode      *string `json:"execution_mode"`
 	IssueTitleTemplate *string `json:"issue_title_template"`
+	// MaxConcurrentRuns caps in-flight runs; 0 means unlimited. Omit to leave
+	// the current value untouched. Must be a non-negative integer (M-87).
+	MaxConcurrentRuns *int `json:"max_concurrent_runs"`
 	// Wholesale replacement when present; omit to leave subscribers untouched.
 	Subscribers []SubscriberInput `json:"subscribers"`
+}
+
+// maxConcurrentRunsOrZero unwraps an optional max_concurrent_runs to its stored
+// value, treating an omitted field as 0 (unlimited). Callers validate the
+// non-negative invariant before persisting.
+func maxConcurrentRunsOrZero(v *int) int {
+	if v == nil {
+		return 0
+	}
+	return *v
 }
 
 type SubscriberInput struct {
@@ -623,6 +643,10 @@ func (h *Handler) CreateAutopilot(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if req.MaxConcurrentRuns != nil && *req.MaxConcurrentRuns < 0 {
+		writeError(w, http.StatusBadRequest, "max_concurrent_runs must be a non-negative integer")
+		return
+	}
 
 	workspaceID := h.resolveWorkspaceID(r)
 	userID, ok := requireUserID(w, r)
@@ -681,6 +705,7 @@ func (h *Handler) CreateAutopilot(w http.ResponseWriter, r *http.Request) {
 		Description:        ptrToText(req.Description),
 		IssueTitleTemplate: ptrToText(req.IssueTitleTemplate),
 		ProjectID:          projectID,
+		MaxConcurrentRuns:  int32(maxConcurrentRunsOrZero(req.MaxConcurrentRuns)),
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create autopilot")
@@ -811,6 +836,13 @@ func (h *Handler) UpdateAutopilot(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ExecutionMode != nil {
 		params.ExecutionMode = pgtype.Text{String: *req.ExecutionMode, Valid: true}
+	}
+	if req.MaxConcurrentRuns != nil {
+		if *req.MaxConcurrentRuns < 0 {
+			writeError(w, http.StatusBadRequest, "max_concurrent_runs must be a non-negative integer")
+			return
+		}
+		params.MaxConcurrentRuns = pgtype.Int4{Int32: int32(*req.MaxConcurrentRuns), Valid: true}
 	}
 	if _, ok := rawFields["description"]; ok {
 		params.Description = ptrToText(req.Description)

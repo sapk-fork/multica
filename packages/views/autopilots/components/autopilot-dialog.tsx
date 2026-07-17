@@ -44,6 +44,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@multica/ui/components/ui/select";
+import { Input } from "@multica/ui/components/ui/input";
 import { TimeInput } from "@multica/ui/components/ui/time-input";
 import { TimezonePicker } from "./pickers/timezone-picker";
 import { useCurrentWorkspace } from "@multica/core/paths";
@@ -95,6 +96,8 @@ export interface AutopilotInitial {
   assignee_type: AutopilotAssigneeType;
   assignee_id: string;
   execution_mode: AutopilotExecutionMode;
+  // Concurrency cap; 0 (or omitted) means unlimited (M-87).
+  max_concurrent_runs?: number;
   subscriber_user_ids?: string[];
 }
 
@@ -300,6 +303,9 @@ export function AutopilotDialog(props: AutopilotDialogProps) {
   const [executionMode, setExecutionMode] = useState<AutopilotExecutionMode>(
     initial.execution_mode ?? "create_issue",
   );
+  const [maxConcurrentRuns, setMaxConcurrentRuns] = useState<number>(
+    initial.max_concurrent_runs ?? 0,
+  );
   const [subscriberUserIds, setSubscriberUserIds] = useState<string[]>(
     initial.subscriber_user_ids ?? [],
   );
@@ -397,6 +403,7 @@ export function AutopilotDialog(props: AutopilotDialogProps) {
           assignee_type: assigneeType,
           assignee_id: assigneeId,
           execution_mode: executionMode,
+          max_concurrent_runs: maxConcurrentRuns,
           subscribers: subscriberUserIds.map((user_id) => ({
             user_type: "member" as const,
             user_id,
@@ -450,6 +457,7 @@ export function AutopilotDialog(props: AutopilotDialogProps) {
           assignee_type: assigneeType,
           assignee_id: assigneeId,
           execution_mode: executionMode,
+          max_concurrent_runs: maxConcurrentRuns,
           subscribers: subscriberUserIds.map((user_id) => ({
             user_type: "member" as const,
             user_id,
@@ -686,6 +694,11 @@ export function AutopilotDialog(props: AutopilotDialogProps) {
 
             <OutputModeSection mode={executionMode} onChange={setExecutionMode} />
 
+            <MaxConcurrentRunsSection
+              value={maxConcurrentRuns}
+              onChange={setMaxConcurrentRuns}
+            />
+
             {executionMode === "create_issue" && (
               <ProjectSection
                 projectId={projectId}
@@ -879,6 +892,46 @@ function OutputModeSection({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// MaxConcurrentRunsSection controls the per-autopilot concurrency cap (M-87).
+// 0 means unlimited; the hint text swaps to explain that when the value is 0.
+function MaxConcurrentRunsSection({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const { t } = useT("autopilots");
+  const label = t(($) => $.dialog.section_max_concurrent_runs);
+  return (
+    <div>
+      <SectionLabel>{label}</SectionLabel>
+      <Input
+        type="number"
+        min={0}
+        step={1}
+        inputMode="numeric"
+        aria-label={label}
+        value={String(value)}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (raw === "") {
+            onChange(0);
+            return;
+          }
+          const parsed = Number.parseInt(raw, 10);
+          onChange(Number.isNaN(parsed) || parsed < 0 ? 0 : parsed);
+        }}
+      />
+      <p className="mt-1.5 text-xs text-muted-foreground">
+        {value === 0
+          ? t(($) => $.dialog.max_concurrent_runs_unlimited_hint)
+          : t(($) => $.dialog.max_concurrent_runs_hint)}
+      </p>
     </div>
   );
 }

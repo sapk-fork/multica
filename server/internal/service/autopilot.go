@@ -1183,9 +1183,39 @@ func (s *AutopilotService) failRun(ctx context.Context, runID pgtype.UUID, reaso
 //     scheduled run. Migration 096 removed the agent FK on autopilot, so an
 //     agent assignee being missing is now a real condition the gate must
 //     handle (previously cascade-deleted).
+//
+// concurrencyLimitReached reports whether an autopilot with a positive
+// max_concurrent_runs cap has no free slot: its active (issue_created /
+// running) run count already meets or exceeds the limit. A non-positive limit
+// means "unlimited" and is filtered out by the caller before this is reached,
+// so this stays a pure, table-driven-testable comparison.
+func concurrencyLimitReached(limit int32, active int64) bool {
+	return limit > 0 && active >= int64(limit)
+}
+
 func (s *AutopilotService) shouldSkipDispatch(ctx context.Context, ap db.Autopilot, actorUserID pgtype.UUID) (string, dispatch.ReasonCode, bool) {
 	if !ap.AssigneeID.Valid {
 		return "autopilot has no assignee", dispatch.ReasonTargetUnavailable, true
+	}
+	// Per-autopilot concurrency cap (M-87). Checked before resolving the leader
+	// so an at-capacity autopilot skips cheaply without touching agent/runtime
+	// state. max_concurrent_runs == 0 means unlimited. The count is taken from
+	// autopilot_run BEFORE this run's row exists (shouldSkipDispatch runs ahead
+	// of CreateAutopilotRun), so there is no off-by-one against the new run.
+	if ap.MaxConcurrentRuns > 0 {
+		active, err := s.Queries.CountActiveAutopilotRuns(ctx, ap.ID)
+		if err != nil {
+			// Transient DB error — fail-open, exactly like the leader /
+			// readiness gates below: a hiccup counting in-flight runs must
+			// never silently swallow a scheduled dispatch.
+			slog.Warn("autopilot admission: failed to count active runs",
+				"autopilot_id", util.UUIDToString(ap.ID),
+				"error", err,
+			)
+		} else if concurrencyLimitReached(ap.MaxConcurrentRuns, active) {
+			return fmt.Sprintf("max concurrent runs reached (%d/%d)", active, ap.MaxConcurrentRuns),
+				dispatch.ReasonConcurrencyLimit, true
+		}
 	}
 	agent, squadResolved, err := s.resolveAutopilotLeader(ctx, ap)
 	if err != nil {

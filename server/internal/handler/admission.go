@@ -59,6 +59,7 @@ const (
 	ReasonAttributionBlocked    = dispatch.ReasonAttributionBlocked
 	ReasonAlreadyActive         = dispatch.ReasonAlreadyActive
 	ReasonSelfTriggerSuppressed = dispatch.ReasonSelfTriggerSuppressed
+	ReasonConcurrencyLimit      = dispatch.ReasonConcurrencyLimit
 	ReasonInternalError         = dispatch.ReasonInternalError
 )
 
@@ -119,6 +120,8 @@ func dispatchBlockedFallbackMessage(code DispatchReasonCode) string {
 		return "the run couldn't be attributed to a responsible member"
 	case ReasonAlreadyActive:
 		return "a run is already active for this target"
+	case ReasonConcurrencyLimit:
+		return "the target is at its concurrent-run limit"
 	default:
 		return "the run was blocked"
 	}

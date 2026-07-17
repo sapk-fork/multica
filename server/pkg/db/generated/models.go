@@ -189,6 +189,7 @@ type Autopilot struct {
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	AssigneeType       string             `json:"assignee_type"`
 	ProjectID          pgtype.UUID        `json:"project_id"`
+	MaxConcurrentRuns  int32              `json:"max_concurrent_runs"`
 }
 
 type AutopilotCollaborator struct {

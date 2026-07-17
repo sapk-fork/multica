@@ -983,6 +983,7 @@ export function AutopilotDetailPage({ autopilotId }: { autopilotId: string }) {
             assignee_type: autopilot.assignee_type,
             assignee_id: autopilot.assignee_id,
             execution_mode: autopilot.execution_mode as AutopilotExecutionMode,
+            max_concurrent_runs: autopilot.max_concurrent_runs ?? 0,
             subscriber_user_ids:
               autopilot.subscribers
                 ?.filter((s) => s.user_type === "member")
