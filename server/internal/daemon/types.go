@@ -93,27 +93,18 @@ type Task struct {
 	// order. Rendered into the brief's status-command line; empty (including on
 	// old servers that never send the field) keeps the brief byte-identical to
 	// the built-in-only form. IssueStatusesOmitted is the cap overflow count.
-	IssueStatuses        []IssueStatusData     `json:"issue_statuses,omitempty"`
-	IssueStatusesOmitted int                   `json:"issue_statuses_omitted,omitempty"`
-	ThreadName           string                `json:"thread_name,omitempty"` // semantic title for provider-native session/thread history
-	Agent                *AgentData            `json:"agent,omitempty"`
-	ConnectedApps        []ConnectedAppData    `json:"connected_apps,omitempty"` // per-run app capabilities mounted through runtime MCP overlays
-	Repos                []RepoData            `json:"repos,omitempty"`
-	ProjectID            string                `json:"project_id,omitempty"`           // active project for this task, when present
-	ProjectTitle         string                `json:"project_title,omitempty"`        // human-readable project title for context injection
-	ProjectDescription   string                `json:"project_description,omitempty"`  // durable project-level context injected into the brief
-	ProjectResources     []ProjectResourceData `json:"project_resources,omitempty"`    // project-scoped resources to expose to the agent
-	IsLeaderTask         bool                  `json:"is_leader_task,omitempty"`       // true when executing in the squad-leader coordinator role
-	LeaderRoleResolved   bool                  `json:"leader_role_resolved,omitempty"` // server capability: IsLeaderTask/SquadID authoritatively answer "is this a leader run". Absent on servers predating it — those before #4951 never sent is_leader_task at all, later ones send it without this guarantee — so taskIsSquadLeader falls back to the briefing marker for both (MUL-5811)
-	// GitWorkBranch / GitBaseBranch (MUL-44): optional issue-level branch
-	// pins. The server populates these from the issue row at task-claim
-	// time; the daemon threads them into the agent brief as a `## Git
-	// Branch` section that the agent MUST follow when committing /
-	// opening a PR. Empty when the issue has no pins — the section is
-	// omitted in that case so the brief looks the same as it did
-	// pre-MUL-44.
-	GitWorkBranch                 string                 `json:"git_work_branch,omitempty"`
-	GitBaseBranch                 string                 `json:"git_base_branch,omitempty"`
+	IssueStatuses                 []IssueStatusData      `json:"issue_statuses,omitempty"`
+	IssueStatusesOmitted          int                    `json:"issue_statuses_omitted,omitempty"`
+	ThreadName                    string                 `json:"thread_name,omitempty"` // semantic title for provider-native session/thread history
+	Agent                         *AgentData             `json:"agent,omitempty"`
+	ConnectedApps                 []ConnectedAppData     `json:"connected_apps,omitempty"` // per-run app capabilities mounted through runtime MCP overlays
+	Repos                         []RepoData             `json:"repos,omitempty"`
+	ProjectID                     string                 `json:"project_id,omitempty"`                       // active project for this task, when present
+	ProjectTitle                  string                 `json:"project_title,omitempty"`                    // human-readable project title for context injection
+	ProjectDescription            string                 `json:"project_description,omitempty"`              // durable project-level context injected into the brief
+	ProjectResources              []ProjectResourceData  `json:"project_resources,omitempty"`                // project-scoped resources to expose to the agent
+	IsLeaderTask                  bool                   `json:"is_leader_task,omitempty"`                   // true when executing in the squad-leader coordinator role
+	LeaderRoleResolved            bool                   `json:"leader_role_resolved,omitempty"`             // server capability: IsLeaderTask/SquadID authoritatively answer "is this a leader run". Absent on servers predating it — those before #4951 never sent is_leader_task at all, later ones send it without this guarantee — so taskIsSquadLeader falls back to the briefing marker for both (MUL-5811)
 	PriorSessionID                string                 `json:"prior_session_id,omitempty"`                 // Claude session ID from a previous task on this issue
 	PriorWorkDir                  string                 `json:"prior_work_dir,omitempty"`                   // work_dir from a previous task on this issue
 	PriorSessionResumeUnavailable bool                   `json:"prior_session_resume_unavailable,omitempty"` // MUL-5305: server signals a more recent Codex session was withheld (rollout missing) and PriorSessionID (if any) is an older fallback; the run must disclose the continuity gap even if that older session resumes cleanly. Absent/false on old servers.
