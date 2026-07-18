@@ -1333,8 +1333,8 @@ func discoverHermesModels(ctx context.Context, runtimeCmd Command) ([]Model, err
 // provider-list does not list, or lists without efforts, keeps Thinking nil,
 // which hides the control for that model alone.
 //
-// Failure modes (kimi missing, not logged in, config error) return an empty
-// list so the UI falls back to manual entry.
+// On any failure (kimi missing, not logged in, config error) falls back to
+// kimiStaticModels so the UI picker stays usable offline.
 func discoverKimiModels(ctx context.Context, runtimeCmd Command) ([]Model, error) {
 	var acpVersion string
 	models, err := discoverACPModels(ctx, runtimeCmd, acpDiscoveryProvider{
@@ -1346,7 +1346,10 @@ func discoverKimiModels(ctx context.Context, runtimeCmd Command) ([]Model, error
 		},
 	})
 	if err != nil || len(models) == 0 {
-		return models, err
+		if err != nil {
+			slog.Debug("kimi model discovery fell back to static catalog", "error", err)
+		}
+		return kimiStaticModels(), nil
 	}
 	if !kimiSupportsThinkingEfforts(acpVersion) {
 		// Not an error and not worth a Warn: an older CLI still lists models and
@@ -1376,6 +1379,16 @@ func discoverKimiModels(ctx context.Context, runtimeCmd Command) ([]Model, error
 		}
 	}
 	return models, nil
+}
+
+// kimiStaticModels is the offline fallback catalog for the Kimi CLI.
+// IDs match the model keys advertised by the Kimi Code platform.
+func kimiStaticModels() []Model {
+	return []Model{
+		{ID: "kimi-k2.7-coding", Label: "K2.7 Coding", Provider: "kimi", Default: true},
+		{ID: "kimi-k2.7-coding-highspeed", Label: "K2.7 Coding Highspeed", Provider: "kimi"},
+		{ID: "kimi-k3", Label: "K3", Provider: "kimi"},
+	}
 }
 
 // kimiMinThinkingEffortVersion is the first Kimi Code CLI whose ACP surface
