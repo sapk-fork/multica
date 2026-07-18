@@ -51,15 +51,8 @@ type IssueResponse struct {
 	Stage     *int32  `json:"stage"`
 	StartDate *string `json:"start_date"`
 	DueDate   *string `json:"due_date"`
-	// GitWorkBranch / GitBaseBranch (MUL-44): optional issue-level pins
-	// that tell the working agent which branch to commit to and which
-	// base to open the PR/MR against. Pointer + omitempty so paths that
-	// don't load them (or that want the field absent) emit nothing; the
-	// full row → response path always populates the pointer explicitly.
-	GitWorkBranch *string `json:"git_work_branch,omitempty"`
-	GitBaseBranch *string `json:"git_base_branch,omitempty"`
-	CreatedAt     string  `json:"created_at"`
-	UpdatedAt     string  `json:"updated_at"`
+	CreatedAt string  `json:"created_at"`
+	UpdatedAt string  `json:"updated_at"`
 	// Metadata is the per-issue KV map (see issue_metadata.go). Always emitted
 	// (empty object when unset) so frontend code can `issue.metadata[key]`
 	// without nil-guarding the parent field.
@@ -95,55 +88,6 @@ func validateIssueEnum(w http.ResponseWriter, field, value string, allowed []str
 	return false
 }
 
-// branchNameRe defines the set of characters allowed in a git branch name
-// (matches git's own check-ref-format allowed set minus the wildcard glob
-// markers we never want here). Used by validateBranchName.
-var branchNameRe = regexp.MustCompile(`^[A-Za-z0-9._/\-]+$`)
-
-// validateBranchName checks a git branch name value for the field named
-// by field. Returns nil when value is empty (the field is optional). The
-// field parameter is "git_work_branch" or "git_base_branch" and selects
-// which extra rules apply (git_work_branch forbids "main" and "master";
-// the cross-field check that work != base is the caller's job because
-// it needs both final values).
-//
-// Rules:
-//   - empty allowed (field is optional)
-//   - max 200 chars
-//   - allowed chars: A-Za-z0-9._/-
-//   - no leading '-'
-//   - no '..' substring
-//   - no '@{' substring
-//   - not 'HEAD'
-//   - git_work_branch must not be 'main' or 'master'
-func validateBranchName(field, value string) error {
-	if value == "" {
-		return nil
-	}
-	if len(value) > 200 {
-		return fmt.Errorf("%s must be at most 200 characters", field)
-	}
-	if !branchNameRe.MatchString(value) {
-		return fmt.Errorf("%s contains invalid characters (allowed: A-Za-z0-9._/-)", field)
-	}
-	if strings.HasPrefix(value, "-") {
-		return fmt.Errorf("%s must not start with '-'", field)
-	}
-	if strings.Contains(value, "..") {
-		return fmt.Errorf("%s must not contain '..'", field)
-	}
-	if strings.Contains(value, "@{") {
-		return fmt.Errorf("%s must not contain '@{'", field)
-	}
-	if value == "HEAD" {
-		return fmt.Errorf("%s must not be 'HEAD'", field)
-	}
-	if field == "git_work_branch" && (value == "main" || value == "master") {
-		return fmt.Errorf("git_work_branch must not be an integration branch ('main' or 'master'); use a feature/fix branch")
-	}
-	return nil
-}
-
 func issueToResponse(i db.Issue, issuePrefix string) IssueResponse {
 	identifier := issuePrefix + "-" + strconv.Itoa(int(i.Number))
 	return IssueResponse{
@@ -165,8 +109,6 @@ func issueToResponse(i db.Issue, issuePrefix string) IssueResponse {
 		Stage:         int4ToPtr(i.Stage),
 		StartDate:     dateToPtr(i.StartDate),
 		DueDate:       dateToPtr(i.DueDate),
-		GitWorkBranch: textToPtr(i.GitWorkBranch),
-		GitBaseBranch: textToPtr(i.GitBaseBranch),
 		CreatedAt:     timestampToString(i.CreatedAt),
 		UpdatedAt:     timestampToString(i.UpdatedAt),
 		Metadata:      parseIssueMetadata(i.Metadata),
@@ -196,8 +138,6 @@ func issueListRowToResponse(i db.ListIssuesRow, issuePrefix string) IssueRespons
 		Stage:         int4ToPtr(i.Stage),
 		StartDate:     dateToPtr(i.StartDate),
 		DueDate:       dateToPtr(i.DueDate),
-		GitWorkBranch: textToPtr(i.GitWorkBranch),
-		GitBaseBranch: textToPtr(i.GitBaseBranch),
 		CreatedAt:     timestampToString(i.CreatedAt),
 		UpdatedAt:     timestampToString(i.UpdatedAt),
 		Metadata:      parseIssueMetadata(i.Metadata),
@@ -259,8 +199,6 @@ func openIssueRowToResponse(i db.ListOpenIssuesRow, issuePrefix string) IssueRes
 		Stage:         int4ToPtr(i.Stage),
 		StartDate:     dateToPtr(i.StartDate),
 		DueDate:       dateToPtr(i.DueDate),
-		GitWorkBranch: textToPtr(i.GitWorkBranch),
-		GitBaseBranch: textToPtr(i.GitBaseBranch),
 		CreatedAt:     timestampToString(i.CreatedAt),
 		UpdatedAt:     timestampToString(i.UpdatedAt),
 		Metadata:      parseIssueMetadata(i.Metadata),
@@ -2432,23 +2370,17 @@ func readRuntimeCLIVersion(metadata []byte) string {
 }
 
 type CreateIssueRequest struct {
-	Title         string  `json:"title"`
-	Description   *string `json:"description"`
-	Status        string  `json:"status"`
-	Priority      string  `json:"priority"`
-	AssigneeType  *string `json:"assignee_type"`
-	AssigneeID    *string `json:"assignee_id"`
-	ParentIssueID *string `json:"parent_issue_id"`
-	ProjectID     *string `json:"project_id"`
-	Stage         *int32  `json:"stage,omitempty"`
-	StartDate     *string `json:"start_date"`
-	DueDate       *string `json:"due_date"`
-	// GitWorkBranch / GitBaseBranch (MUL-44) pin the working agent's
-	// commit / base branches. Optional; the handler validates format,
-	// uniqueness (workspace-scoped), and the multi-repo guard before
-	// the service creates the row.
-	GitWorkBranch *string  `json:"git_work_branch,omitempty"`
-	GitBaseBranch *string  `json:"git_base_branch,omitempty"`
+	Title         string   `json:"title"`
+	Description   *string  `json:"description"`
+	Status        string   `json:"status"`
+	Priority      string   `json:"priority"`
+	AssigneeType  *string  `json:"assignee_type"`
+	AssigneeID    *string  `json:"assignee_id"`
+	ParentIssueID *string  `json:"parent_issue_id"`
+	ProjectID     *string  `json:"project_id"`
+	Stage         *int32   `json:"stage,omitempty"`
+	StartDate     *string  `json:"start_date"`
+	DueDate       *string  `json:"due_date"`
 	AttachmentIDs []string `json:"attachment_ids,omitempty"`
 	// LabelIDs are issue-scoped labels to attach to the new issue in the same
 	// transaction as the create. Unknown or non-issue ids are rejected with
@@ -2581,84 +2513,6 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		dueDate = d
 	}
 
-	// MUL-44: optional git branch pins. Validate format + cross-field
-	// invariants and run the workspace-scoped uniqueness check before
-	// the service does the insert. The multi-repo guard (a project
-	// with > 1 github_repo resources cannot have these fields set)
-	// is checked here so the rejection carries a 422 with a clear
-	// message instead of a silently accepted value that would later
-	// be ambiguous about which repo the branch lives on.
-	var gitWorkBranch pgtype.Text
-	var gitBaseBranch pgtype.Text
-	gitBranchSet := req.GitWorkBranch != nil || req.GitBaseBranch != nil
-	if gitBranchSet {
-		gwb := ""
-		if req.GitWorkBranch != nil {
-			gwb = *req.GitWorkBranch
-		}
-		gbb := ""
-		if req.GitBaseBranch != nil {
-			gbb = *req.GitBaseBranch
-		}
-		if err := validateBranchName("git_work_branch", gwb); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		if err := validateBranchName("git_base_branch", gbb); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		if gwb != "" && gbb != "" && gwb == gbb {
-			writeError(w, http.StatusBadRequest, "git_work_branch and git_base_branch must be different")
-			return
-		}
-		// Multi-repo guard: refuse the request if the issue's project
-		// has more than one github_repo resource, because the branch
-		// pins would otherwise need per-repo-id disambiguation (a
-		// per-repo map syntax that is out of scope for MUL-44).
-		if projectID.Valid {
-			count, err := h.Queries.CountGithubRepoResourcesForProject(r.Context(), projectID)
-			if err != nil {
-				slog.Warn("count github_repo resources failed", append(logger.RequestAttrs(r), "error", err, "project_id", util.UUIDToString(projectID))...)
-				writeError(w, http.StatusInternalServerError, "failed to count project resources")
-				return
-			}
-			if count > 1 {
-				writeError(w, http.StatusUnprocessableEntity,
-					"cannot set git_work_branch or git_base_branch when multiple github_repo resources are bound to the project")
-				return
-			}
-		}
-		if gwb != "" {
-			existing, err := h.Queries.FindActiveIssueByWorkBranch(r.Context(), db.FindActiveIssueByWorkBranchParams{
-				WorkspaceID:   wsUUID,
-				GitWorkBranch: pgtype.Text{String: gwb, Valid: true},
-			})
-			if err == nil && existing.ID.Valid {
-				// Route through issueToResponse so the pre-check 409 body
-				// shape matches the post-race path (service
-				// ErrGitWorkBranchConflict). Without this, `"issue"`
-				// here is a raw db.Issue (sqlc internals leak) and
-				// clients that pin to IssueResponse keys see a
-				// different shape depending on which path fired.
-				// Locked in by TestCreateIssueGitWorkBranchConflictBody.
-				existingResp := issueToResponse(existing, h.getIssuePrefix(r.Context(), existing.WorkspaceID))
-				branch := ""
-				if existingResp.GitWorkBranch != nil {
-					branch = *existingResp.GitWorkBranch
-				}
-				writeJSON(w, http.StatusConflict, map[string]any{
-					"code":  "git_work_branch_in_use",
-					"error": fmt.Sprintf("git_work_branch %q is already used by issue %s", branch, existingResp.Identifier),
-					"issue": existingResp,
-				})
-				return
-			}
-		}
-		gitWorkBranch = pgtype.Text{String: gwb, Valid: gwb != ""}
-		gitBaseBranch = pgtype.Text{String: gbb, Valid: gbb != ""}
-	}
-
 	// Determine creator identity: agent (via X-Agent-ID header) or member.
 	creatorType, actualCreatorID := h.resolveActor(r, creatorID, workspaceID)
 
@@ -2753,8 +2607,6 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		ProjectID:      projectID,
 		StartDate:      startDate,
 		DueDate:        dueDate,
-		GitWorkBranch:  gitWorkBranch,
-		GitBaseBranch:  gitBaseBranch,
 		OriginType:     originType,
 		OriginID:       originID,
 		Stage:          ptrToInt4(req.Stage),
@@ -2784,23 +2636,6 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusConflict, map[string]any{
 			"code":  "active_duplicate_issue",
 			"error": duplicateIssueMessage(existing),
-			"issue": existing,
-		})
-		return
-	}
-	if errors.Is(err, service.ErrGitWorkBranchConflict) {
-		// Reached only when a concurrent create beat the handler's
-		// pre-check (the service runs the same query inside the create
-		// tx under the workspace row lock). Render the same 409 shape.
-		dup := *res.DuplicateIssue
-		existing := issueToResponse(dup, h.getIssuePrefix(r.Context(), dup.WorkspaceID))
-		branch := ""
-		if existing.GitWorkBranch != nil {
-			branch = *existing.GitWorkBranch
-		}
-		writeJSON(w, http.StatusConflict, map[string]any{
-			"code":  "git_work_branch_in_use",
-			"error": fmt.Sprintf("git_work_branch %q is already used by issue %s", branch, existing.Identifier),
 			"issue": existing,
 		})
 		return
@@ -2849,12 +2684,6 @@ type UpdateIssueRequest struct {
 	ParentIssueID *string  `json:"parent_issue_id"`
 	ProjectID     *string  `json:"project_id"`
 	Stage         *int32   `json:"stage"`
-	// GitWorkBranch / GitBaseBranch (MUL-44) pin the working agent's
-	// commit / base branches. Optional; passing an explicit null in
-	// the JSON body clears the field (same contract as start_date /
-	// due_date).
-	GitWorkBranch *string `json:"git_work_branch"`
-	GitBaseBranch *string `json:"git_base_branch"`
 	// AttachmentIDs lets the description editor bind newly uploaded files to
 	// this issue so they surface in `GET /api/issues/:id/attachments` and the
 	// editor's preview Eye keeps working past a refresh. Existing bindings
@@ -2909,8 +2738,6 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		ParentIssueID: prevIssue.ParentIssueID,
 		ProjectID:     prevIssue.ProjectID,
 		Stage:         prevIssue.Stage,
-		GitWorkBranch: prevIssue.GitWorkBranch,
-		GitBaseBranch: prevIssue.GitBaseBranch,
 	}
 
 	// COALESCE fields — only set when explicitly provided
@@ -3040,98 +2867,6 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// MUL-44: handle git_work_branch / git_base_branch. Both fields
-	// follow the same nullable pattern as start_date / due_date —
-	// explicit JSON null clears, missing key leaves the column alone.
-	// Setting either field is rejected when the issue's project has
-	// more than one github_repo resource; the uniqueness check runs
-	// only when the work branch is being set to a non-empty value
-	// that differs from the current one (clearing or no-op doesn't
-	// need a check).
-	gitBranchTouched := false
-	if _, ok := rawFields["git_work_branch"]; ok {
-		gitBranchTouched = true
-		gwb := ""
-		if req.GitWorkBranch != nil {
-			gwb = *req.GitWorkBranch
-		}
-		if err := validateBranchName("git_work_branch", gwb); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		prevGWB := textToStringFromText(prevIssue.GitWorkBranch)
-		if gwb != "" && gwb != prevGWB {
-			existing, err := h.Queries.FindActiveIssueByWorkBranch(r.Context(), db.FindActiveIssueByWorkBranchParams{
-				WorkspaceID:   prevIssue.WorkspaceID,
-				GitWorkBranch: pgtype.Text{String: gwb, Valid: true},
-			})
-			if err == nil && existing.ID.Valid && existing.ID != prevIssue.ID {
-				// Route through issueToResponse so the pre-check
-				// 409 body shape matches the post-race path
-				// (service ErrGitWorkBranchConflict, which only
-				// fires on create) and the create pre-check
-				// path. Locked in by
-				// TestUpdateIssueGitWorkBranchConflictBody.
-				existingResp := issueToResponse(existing, h.getIssuePrefix(r.Context(), existing.WorkspaceID))
-				branch := ""
-				if existingResp.GitWorkBranch != nil {
-					branch = *existingResp.GitWorkBranch
-				}
-				writeJSON(w, http.StatusConflict, map[string]any{
-					"code":  "git_work_branch_in_use",
-					"error": fmt.Sprintf("git_work_branch %q is already used by issue %s", branch, existingResp.Identifier),
-					"issue": existingResp,
-				})
-				return
-			}
-		}
-		params.GitWorkBranch = pgtype.Text{String: gwb, Valid: gwb != ""}
-	}
-	if _, ok := rawFields["git_base_branch"]; ok {
-		gitBranchTouched = true
-		gbb := ""
-		if req.GitBaseBranch != nil {
-			gbb = *req.GitBaseBranch
-		}
-		if err := validateBranchName("git_base_branch", gbb); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		params.GitBaseBranch = pgtype.Text{String: gbb, Valid: gbb != ""}
-	}
-	// Cross-field check: work and base must differ in the final state
-	// (only when the caller actually touched at least one of the two
-	// fields — otherwise pre-existing data is left alone).
-	if gitBranchTouched {
-		finalGWB := textToStringFromText(params.GitWorkBranch)
-		finalGBB := textToStringFromText(params.GitBaseBranch)
-		if finalGWB != "" && finalGBB != "" && finalGWB == finalGBB {
-			writeError(w, http.StatusBadRequest, "git_work_branch and git_base_branch must be different")
-			return
-		}
-		// Multi-repo guard. Use the *resolved* project_id (which may
-		// be the one the caller just set via project_id, or the
-		// issue's existing project). The branch-pin set is allowed
-		// only when the project has 0 or 1 github_repo resources.
-		projectForGuard := params.ProjectID
-		if !projectForGuard.Valid {
-			projectForGuard = prevIssue.ProjectID
-		}
-		if projectForGuard.Valid {
-			count, err := h.Queries.CountGithubRepoResourcesForProject(r.Context(), projectForGuard)
-			if err != nil {
-				slog.Warn("count github_repo resources failed", append(logger.RequestAttrs(r), "error", err, "project_id", util.UUIDToString(projectForGuard))...)
-				writeError(w, http.StatusInternalServerError, "failed to count project resources")
-				return
-			}
-			if count > 1 {
-				writeError(w, http.StatusUnprocessableEntity,
-					"cannot set git_work_branch or git_base_branch when multiple github_repo resources are bound to the project")
-				return
-			}
-		}
-	}
-
 	// Validate the resulting (assignee_type, assignee_id) pair when the caller
 	// touches either field. Existing data on the issue is left alone if the
 	// caller is not changing it.
@@ -3181,44 +2916,30 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	prevDueDate := dateToPtr(prevIssue.DueDate)
 	dueDateChanged := prevDueDate != resp.DueDate && (prevDueDate == nil) != (resp.DueDate == nil) ||
 		(prevDueDate != nil && resp.DueDate != nil && *prevDueDate != *resp.DueDate)
-	prevGitWorkBranch := textToPtr(prevIssue.GitWorkBranch)
-	_, gitWorkBranchTouched := rawFields["git_work_branch"]
-	gitWorkBranchChanged := gitWorkBranchTouched &&
-		((prevGitWorkBranch == nil) != (resp.GitWorkBranch == nil) ||
-			(prevGitWorkBranch != nil && resp.GitWorkBranch != nil && *prevGitWorkBranch != *resp.GitWorkBranch))
-	prevGitBaseBranch := textToPtr(prevIssue.GitBaseBranch)
-	_, gitBaseBranchTouched := rawFields["git_base_branch"]
-	gitBaseBranchChanged := gitBaseBranchTouched &&
-		((prevGitBaseBranch == nil) != (resp.GitBaseBranch == nil) ||
-			(prevGitBaseBranch != nil && resp.GitBaseBranch != nil && *prevGitBaseBranch != *resp.GitBaseBranch))
 
 	// Determine actor identity: agent (via X-Agent-ID header) or member.
 	actorType, actorID := h.resolveActor(r, userID, workspaceID)
 
 	h.publish(protocol.EventIssueUpdated, workspaceID, actorType, actorID, map[string]any{
-		"issue":                   resp,
-		"assignee_changed":        assigneeChanged,
-		"status_changed":          statusChanged,
-		"priority_changed":        priorityChanged,
-		"project_changed":         projectChanged,
-		"start_date_changed":      startDateChanged,
-		"due_date_changed":        dueDateChanged,
-		"git_work_branch_changed": gitWorkBranchChanged,
-		"git_base_branch_changed": gitBaseBranchChanged,
-		"description_changed":     descriptionChanged,
-		"title_changed":           titleChanged,
-		"prev_title":              prevIssue.Title,
-		"prev_assignee_type":      textToPtr(prevIssue.AssigneeType),
-		"prev_assignee_id":        uuidToPtr(prevIssue.AssigneeID),
-		"prev_status":             prevIssue.Status,
-		"prev_priority":           prevIssue.Priority,
-		"prev_start_date":         prevStartDate,
-		"prev_due_date":           prevDueDate,
-		"prev_git_work_branch":    prevGitWorkBranch,
-		"prev_git_base_branch":    prevGitBaseBranch,
-		"prev_description":        textToPtr(prevIssue.Description),
-		"creator_type":            prevIssue.CreatorType,
-		"creator_id":              uuidToString(prevIssue.CreatorID),
+		"issue":               resp,
+		"assignee_changed":    assigneeChanged,
+		"status_changed":      statusChanged,
+		"priority_changed":    priorityChanged,
+		"project_changed":     projectChanged,
+		"start_date_changed":  startDateChanged,
+		"due_date_changed":    dueDateChanged,
+		"description_changed": descriptionChanged,
+		"title_changed":       titleChanged,
+		"prev_title":          prevIssue.Title,
+		"prev_assignee_type":  textToPtr(prevIssue.AssigneeType),
+		"prev_assignee_id":    uuidToPtr(prevIssue.AssigneeID),
+		"prev_status":         prevIssue.Status,
+		"prev_priority":       prevIssue.Priority,
+		"prev_start_date":     prevStartDate,
+		"prev_due_date":       prevDueDate,
+		"prev_description":    textToPtr(prevIssue.Description),
+		"creator_type":        prevIssue.CreatorType,
+		"creator_id":          uuidToString(prevIssue.CreatorID),
 	})
 
 	// Reconcile the task queue. Whether this write starts an agent run — and
