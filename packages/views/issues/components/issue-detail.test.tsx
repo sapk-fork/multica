@@ -480,8 +480,6 @@ const mockIssue: Issue = {
   stage: null,
   start_date: null,
   due_date: "2026-06-01T00:00:00Z",
-  git_work_branch: null,
-  git_base_branch: null,
   metadata: {},
   properties: {},
   created_at: "2026-01-15T00:00:00Z",
@@ -834,48 +832,6 @@ describe("IssueDetail (shared)", () => {
     // Key names are not rendered in the sidebar prior to opening the dialog.
     expect(screen.queryByText("pr_url")).not.toBeInTheDocument();
     expect(screen.queryByText("pipeline_status")).not.toBeInTheDocument();
-  });
-
-  it("renders editable work/base branch rows in the sidebar when both branches are set", async () => {
-    // M-59: an issue pinned to specific work/base branches surfaces them as
-    // editable property rows (each a BranchPicker showing the current value).
-    mockApiObj.getIssue.mockResolvedValue({
-      ...mockIssue,
-      git_work_branch: "feature/m-44-thing",
-      git_base_branch: "main",
-    });
-
-    renderIssueDetail();
-
-    await waitFor(() => {
-      expect(screen.getByText("feature/m-44-thing")).toBeInTheDocument();
-    });
-
-    // The two property rows are labelled "Work branch" / "Base branch" and
-    // each picker trigger shows its current value.
-    expect(screen.getByText("Work branch")).toBeInTheDocument();
-    expect(screen.getByText("Base branch")).toBeInTheDocument();
-    expect(screen.getByText("main")).toBeInTheDocument();
-  });
-
-  it("does not show the git branch rows when neither branch is set", async () => {
-    // No pinning on the issue → the rows stay hidden until added via the
-    // "+ Add property" picker (the popover is closed by default, so its
-    // option labels are not in the DOM either).
-    mockApiObj.getIssue.mockResolvedValue({
-      ...mockIssue,
-      git_work_branch: null,
-      git_base_branch: null,
-    });
-
-    renderIssueDetail();
-
-    await waitFor(() => {
-      expect(screen.getByText("Properties")).toBeInTheDocument();
-    });
-
-    expect(screen.queryByText("Work branch")).not.toBeInTheDocument();
-    expect(screen.queryByText("Base branch")).not.toBeInTheDocument();
   });
 
   it("opens a dialog with formatted JSON when the Metadata button is clicked", async () => {
