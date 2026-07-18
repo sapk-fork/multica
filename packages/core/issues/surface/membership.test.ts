@@ -26,8 +26,6 @@ function makeIssue(overrides: Partial<Issue> = {}): Issue {
     stage: null,
     start_date: null,
     due_date: null,
-    git_work_branch: null,
-    git_base_branch: null,
     labels: [],
     metadata: {},
   properties: {},
