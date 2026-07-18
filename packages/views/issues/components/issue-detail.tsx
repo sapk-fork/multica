@@ -14,7 +14,6 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleCheck,
-  GitBranch,
   Milestone,
   MoreHorizontal,
   PanelRight,
@@ -53,7 +52,7 @@ import { STATUS_CONFIG, PRIORITY_CONFIG } from "@multica/core/issues/config";
 import { formatDateOnly } from "@multica/core/issues/date";
 import { useUpdateIssue } from "@multica/core/issues/mutations";
 import { toast } from "sonner";
-import { StatusIcon, PriorityIcon, StatusPicker, PriorityPicker, StagePicker, StartDatePicker, DueDatePicker, AssigneePicker, LabelPicker, BranchPicker } from ".";
+import { StatusIcon, PriorityIcon, StatusPicker, PriorityPicker, StagePicker, StartDatePicker, DueDatePicker, AssigneePicker, LabelPicker } from ".";
 import { maxSiblingStage } from "./pickers/stage-picker";
 import { CustomPropertyValueEditor } from "./pickers/custom-property-picker";
 import { IssueActionsDropdown, useIssueActions } from "../actions";
@@ -322,7 +321,7 @@ const EMPTY_REPLIES: TimelineEntry[] = [];
 // its row and add-property entry are gated on `issue.parent_issue_id` at the
 // render site below — it stays in this list so seeding/visibility flow through
 // the same machinery as the other optional props.
-const OPTIONAL_PROP_KEYS = ["priority", "stage", "start_date", "due_date", "labels", "git_work_branch", "git_base_branch"] as const;
+const OPTIONAL_PROP_KEYS = ["priority", "stage", "start_date", "due_date", "labels"] as const;
 type OptionalPropKey = (typeof OPTIONAL_PROP_KEYS)[number];
 
 function isOptionalPropSet(
@@ -341,10 +340,6 @@ function isOptionalPropSet(
       return !!issue.due_date;
     case "labels":
       return attachedLabelsCount > 0;
-    case "git_work_branch":
-      return !!issue.git_work_branch;
-    case "git_base_branch":
-      return !!issue.git_base_branch;
   }
 }
 
@@ -1654,33 +1649,6 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
               </PropRow>
             ))}
 
-          {/* Editable git branch pins (M-44 / M-59). Both pin the branch an
-              agent should commit to (work) and base / target the PR against
-              (base). Inline editor with client-side validation mirroring the
-              server's validateBranchName; the server stays authoritative. */}
-          {visibleOptionalProps.has("git_work_branch") && (
-            <PropRow label={t(($) => $.detail.prop_git_work_branch)}>
-              <BranchPicker
-                field="git_work_branch"
-                value={issue.git_work_branch}
-                onUpdate={handleUpdateField}
-                align="start"
-                defaultOpen={autoOpenProp === "git_work_branch"}
-              />
-            </PropRow>
-          )}
-          {visibleOptionalProps.has("git_base_branch") && (
-            <PropRow label={t(($) => $.detail.prop_git_base_branch)}>
-              <BranchPicker
-                field="git_base_branch"
-                value={issue.git_base_branch}
-                onUpdate={handleUpdateField}
-                align="start"
-                defaultOpen={autoOpenProp === "git_base_branch"}
-              />
-            </PropRow>
-          )}
-
           {/* "+ Add property" — opens a Popover listing optional fields
               not yet displayed. Hidden once every optional field is on
               screen. Sits inside the same grid as a full-row, with its
@@ -1722,17 +1690,12 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                       {k === "labels" && (
                         <Tag className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       )}
-                      {(k === "git_work_branch" || k === "git_base_branch") && (
-                        <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      )}
                       <span className="truncate">
                         {k === "priority" && t(($) => $.detail.prop_priority)}
                         {k === "stage" && t(($) => $.detail.prop_stage)}
                         {k === "start_date" && t(($) => $.detail.prop_start_date)}
                         {k === "due_date" && t(($) => $.detail.prop_due_date)}
                         {k === "labels" && t(($) => $.detail.prop_labels)}
-                        {k === "git_work_branch" && t(($) => $.detail.prop_git_work_branch)}
-                        {k === "git_base_branch" && t(($) => $.detail.prop_git_base_branch)}
                       </span>
                     </button>
                   ))}
