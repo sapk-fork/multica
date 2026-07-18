@@ -825,14 +825,31 @@ func discoverHermesModels(ctx context.Context, executablePath string) ([]Model, 
 // ACPServer.new_session returns a `models` block of the same shape
 // (`availableModels`/`currentModelId`) so the parsing path is shared.
 //
-// Failure modes (kimi missing, not logged in, config error) all
-// return an empty list so the UI falls back to manual entry.
+// On any failure (kimi missing, not logged in, config error) falls
+// back to kimiStaticModels so the UI picker stays usable offline.
 func discoverKimiModels(ctx context.Context, executablePath string) ([]Model, error) {
-	return discoverACPModels(ctx, executablePath, acpDiscoveryProvider{
+	models, err := discoverACPModels(ctx, executablePath, acpDiscoveryProvider{
 		defaultBin:   "kimi",
 		clientName:   "multica-model-discovery",
 		tmpdirPrefix: "multica-kimi-discovery-",
 	})
+	if err != nil || len(models) == 0 {
+		if err != nil {
+			slog.Debug("kimi model discovery fell back to static catalog", "error", err)
+		}
+		return kimiStaticModels(), nil
+	}
+	return models, nil
+}
+
+// kimiStaticModels is the offline fallback catalog for the Kimi CLI.
+// IDs match the model keys advertised by the Kimi Code platform.
+func kimiStaticModels() []Model {
+	return []Model{
+		{ID: "kimi-k2.7-coding", Label: "K2.7 Coding", Provider: "kimi", Default: true},
+		{ID: "kimi-k2.7-coding-highspeed", Label: "K2.7 Coding Highspeed", Provider: "kimi"},
+		{ID: "kimi-k3", Label: "K3", Provider: "kimi"},
+	}
 }
 
 // discoverKiroModels spins up a throwaway `kiro-cli acp` process and parses
