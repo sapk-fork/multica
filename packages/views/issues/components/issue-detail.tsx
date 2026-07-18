@@ -2023,7 +2023,6 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
               />
             </PropRow>
           )}
-          )}
 
           {/* "+ Add property" — opens a Popover listing optional fields
               not yet displayed. Hidden once every optional field is on
