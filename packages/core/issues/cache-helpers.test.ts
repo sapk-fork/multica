@@ -24,8 +24,6 @@ function mk(id: string, status: Issue["status"], position: number): Issue {
     stage: null,
     start_date: null,
     due_date: null,
-    git_work_branch: null,
-    git_base_branch: null,
     metadata: {},
   properties: {},
     labels: [],
