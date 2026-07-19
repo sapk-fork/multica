@@ -158,6 +158,7 @@ func TestIsBlockedEnvKey(t *testing.T) {
 		{key: "TEMP", want: true},
 		{key: "CODEX_HOME", want: true},
 		{key: "REASONIX_STATE_HOME", want: true},
+		{key: "KIMI_CODE_HOME", want: true},
 		{key: "CURSOR_DATA_DIR", want: true},
 		{key: "cursor_data_dir", want: true},
 		{key: "CURSOR_MCP_AUTH_SOURCE", want: true},
