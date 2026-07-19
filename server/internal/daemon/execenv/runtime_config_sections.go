@@ -582,38 +582,26 @@ func writeSubIssueCreation(b *strings.Builder) {
 // Each CLI's own listing is theirs: its format, and whether it exists at all,
 // can change with any release.
 //
-// There is no per-provider branch except Kimi. The old fallback told providers
-// outside a hardcoded list to read `.agent_context/skills/`, which was the
-// wrong path for every provider that actually reached it — grok and traecli
-// write to `.grok/skills` and `.traecli/skills` — while both discover natively
-// and never needed the pointer.
+// There is no per-provider branch, including Kimi. The old fallback told
+// providers outside a hardcoded list to read `.agent_context/skills/`, which
+// was the wrong path for every provider that actually reached it — grok and
+// traecli write to `.grok/skills` and `.traecli/skills` — while both discover
+// natively and never needed the pointer.
 //
-// Kimi is the one exception. Its own project-level skill scan depends on the
-// same cwd resolution daemon.go's providerNeedsInlineSystemPrompt already
-// distrusts enough to inline the entire runtime brief for this provider, so it
-// can silently miss `.kimi/skills/` the same way it misses AGENTS.md. Point
-// the agent at the on-disk SKILL.md path directly instead of assuming native
-// discovery works (MUL-93).
-func writeSkills(b *strings.Builder, provider string, ctx TaskContextForEnv) {
+// Kimi no longer needs a special case either: its skills are hydrated into
+// its per-task KIMI_CODE_HOME/skills (seeded by the daemon at Prepare/Reuse —
+// see kimi_code_home.go), which is Kimi Code CLI's own User-tier skill scan
+// location. That placement is what makes discovery work by construction, so
+// Kimi gets the same "discovered automatically" framing as every other
+// native-discovery runtime instead of a special-cased path pointer (MUL-93).
+func writeSkills(b *strings.Builder, ctx TaskContextForEnv) {
 	skills := modelVisibleSkills(ctx.AgentSkills)
 	if len(skills) == 0 {
 		return
 	}
 	b.WriteString("## Skills\n\n")
-	if provider == "kimi" {
-		// The path emitted per skill below must come from sanitizeSkillName —
-		// the same function writeSkillFiles uses to name the on-disk
-		// directory — so this text can never drift from where the SKILL.md
-		// actually lives (MUL-93).
-		b.WriteString("Skill instructions are on disk at `.kimi/skills/<slug>/SKILL.md` in your working directory (one subdirectory per skill, exact path given below) — read the file before using a skill:\n\n")
-	} else {
-		b.WriteString("You have the following skills installed (discovered automatically):\n\n")
-	}
+	b.WriteString("You have the following skills installed (discovered automatically):\n\n")
 	for _, skill := range skills {
-		if provider == "kimi" {
-			fmt.Fprintf(b, "- **%s** — `.kimi/skills/%s/SKILL.md`\n", skill.Name, sanitizeSkillName(skill.Name))
-			continue
-		}
 		fmt.Fprintf(b, "- **%s**\n", skill.Name)
 	}
 	b.WriteString("\n")
@@ -797,7 +785,7 @@ func buildMetaSkillContentSlim(provider string, ctx TaskContextForEnv) string {
 	// Every kind, quick-create included. Quick-create used to be skipped here
 	// and carried its own copy in issue_context.md instead; now that both are
 	// the same names-only index, the brief is the one that survives.
-	writeSkills(&b, provider, ctx)
+	writeSkills(&b, ctx)
 
 	if kind == kindIssue {
 		writeMentions(&b)
