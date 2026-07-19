@@ -1,14 +1,18 @@
 package agent
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -493,6 +497,32 @@ func (b *kimiBackend) Execute(ctx context.Context, prompt string, opts ExecOptio
 			}
 		}
 
+		// Kimi answers session/prompt with stopReason=end_turn even when
+		// the turn died provider-side (upstream kimi bug; the failure is
+		// only recorded in the session's logs/kimi-code.log). A
+		// "completed" run with no output AND no usage.record for the turn
+		// is therefore not a valid empty completion: cross-check the
+		// session log for an in-window turn failure and fail loudly with
+		// the real provider error instead of reporting a silent success.
+		// The session id is dropped as well — a failed turn can leave the
+		// context corrupt (empty assistant message) and brick every
+		// follow-up resume, so the empty SessionID routes the daemon's
+		// resume-failure fallback to a fresh session. Healthy empty
+		// completions flushed a usage.record and never reach this check.
+		if finalStatus == "completed" && finalOutput == "" && sessionID != "" &&
+			u.InputTokens == 0 && u.OutputTokens == 0 && u.CacheReadTokens == 0 && u.CacheWriteTokens == 0 &&
+			usageMap == nil {
+			if failMsg, failed := readKimiTurnFailure(sessionID, startTime, b.cfg.Logger); failed {
+				b.cfg.Logger.Warn("kimi turn failed provider-side behind end_turn; failing the run and dropping the poisoned session",
+					"session_id", sessionID,
+					"error", failMsg,
+				)
+				finalStatus = "failed"
+				finalError = failMsg
+				sessionID = ""
+			}
+		}
+
 		resCh <- Result{
 			Status:         finalStatus,
 			Output:         finalOutput,
@@ -762,4 +792,174 @@ func kimiSessionRoot(kimiHome string) string {
 		return dir
 	}
 	return ""
+}
+
+// kimiCodeHome returns kimi-cli's data dir: $KIMI_CODE_HOME when set,
+// else ~/.kimi-code. The KIMI_CODE_HOME lookup uses the daemon process
+// env, which is what the child inherits in the common case.
+func kimiCodeHome() string {
+	if home := os.Getenv("KIMI_CODE_HOME"); home != "" {
+		return home
+	}
+	if h, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(h, ".kimi-code")
+	}
+	return ""
+}
+
+// Markers recorded in the session's logs/kimi-code.log when a turn dies
+// provider-side while ACP still reports stopReason=end_turn (upstream
+// kimi bug; see M-95). The ERROR line marks the failure, the WARN line
+// carries the provider error payload:
+//
+//	2026-07-19T15:03:24.931Z ERROR turn failed  turnId=1
+//	2026-07-19T15:03:24.933Z WARN  acp: turn ended with failed reason  error="{...}"
+const (
+	kimiTurnFailedMarker       = "turn failed"
+	kimiTurnFailedDetailMarker = "acp: turn ended with failed reason"
+)
+
+// kimiTurnFailedErrorRe extracts the slog-style quoted error attribute
+// from the detail line: `error="{\"code\":\"provider.api_error\",...}"`.
+var kimiTurnFailedErrorRe = regexp.MustCompile(`\berror="((?:[^"\\]|\\.)*)"`)
+
+// kimiWireUsageGrace absorbs clock granularity between the daemon's run
+// start and kimi's record timestamps (same host, same clock). It stays
+// far below the age of any previous task's records on a resumed session.
+const kimiWireUsageGrace = 5 * time.Second
+
+// readKimiTurnFailure cross-checks the session's logs/kimi-code.log (same
+// directory layout as the wire: sessions/<cwd-hash>/<sessionID>/logs/) for
+// a turn failure recorded at or after `since`, returning a message that
+// surfaces the provider error. It exists because kimi reports failed
+// turns over ACP as stopReason=end_turn with no output, so the session
+// log is the only place the failure — and its cause — is visible.
+//
+// Only entries newer than `since` (minus kimiWireUsageGrace, same host
+// clock) count: the log accumulates every past turn on a resumed session,
+// and a failure from a previous run must not flag the current one. Lines
+// whose timestamp can't be parsed are skipped for the same reason.
+// Returns ("", false) when no log exists at all (older kimi builds,
+// custom data dir) — no signal, never a false positive.
+func readKimiTurnFailure(sessionID string, since time.Time, logger *slog.Logger) (string, bool) {
+	home := kimiCodeHome()
+	if home == "" {
+		return "", false
+	}
+	files, err := filepath.Glob(filepath.Join(home, "sessions", "*", sessionID, "logs", "kimi-code.log"))
+	if err != nil || len(files) == 0 {
+		return "", false
+	}
+	cutoff := since.Add(-kimiWireUsageGrace)
+	failed := false
+	detail := ""
+	for _, f := range files {
+		fileDetail, fileFailed, err := scanKimiTurnFailureLog(f, cutoff)
+		if err != nil {
+			logger.Debug("kimi turn-failure log read failed", "file", f, "error", err)
+			continue
+		}
+		if fileFailed {
+			failed = true
+			if fileDetail != "" {
+				detail = fileDetail
+			}
+		}
+	}
+	if !failed {
+		return "", false
+	}
+	const prefix = "kimi turn failed provider-side (acp reported end_turn)"
+	if detail == "" {
+		return prefix + "; see the session's logs/kimi-code.log", true
+	}
+	return prefix + ": " + detail, true
+}
+
+// scanKimiTurnFailureLog reads one kimi-code.log and reports whether it
+// holds an in-window turn failure, plus the extracted provider error
+// detail from the most recent matching WARN line ("" when only the bare
+// ERROR marker matched). Like the wire, the log is an append-only file
+// best read leniently, with an unbounded reader so an oversized line
+// can't hide failure entries appended after it.
+func scanKimiTurnFailureLog(path string, cutoff time.Time) (string, bool, error) {
+	fh, err := os.Open(path)
+	if err != nil {
+		return "", false, err
+	}
+	defer func() { _ = fh.Close() }()
+	found := false
+	detail := ""
+	r := bufio.NewReader(fh)
+	for {
+		line, err := r.ReadBytes('\n')
+		if len(line) > 0 {
+			if d, ok := parseKimiTurnFailureLine(line, cutoff); ok {
+				found = true
+				if d != "" {
+					detail = d
+				}
+			}
+		}
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return detail, found, err
+		}
+	}
+	return detail, found, nil
+}
+
+// parseKimiTurnFailureLine reports whether one kimi-code.log line records
+// a turn failure at or after cutoff. Lines are Go-slog text
+// ("<rfc3339> <LEVEL> <msg> key=value …"); the leading timestamp decides
+// whether the entry belongs to the current run.
+func parseKimiTurnFailureLine(line []byte, cutoff time.Time) (string, bool) {
+	if !bytes.Contains(line, []byte(kimiTurnFailedMarker)) &&
+		!bytes.Contains(line, []byte(kimiTurnFailedDetailMarker)) {
+		return "", false
+	}
+	sp := bytes.IndexByte(line, ' ')
+	if sp <= 0 {
+		return "", false
+	}
+	ts, err := time.Parse(time.RFC3339Nano, string(line[:sp]))
+	if err != nil || ts.Before(cutoff) {
+		return "", false
+	}
+	if !bytes.Contains(line, []byte(kimiTurnFailedDetailMarker)) {
+		// Bare ERROR marker; the paired WARN detail line carries the cause.
+		return "", true
+	}
+	return extractKimiTurnFailureDetail(line), true
+}
+
+// extractKimiTurnFailureDetail pulls the provider error out of the WARN
+// detail line's error attribute — a quoted JSON payload such as
+// {"code":"provider.api_error","message":"400 the message at position 168
+// ..."}. Returns "code: message" (or just the message), "" when the
+// attribute is missing or malformed.
+func extractKimiTurnFailureDetail(line []byte) string {
+	m := kimiTurnFailedErrorRe.FindSubmatch(line)
+	if m == nil {
+		return ""
+	}
+	raw, err := strconv.Unquote(`"` + string(m[1]) + `"`)
+	if err != nil {
+		return ""
+	}
+	var payload struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		return ""
+	}
+	switch {
+	case payload.Code != "" && payload.Message != "":
+		return payload.Code + ": " + payload.Message
+	default:
+		return payload.Message
+	}
 }
