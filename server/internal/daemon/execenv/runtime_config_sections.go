@@ -655,11 +655,19 @@ func writeSkills(b *strings.Builder, provider string, ctx TaskContextForEnv) {
 	}
 	b.WriteString("## Skills\n\n")
 	if provider == "kimi" {
-		b.WriteString("Skill instructions are on disk at `.kimi/skills/<name>/SKILL.md` in your working directory (one subdirectory per skill below, `<name>` matching the skill name) — read the file before using a skill:\n\n")
+		// The path emitted per skill below must come from sanitizeSkillName —
+		// the same function writeSkillFiles uses to name the on-disk
+		// directory — so this text can never drift from where the SKILL.md
+		// actually lives (MUL-93).
+		b.WriteString("Skill instructions are on disk at `.kimi/skills/<slug>/SKILL.md` in your working directory (one subdirectory per skill, exact path given below) — read the file before using a skill:\n\n")
 	} else {
 		b.WriteString("You have the following skills installed (discovered automatically):\n\n")
 	}
 	for _, skill := range skills {
+		if provider == "kimi" {
+			fmt.Fprintf(b, "- **%s** — `.kimi/skills/%s/SKILL.md`\n", skill.Name, sanitizeSkillName(skill.Name))
+			continue
+		}
 		fmt.Fprintf(b, "- **%s**\n", skill.Name)
 	}
 	b.WriteString("\n")
