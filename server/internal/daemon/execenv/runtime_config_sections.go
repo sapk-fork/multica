@@ -633,18 +633,29 @@ func writeSubIssueCreation(b *strings.Builder) {
 // Each CLI's own listing is theirs: its format, and whether it exists at all,
 // can change with any release.
 //
-// There is no per-provider branch. The old fallback told providers outside a
-// hardcoded list to read `.agent_context/skills/`, which was the wrong path for
-// every provider that actually reached it — grok and traecli write to
-// `.grok/skills` and `.traecli/skills` — while both discover natively and never
-// needed the pointer.
-func writeSkills(b *strings.Builder, ctx TaskContextForEnv) {
+// There is no per-provider branch except Kimi. The old fallback told providers
+// outside a hardcoded list to read `.agent_context/skills/`, which was the
+// wrong path for every provider that actually reached it — grok and traecli
+// write to `.grok/skills` and `.traecli/skills` — while both discover natively
+// and never needed the pointer.
+//
+// Kimi is the one exception. Its own project-level skill scan depends on the
+// same cwd resolution daemon.go's providerNeedsInlineSystemPrompt already
+// distrusts enough to inline the entire runtime brief for this provider, so it
+// can silently miss `.kimi/skills/` the same way it misses AGENTS.md. Point
+// the agent at the on-disk SKILL.md path directly instead of assuming native
+// discovery works (MUL-93).
+func writeSkills(b *strings.Builder, provider string, ctx TaskContextForEnv) {
 	skills := modelVisibleSkills(ctx.AgentSkills)
 	if len(skills) == 0 {
 		return
 	}
 	b.WriteString("## Skills\n\n")
-	b.WriteString("You have the following skills installed (discovered automatically):\n\n")
+	if provider == "kimi" {
+		b.WriteString("Skill instructions are on disk at `.kimi/skills/<name>/SKILL.md` in your working directory (one subdirectory per skill below, `<name>` matching the skill name) — read the file before using a skill:\n\n")
+	} else {
+		b.WriteString("You have the following skills installed (discovered automatically):\n\n")
+	}
 	for _, skill := range skills {
 		fmt.Fprintf(b, "- **%s**\n", skill.Name)
 	}
@@ -853,7 +864,7 @@ func buildMetaSkillContentSlim(provider string, ctx TaskContextForEnv) string {
 	// Every kind, quick-create included. Quick-create used to be skipped here
 	// and carried its own copy in issue_context.md instead; now that both are
 	// the same names-only index, the brief is the one that survives.
-	writeSkills(&b, ctx)
+	writeSkills(&b, provider, ctx)
 
 	if kind == kindIssue {
 		writeMentions(&b)
