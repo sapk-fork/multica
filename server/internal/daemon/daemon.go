@@ -6554,6 +6554,13 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 	// user's existing state (MUL-5578). The Multica CLI is the exception:
 	// MULTICA_TASK_CONFIG_ROOT above redirects its implicit profile lookup to
 	// private task-local state and prevents Owner-profile fallback.
+	// Point Kimi Code CLI at the per-task KIMI_CODE_HOME so its native
+	// User-tier skill scan discovers the bound skills at
+	// $KIMI_CODE_HOME/skills/ (see kimi_code_home.go) without polluting the
+	// user's real ~/.kimi-code/skills/.
+	if env.KimiCodeHome != "" {
+		agentEnv["KIMI_CODE_HOME"] = env.KimiCodeHome
+	}
 	// (Hermes HERMES_HOME is applied after custom_env below so the per-task
 	// overlay can win over a user-set HERMES_HOME; see
 	// layerCustomEnvAndHermesHome.)
@@ -8097,7 +8104,7 @@ func isBlockedEnvKey(key string) bool {
 		return true
 	}
 	switch upper {
-	case "HOME", "PATH", "USER", "SHELL", "TERM", "TMPDIR", "TMP", "TEMP", "CODEX_HOME", "REASONIX_STATE_HOME", "CURSOR_DATA_DIR", execenv.CursorMcpAuthSourceEnv, "OPENCLAW_CONFIG_PATH", "OPENCLAW_INCLUDE_ROOTS":
+	case "HOME", "PATH", "USER", "SHELL", "TERM", "TMPDIR", "TMP", "TEMP", "CODEX_HOME", "KIMI_CODE_HOME", "REASONIX_STATE_HOME", "CURSOR_DATA_DIR", execenv.CursorMcpAuthSourceEnv, "OPENCLAW_CONFIG_PATH", "OPENCLAW_INCLUDE_ROOTS":
 		return true
 	}
 	return false
