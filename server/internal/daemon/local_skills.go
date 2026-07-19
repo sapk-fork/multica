@@ -170,7 +170,16 @@ func localSkillRootsForProvider(provider string) ([]localSkillRoot, bool, error)
 		case "hermes":
 			providerRoot = filepath.Join(home, ".hermes", "skills")
 		case "kimi":
-			providerRoot = filepath.Join(home, ".kimi", "skills")
+			// KIMI_CODE_HOME replaces the default ~/.kimi-code home for config,
+			// credentials, and user-level skills. The CLI/directory were renamed
+			// from kimi-cli/.kimi to Kimi Code CLI/.kimi-code; ~/.kimi/skills is
+			// not scanned by any current Kimi Code CLI tier. See
+			// https://www.kimi.com/code/docs/en/kimi-code-cli/customization/skills.html
+			kimiHome := strings.TrimSpace(os.Getenv("KIMI_CODE_HOME"))
+			if kimiHome == "" {
+				kimiHome = filepath.Join(home, ".kimi-code")
+			}
+			providerRoot = filepath.Join(kimiHome, "skills")
 		case "reasonix":
 			reasonixHome := strings.TrimSpace(os.Getenv("REASONIX_HOME"))
 			if reasonixHome == "" {
