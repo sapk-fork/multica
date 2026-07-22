@@ -816,18 +816,123 @@ func discoverHermesModels(ctx context.Context, executablePath string) ([]Model, 
 
 // discoverKimiModels spins up a throwaway `kimi acp` process and
 // drives the same minimal ACP handshake as Hermes to surface the
-// model catalog advertised by Kimi's `session/new` response. Kimi's
-// ACPServer.new_session returns a `models` block of the same shape
-// (`availableModels`/`currentModelId`) so the parsing path is shared.
+// model catalog the installed CLI advertises from `session/new`.
+// Current kimi builds (≥ 0.2x) return it via the ACP configOptions
+// schema (the select entry with category "model"); older builds used
+// the `models.availableModels` block — parseACPSessionNewModels
+// handles both shapes.
 //
-// Failure modes (kimi missing, not logged in, config error) all
-// return an empty list so the UI falls back to manual entry.
+// Kimi also advertises a per-session thinking-effort select under
+// `configOptions` with `category: "thought_level"` and `id: "thinking"`.
+// We capture the raw session/new response and attach the advertised
+// levels to every discovered model so the UI thinking picker works
+// for kimi the same way it does for claude/codex. If the runtime only
+// advertises "on" (kimi 0.27.0's current behavior), the picker shows
+// that single option. Levels may vary by model/version in future
+// builds; the discovery path is generic and follows whatever the CLI
+// returns.
+//
+// There is deliberately NO static fallback: the picker must reflect
+// what the installed CLI actually offers so the list stays in sync
+// with the account and CLI version. On failure we return an empty
+// catalog (reason logged at debug, mirroring the Grok pattern); the
+// UI then offers manual model entry, and cachedDiscovery never caches
+// empty results so the next load retries discovery.
 func discoverKimiModels(ctx context.Context, executablePath string) ([]Model, error) {
-	return discoverACPModels(ctx, executablePath, acpDiscoveryProvider{
+	var capturedThinking *ModelThinking
+	captureRaw := func(raw json.RawMessage) {
+		capturedThinking = parseACPThoughtLevelOptions(raw)
+	}
+
+	models, err := discoverACPModels(ctx, executablePath, acpDiscoveryProvider{
 		defaultBin:   "kimi",
 		clientName:   "multica-model-discovery",
 		tmpdirPrefix: "multica-kimi-discovery-",
+		strictErrors: true,
+		captureRaw:   captureRaw,
 	})
+	if err != nil || len(models) == 0 {
+		if err != nil {
+			slog.Debug("kimi model discovery returned no models", "error", err)
+		}
+		return []Model{}, nil
+	}
+	// Kimi model IDs (e.g. "kimi-code/k3") carry no colon prefix, so
+	// the shared parser leaves Provider empty — backfill it like Grok.
+	for i := range models {
+		if models[i].Provider == "" {
+			models[i].Provider = "kimi"
+		}
+		if capturedThinking != nil {
+			models[i].Thinking = capturedThinking
+		}
+	}
+	return models, nil
+}
+
+// parseACPThoughtLevelOptions extracts the thinking-effort catalog from an
+// ACP session/new configOptions response. It looks for the select entry whose
+// category is "thought_level" (or id is "thinking" as a fallback) and returns
+// the advertised options as a ModelThinking catalog. nil means the runtime did
+// not surface a thinking control for this session/model.
+func parseACPThoughtLevelOptions(raw json.RawMessage) *ModelThinking {
+	var resp struct {
+		ConfigOptions []struct {
+			Type         string `json:"type"`
+			ID           string `json:"id"`
+			Category     string `json:"category"`
+			CurrentValue string `json:"currentValue"`
+			Options      []struct {
+				Value       string `json:"value"`
+				Name        string `json:"name"`
+				Description string `json:"description"`
+			} `json:"options"`
+		} `json:"configOptions"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil
+	}
+	for _, opt := range resp.ConfigOptions {
+		if opt.Type != "select" {
+			continue
+		}
+		if opt.Category != "thought_level" {
+			// Allow a bare "thinking" id only when the runtime omitted
+			// the category field.
+			if opt.Category != "" || opt.ID != "thinking" {
+				continue
+			}
+		}
+		if len(opt.Options) == 0 {
+			return nil
+		}
+		levels := make([]ThinkingLevel, 0, len(opt.Options))
+		seen := map[string]bool{}
+		for _, o := range opt.Options {
+			value := strings.TrimSpace(o.Value)
+			if value == "" || seen[value] {
+				continue
+			}
+			seen[value] = true
+			label := strings.TrimSpace(o.Name)
+			if label == "" || strings.EqualFold(label, "unknown") {
+				label = value
+			}
+			levels = append(levels, ThinkingLevel{
+				Value:       value,
+				Label:       label,
+				Description: strings.TrimSpace(o.Description),
+			})
+		}
+		if len(levels) == 0 {
+			return nil
+		}
+		return &ModelThinking{
+			SupportedLevels: levels,
+			DefaultLevel:    strings.TrimSpace(opt.CurrentValue),
+		}
+	}
+	return nil
 }
 
 // discoverKiroModels spins up a throwaway `kiro-cli acp` process and parses
@@ -912,6 +1017,11 @@ type acpDiscoveryProvider struct {
 	// Legacy discovery providers keep their empty-list behavior; Grok enables
 	// this so it can log the actual fallback reason.
 	strictErrors bool
+	// captureRaw receives the raw session/new response before it is parsed.
+	// It is used by providers (currently Kimi) that need to inspect config
+	// options beyond the model catalog. Shared callers leave this nil so the
+	// hook stays a no-op for Hermes/Kiro/Copilot/Qoder/Trae/Grok.
+	captureRaw func(json.RawMessage)
 }
 
 // discoverACPModels runs the ACP handshake for any agent CLI that
@@ -1068,6 +1178,9 @@ func discoverACPModels(ctx context.Context, executablePath string, p acpDiscover
 	if err != nil {
 		return fail("session/new", err)
 	}
+	if p.captureRaw != nil {
+		p.captureRaw(sessionResult)
+	}
 	models := parseACPSessionNewModels(sessionResult)
 	if models == nil {
 		return fail("session/new model parsing", fmt.Errorf("response contained no model catalog"))
@@ -1079,8 +1192,9 @@ func discoverACPModels(ctx context.Context, executablePath string, p acpDiscover
 }
 
 // parseACPSessionNewModels extracts the model catalog from an ACP
-// `session/new` response. Both Hermes and Kimi (and any other ACP
-// agent that follows the standard schema) emit:
+// `session/new` response. Two shapes exist in the wild.
+//
+// The original SessionModelState block (Hermes and older runtimes):
 //
 //	{
 //	  "sessionId": "...",
@@ -1092,7 +1206,20 @@ func discoverACPModels(ctx context.Context, executablePath string, p acpDiscover
 //	  }
 //	}
 //
-// Returns nil (not an empty slice) when the payload is missing so
+// The newer ACP session config-options schema (current Kimi builds),
+// where the catalog is one select entry among several:
+//
+//	{
+//	  "sessionId": "...",
+//	  "configOptions": [
+//	    {"type": "select", "id": "model", "category": "model",
+//	     "currentValue": "kimi-code/k3",
+//	     "options": [{"value": "kimi-code/k3", "name": "K3"}, ...]},
+//	    ...
+//	  ]
+//	}
+//
+// Returns nil (not an empty slice) when neither payload is present so
 // the caller can distinguish "parsed with no models" (valid but
 // empty catalog) from "couldn't find the structure at all".
 func parseACPSessionNewModels(raw json.RawMessage) []Model {
@@ -1109,6 +1236,16 @@ func parseACPSessionNewModels(raw json.RawMessage) []Model {
 			CurrentModelID       string         `json:"currentModelId"`
 			CurrentModelIDSnake  string         `json:"current_model_id"`
 		} `json:"models"`
+		ConfigOptions []struct {
+			Type         string `json:"type"`
+			ID           string `json:"id"`
+			Category     string `json:"category"`
+			CurrentValue string `json:"currentValue"`
+			Options      []struct {
+				Value string `json:"value"`
+				Name  string `json:"name"`
+			} `json:"options"`
+		} `json:"configOptions"`
 	}
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		return nil
@@ -1116,6 +1253,33 @@ func parseACPSessionNewModels(raw json.RawMessage) []Model {
 	availableModels := resp.Models.AvailableModels
 	if len(availableModels) == 0 && resp.Models.AvailableModelsSnake != nil {
 		availableModels = resp.Models.AvailableModelsSnake
+	}
+	if len(availableModels) == 0 {
+		// No legacy models block — try the config-options schema. The
+		// catalog is the select entry whose category is "model"; the
+		// plain id match is a weaker fallback for runtimes that omit
+		// the category field.
+		for _, opt := range resp.ConfigOptions {
+			if opt.Category == "model" || (opt.Category == "" && opt.ID == "model") {
+				currentModelID := strings.TrimSpace(opt.CurrentValue)
+				models := make([]Model, 0, len(opt.Options))
+				seen := map[string]bool{}
+				for _, o := range opt.Options {
+					modelID := strings.TrimSpace(o.Value)
+					if modelID == "" || seen[modelID] {
+						continue
+					}
+					seen[modelID] = true
+					models = append(models, Model{
+						ID:      modelID,
+						Label:   acpModelLabel(o.Name, modelID),
+						Default: modelID == currentModelID,
+					})
+				}
+				return models
+			}
+		}
+		return nil
 	}
 	currentModelID := strings.TrimSpace(resp.Models.CurrentModelID)
 	if currentModelID == "" {
