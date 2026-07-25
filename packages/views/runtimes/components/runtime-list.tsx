@@ -289,7 +289,7 @@ function VisibilityBadge({ runtime }: { runtime: AgentRuntime }) {
 // it (idle is the unremarkable default). If "queued but nothing running"
 // ever becomes a signal worth surfacing, it belongs to the HEALTH layer
 // (a new deriveRuntimeHealth state), not to vocabulary hints here.
-function HealthCell({
+export function HealthCell({
   runtime,
   workload,
   now,
@@ -352,6 +352,11 @@ function HealthCell({
     i18n.language,
     t(($) => $.health.on_hold.soon),
   );
+  const rawReason = runtime.hold_reason;
+  const holdReason = rawReason
+    ? t(($) => $.health.on_hold.reason[rawReason as keyof typeof $.health.on_hold.reason]) ??
+      rawReason
+    : null;
   const active = workload.runningCount + workload.queuedCount;
 
   return (
@@ -378,13 +383,24 @@ function HealthCell({
               <div className="flex min-w-0 items-center gap-1">
                 <PauseCircle className="h-3 w-3 shrink-0 text-warning" />
                 <span className="truncate text-xs text-warning">
-                  {t(($) => $.health.on_hold.label)} ·{" "}
+                  {t(($) => $.health.on_hold.label)}
+                  {holdReason && (
+                    <>
+                      {" · "}
+                      {holdReason}
+                    </>
+                  )}
+                  {" · "}
                   {t(($) => $.health.on_hold.resumes_in, { time: holdTime })}
                 </span>
               </div>
             }
           />
-          <TooltipContent>{t(($) => $.health.on_hold.tooltip)}</TooltipContent>
+          <TooltipContent>
+            {holdReason
+              ? t(($) => $.health.on_hold.reason_label, { reason: holdReason })
+              : t(($) => $.health.on_hold.tooltip)}
+          </TooltipContent>
         </Tooltip>
       )}
     </ListGridCell>

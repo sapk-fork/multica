@@ -102,7 +102,12 @@
       "tooltip": "このランタイムは一時停止中です — タスクはキューに入っており、再開時に自動的に処理されます。",
       "resume_button": "再開",
       "resume_toast": "ランタイムを再開しました",
-      "resume_failed": "ランタイムの再開に失敗しました"
+      "resume_failed": "ランタイムの再開に失敗しました",
+      "reason_label": "Reason: {{reason}}",
+      "reason": {
+        "session_limit": "Session limit",
+        "unknown": "Unknown"
+      }
     }
   },
   "detail": {

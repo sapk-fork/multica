@@ -36,6 +36,7 @@ import {
 } from "@multica/core/agents";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { Button } from "@multica/ui/components/ui/button";
+import { Badge } from "@multica/ui/components/ui/badge";
 import {
   Tooltip,
   TooltipContent,
@@ -273,6 +274,12 @@ function HeroCard({
   const resumeMutation = useResumeRuntime(wsId);
   const device = runtime.device_info ? parseDeviceInfo(runtime.device_info) : null;
   const hasTechDetails = !!cliVersion || !!daemonShort;
+  const holdUntil = runtime.hold_until;
+  const rawReason = runtime.hold_reason;
+  const holdReason = rawReason
+    ? t(($) => $.health.on_hold.reason[rawReason as keyof typeof $.health.on_hold.reason]) ??
+      rawReason
+    : t(($) => $.health.on_hold.reason.unknown);
 
   return (
     <div className="rounded-lg border bg-card">
@@ -287,18 +294,27 @@ function HeroCard({
               {runtimeDisplayName(runtime)}
             </h2>
             <HealthBadge health={health} />
+            {holdUntil && (
+              <Badge
+                variant="secondary"
+                className="gap-1 bg-warning/10 text-warning hover:bg-warning/10 border-warning/20"
+              >
+                <PauseCircle className="h-3 w-3" />
+                {t(($) => $.health.on_hold.label)}
+              </Badge>
+            )}
             <span className="text-xs text-muted-foreground">
               {t(($) => $.detail.last_seen, { when: lastSeen })}
             </span>
           </div>
-          {runtime.hold_until && (
+          {holdUntil && (
             <div className="mt-2 flex items-center gap-1.5 rounded-md bg-warning/10 px-2 py-1.5 text-xs text-warning">
               <PauseCircle className="h-3.5 w-3.5 shrink-0" />
               <span className="min-w-0 flex-1">
-                {t(($) => $.health.on_hold.label)} —{" "}
+                {t(($) => $.health.on_hold.reason_label, { reason: holdReason })} ·{" "}
                 {t(($) => $.health.on_hold.resumes_in, {
                   time: formatHoldUntil(
-                    runtime.hold_until,
+                    holdUntil,
                     Date.now(),
                     i18n.language,
                     t(($) => $.health.on_hold.soon),

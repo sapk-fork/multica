@@ -313,3 +313,60 @@ describe("RuntimeDetail visibility section", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("RuntimeDetail hold state", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockQueryData.members = [];
+    mockQueryData.profiles = [];
+  });
+
+  it("renders an On hold badge and banner when the runtime is held", () => {
+    renderDetail(
+      makeRuntime({
+        hold_until: "2026-04-27T14:00:00Z",
+        hold_reason: "session_limit",
+      }),
+    );
+
+    expect(screen.getByText("On hold")).toBeInTheDocument();
+    expect(screen.getByText(/Reason: Session limit/)).toBeInTheDocument();
+    expect(screen.getByText(/Resumes/)).toBeInTheDocument();
+  });
+
+  it("shows the raw hold reason when it is not a known reason key", () => {
+    renderDetail(
+      makeRuntime({
+        hold_until: "2026-04-27T14:00:00Z",
+        hold_reason: "custom_reason",
+      }),
+    );
+
+    expect(
+      screen.getByText((content) =>
+        content.includes("custom_reason"),
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a Resume button in the hold banner for an owner", () => {
+    renderDetail(
+      makeRuntime({
+        owner_id: "user-me",
+        hold_until: "2026-04-27T14:00:00Z",
+        hold_reason: "session_limit",
+      }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: /Resume/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not render hold UI when the runtime is not held", () => {
+    renderDetail(makeRuntime());
+
+    expect(screen.queryByText("On hold")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Reason:/)).not.toBeInTheDocument();
+  });
+});

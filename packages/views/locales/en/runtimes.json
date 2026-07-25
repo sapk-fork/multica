@@ -106,7 +106,12 @@
       "tooltip": "This runtime is paused — tasks are queued and will resume automatically.",
       "resume_button": "Resume",
       "resume_toast": "Runtime resumed",
-      "resume_failed": "Failed to resume runtime"
+      "resume_failed": "Failed to resume runtime",
+      "reason_label": "Reason: {{reason}}",
+      "reason": {
+        "session_limit": "Session limit",
+        "unknown": "Unknown"
+      }
     }
   },
   "detail": {
