@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"log/slog"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -12,18 +14,43 @@ import (
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
+// defaultHoldExpiryMargin is the default grace period applied past a runtime's
+// hold_until before it is considered released. The provider quota is often not
+// lifted on the very first run after the stated reset time, and there is some
+// clock skew/jitter between when we parsed the reset time and when the limit
+// actually clears, so we wait this much longer rather than dispatch into a
+// still-throttled provider.
+const defaultHoldExpiryMargin = 10 * time.Minute
+
 // HoldExpiryMargin keeps a runtime held for a grace period past its hold_until
-// before it is considered released. The provider quota is often not lifted on
-// the very first run after the stated reset time, and there is some clock skew
-// between when we parsed the reset time and when the limit actually clears, so
-// we wait this much longer rather than dispatch into a still-throttled
-// provider.
+// before it is considered released. It is initialized from the
+// MULTICA_HOLD_EXPIRY_MARGIN environment variable (a Go duration string such as
+// "10m" or "1h"), falling back to defaultHoldExpiryMargin when the variable is
+// unset or invalid.
 //
 // This is the single source of truth for the margin. The ClearExpiredHolds,
 // ClaimAgentTask, and ListQueuedClaimCandidatesByRuntime SQL queries take it as
 // a parameter (HoldExpiryMargin.Seconds()) so the sweeper, both claim paths, and
 // runtimeOnHold cannot drift out of sync.
-const HoldExpiryMargin = 5 * time.Minute
+var HoldExpiryMargin = loadHoldExpiryMargin()
+
+func loadHoldExpiryMargin() time.Duration {
+	raw := strings.TrimSpace(os.Getenv("MULTICA_HOLD_EXPIRY_MARGIN"))
+	if raw == "" {
+		return defaultHoldExpiryMargin
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil || d <= 0 {
+		slog.Warn("invalid env var, using default",
+			"name", "MULTICA_HOLD_EXPIRY_MARGIN",
+			"value", raw,
+			"default", defaultHoldExpiryMargin.String(),
+			"error", err,
+		)
+		return defaultHoldExpiryMargin
+	}
+	return d
+}
 
 // HoldRuntime places a runtime on hold until the given reset time. While on
 // hold, the claim path skips the runtime so no new tasks are dispatched to
