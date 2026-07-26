@@ -32,6 +32,7 @@ function item(overrides: Partial<InboxItem> = {}): InboxItem {
     title: "Issue title",
     body: null,
     issue_status: null,
+    issue_priority: null,
     read: false,
     archived: true,
     created_at: "2026-06-15T08:00:00Z",

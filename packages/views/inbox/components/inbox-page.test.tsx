@@ -93,8 +93,16 @@ vi.mock("../../layout/page-header", () => ({
 
 // Render each inbox item as a simple div so order in DOM is testable.
 vi.mock("./inbox-list-item", () => ({
-  InboxListItem: ({ item }: { item: InboxItem }) => (
-    <div data-testid={`inbox-item-${item.id}`}>{item.title}</div>
+  InboxListItem: ({
+    item,
+    onClick,
+  }: {
+    item: InboxItem;
+    onClick?: () => void;
+  }) => (
+    <div data-testid={`inbox-item-${item.id}`} onClick={onClick} role="button" tabIndex={0}>
+      {item.title}
+    </div>
   ),
   useTimeAgo: () => () => "1h",
 }));
@@ -163,7 +171,6 @@ let _idCounter = 0;
 function makeItem(overrides: Partial<InboxItem> & { id: string }): InboxItem {
   _idCounter++;
   return {
-    id: overrides.id,
     workspace_id: "ws-1",
     recipient_type: "member",
     recipient_id: "member-1",
