@@ -55,7 +55,6 @@ func TestOpencodeCancellationTerminatesProcessGroupGraceful(t *testing.T) {
 // still reap the whole group — without deadlocking on the stdout scanner or
 // closing the pipe under a live writer.
 func TestOpencodeCancellationEscalatesToSIGKILL(t *testing.T) {
-	skipIfOrphanReapMovesOutOfGroup(t)
 	opencodeTerminateGraceNanos.Store(int64(300 * time.Millisecond))
 	t.Cleanup(func() { opencodeTerminateGraceNanos.Store(0) })
 	runOpencodeCancellationTest(t, opencodeCancelFakeScript(true))

@@ -78,7 +78,6 @@ func TestClaudeCancellationTerminatesProcessGroupGraceful(t *testing.T) {
 // still reap the whole group — without deadlocking on the stdout scanner or
 // closing the pipe under a live writer.
 func TestClaudeCancellationEscalatesToSIGKILL(t *testing.T) {
-	skipIfOrphanReapMovesOutOfGroup(t)
 	claudeTerminateGraceNanos.Store(int64(300 * time.Millisecond))
 	t.Cleanup(func() { claudeTerminateGraceNanos.Store(0) })
 	runClaudeCancellationTest(t, claudeCancelFakeScript(true))
@@ -90,7 +89,6 @@ func TestClaudeCancellationEscalatesToSIGKILL(t *testing.T) {
 // only holds when the SIGKILL escalation is gated on the whole process group
 // (not the leader's exit). This fails against the leader-keyed escalation.
 func TestClaudeCancellationEscalatesWhenDescendantIgnoresTERM(t *testing.T) {
-	skipIfOrphanReapMovesOutOfGroup(t)
 	claudeTerminateGraceNanos.Store(int64(300 * time.Millisecond))
 	t.Cleanup(func() { claudeTerminateGraceNanos.Store(0) })
 	runClaudeCancellationTest(t, claudeMixedSignalFakeScript())
