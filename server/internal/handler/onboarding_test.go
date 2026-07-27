@@ -659,6 +659,8 @@ func TestBootstrapOnboardingNoRuntimeUsesChineseGuideForChineseUsers(t *testing.
 		"先体验项目管理功能",
 		"https://multica.ai/docs/install-agent-runtime",
 		"中文用户建议先装 Kimi Code CLI",
+		"https://code.kimi.com/kimi-code/install.sh",
+		"https://code.kimi.com/kimi-code/install.ps1",
 		"kimi --version",
 	} {
 		if !strings.Contains(description, want) {
