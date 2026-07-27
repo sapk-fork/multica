@@ -1176,3 +1176,83 @@ func TestKimiBackendOmitsSetConfigOptionWhenNoThinkingLevel(t *testing.T) {
 		t.Fatalf("set_config_option should not be called when ThinkingLevel is empty")
 	}
 }
+
+// TestKimiHomeFromEnvFallbackChain verifies the legacy home resolution
+// precedence: KIMI_CODE_HOME wins, then ~/.kimi-code, then KIMI_CLI_HOME,
+// then ~/.kimi, and finally ~/.kimi-code as the default for fresh installs.
+// This guards against M-102 regressions where legacy kimi-cli users lose
+// usage/failure recovery after the runtime switched to the kimi-code home.
+func TestKimiHomeFromEnvFallbackChain(t *testing.T) {
+	mkDir := func(t *testing.T, elems ...string) string {
+		t.Helper()
+		path := filepath.Join(elems...)
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+
+	t.Run("KIMI_CODE_HOME wins", func(t *testing.T) {
+		home := t.TempDir()
+		newDir := mkDir(t, home, ".kimi-code")
+		legacyDir := mkDir(t, home, ".kimi")
+		want := filepath.Join(t.TempDir(), "explicit")
+		if err := os.MkdirAll(want, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("HOME", home)
+		env := []string{"KIMI_CODE_HOME=" + want}
+		if got := kimiHomeFromEnv(env); got != want {
+			t.Errorf("kimiHomeFromEnv = %q, want %q", got, want)
+		}
+		_ = newDir
+		_ = legacyDir
+	})
+
+	t.Run("~/.kimi-code beats KIMI_CLI_HOME and ~/.kimi", func(t *testing.T) {
+		home := t.TempDir()
+		want := mkDir(t, home, ".kimi-code")
+		_ = mkDir(t, home, ".kimi")
+		legacyEnv := filepath.Join(t.TempDir(), "legacy-from-env")
+		if err := os.MkdirAll(legacyEnv, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("HOME", home)
+		env := []string{"KIMI_CLI_HOME=" + legacyEnv}
+		if got := kimiHomeFromEnv(env); got != want {
+			t.Errorf("kimiHomeFromEnv = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("KIMI_CLI_HOME beats ~/.kimi", func(t *testing.T) {
+		home := t.TempDir()
+		_ = mkDir(t, home, ".kimi")
+		want := filepath.Join(t.TempDir(), "legacy-from-env")
+		if err := os.MkdirAll(want, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("HOME", home)
+		env := []string{"KIMI_CLI_HOME=" + want}
+		if got := kimiHomeFromEnv(env); got != want {
+			t.Errorf("kimiHomeFromEnv = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("~/.kimi legacy fallback", func(t *testing.T) {
+		home := t.TempDir()
+		want := mkDir(t, home, ".kimi")
+		t.Setenv("HOME", home)
+		if got := kimiHomeFromEnv(nil); got != want {
+			t.Errorf("kimiHomeFromEnv = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("fresh install defaults to ~/.kimi-code", func(t *testing.T) {
+		home := t.TempDir()
+		want := filepath.Join(home, ".kimi-code")
+		t.Setenv("HOME", home)
+		if got := kimiHomeFromEnv(nil); got != want {
+			t.Errorf("kimiHomeFromEnv = %q, want %q", got, want)
+		}
+	})
+}

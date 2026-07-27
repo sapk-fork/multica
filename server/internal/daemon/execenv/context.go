@@ -379,7 +379,7 @@ func skillsDirPath(workDir, provider string) string {
 		return filepath.Join(workDir, ".cursor", "skills")
 	case "kimi":
 		// Kimi Code CLI auto-discovers project-level skills from .kimi/skills/
-		// in the workdir. See https://moonshotai.github.io/kimi-cli/en/customization/skills.html
+		// in the workdir. See https://moonshotai.github.io/kimi-code/en/customization/skills.html
 		return filepath.Join(workDir, ".kimi", "skills")
 	case "kiro":
 		// Kiro CLI auto-discovers project-level skills from .kiro/skills/

@@ -658,7 +658,7 @@ func TestBootstrapOnboardingNoRuntimeUsesChineseGuideForChineseUsers(t *testing.
 	for _, want := range []string{
 		"先体验项目管理功能",
 		"https://multica.ai/docs/install-agent-runtime",
-		"中文用户建议先装 Kimi CLI",
+		"中文用户建议先装 Kimi Code CLI",
 		"kimi --version",
 	} {
 		if !strings.Contains(description, want) {

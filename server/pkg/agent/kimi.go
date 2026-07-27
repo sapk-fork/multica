@@ -30,7 +30,7 @@ var kimiBlockedArgs = map[string]blockedArgMode{
 // kimiBackend implements Backend by spawning `kimi acp` and communicating
 // via the ACP (Agent Client Protocol) JSON-RPC 2.0 over stdin/stdout.
 //
-// Kimi Code CLI (https://github.com/MoonshotAI/kimi-cli) supports ACP out of
+// Kimi Code CLI (https://github.com/MoonshotAI/kimi-code) supports ACP out of
 // the box via the `kimi acp` subcommand. We reuse the existing hermesClient
 // ACP transport since both runtimes speak the same protocol — only the
 // binary, env, and tool-name extraction differ.
@@ -773,24 +773,51 @@ func accumulateKimiWireLine(line []byte, cutoffMs int64, totals map[string]Token
 	totals[model] = u
 }
 
-// kimiHomeFromEnv extracts KIMI_CODE_HOME from an env slice (last wins),
-// falling back to ~/.kimi-code. This lets the kimi backend read session
-// files from the same directory the child process writes them to, even when
-// the daemon's own environment points elsewhere.
+// kimiHomeFromEnv resolves the effective Kimi data directory from a child-
+// process env slice (last wins). The fallback chain is:
+//
+//   1. KIMI_CODE_HOME, if set.
+//   2. ~/.kimi-code, if the directory exists.
+//   3. KIMI_CLI_HOME, if set (legacy kimi-cli installs).
+//   4. ~/.kimi, if the directory exists (legacy kimi-cli installs).
+//   5. ~/.kimi-code as the default for fresh installs.
+//
+// This lets the kimi backend read session files from the same directory the
+// child process writes them to, even when the daemon's own environment points
+// elsewhere, and preserves usage/failure recovery for users who still run the
+// legacy kimi-cli home layout.
 func kimiHomeFromEnv(env []string) string {
-	prefix := "KIMI_CODE_HOME="
-	var home string
+	if home := envValue(env, "KIMI_CODE_HOME"); home != "" {
+		return home
+	}
+	if h, err := os.UserHomeDir(); err == nil {
+		newHome := filepath.Join(h, ".kimi-code")
+		if info, err := os.Stat(newHome); err == nil && info.IsDir() {
+			return newHome
+		}
+		if home := envValue(env, "KIMI_CLI_HOME"); home != "" {
+			return home
+		}
+		legacyHome := filepath.Join(h, ".kimi")
+		if info, err := os.Stat(legacyHome); err == nil && info.IsDir() {
+			return legacyHome
+		}
+		return newHome
+	}
+	return ""
+}
+
+// envValue extracts the last value of key from an env slice formatted as
+// KEY=VALUE, or "" when the key is absent or its value is empty.
+func envValue(env []string, key string) string {
+	prefix := key + "="
+	var value string
 	for _, e := range env {
 		if strings.HasPrefix(e, prefix) {
-			home = strings.TrimPrefix(e, prefix)
+			value = strings.TrimPrefix(e, prefix)
 		}
 	}
-	if home == "" {
-		if h, err := os.UserHomeDir(); err == nil {
-			home = filepath.Join(h, ".kimi-code")
-		}
-	}
-	return home
+	return value
 }
 
 // snapshotKimiWire returns the largest usage.record timestamp (epoch ms)

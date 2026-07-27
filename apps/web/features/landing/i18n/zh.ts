@@ -2049,7 +2049,7 @@ export function createZhDict(allowSignup: boolean): LandingDict {
         changes: [],
         features: [
           "Agent 新增 `model` 字段及按 Provider 聚合的模型下拉框——可在界面或通过 `multica agent create/update --model` 为每个 Agent 选择 LLM 模型，并从各 Runtime CLI 实时发现可用模型",
-          "新增 Kimi CLI Agent Runtime（Moonshot AI 的 `kimi-cli`，基于 ACP），支持模型选择、自动授权工具权限以及流式工具调用渲染",
+          "新增 Kimi Code CLI Agent Runtime（Moonshot AI 的 `kimi-code`，基于 ACP），支持模型选择、自动授权工具权限以及流式工具调用渲染",
           "评论和回复编辑器新增放大按钮，便于撰写长文本",
         ],
         fixes: [
