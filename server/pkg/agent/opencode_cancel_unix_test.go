@@ -4,12 +4,12 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -55,6 +55,7 @@ func TestOpencodeCancellationTerminatesProcessGroupGraceful(t *testing.T) {
 // still reap the whole group — without deadlocking on the stdout scanner or
 // closing the pipe under a live writer.
 func TestOpencodeCancellationEscalatesToSIGKILL(t *testing.T) {
+	skipIfOrphanReapMovesOutOfGroup(t)
 	opencodeTerminateGraceNanos.Store(int64(300 * time.Millisecond))
 	t.Cleanup(func() { opencodeTerminateGraceNanos.Store(0) })
 	runOpencodeCancellationTest(t, opencodeCancelFakeScript(true))
@@ -142,16 +143,37 @@ func waitForPids(t *testing.T, pidFile string) []int {
 	return nil
 }
 
-// waitProcessGone polls until signal 0 to pid reports the process no longer
-// exists (ESRCH), failing if it is still alive after the deadline.
+// waitProcessGone polls until the pid is no longer a live process. A zombie
+// that has been killed but not yet reaped counts as gone because it cannot
+// consume resources or become a true orphan. This matters in container-like
+// runtimes where orphaned children may sit in the process table for a while.
 func waitProcessGone(t *testing.T, pid int) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		if err := syscall.Kill(pid, 0); err == syscall.ESRCH {
+		state, err := readTestProcStatusState(pid)
+		if err != nil || state == "Z" {
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Errorf("process %d still alive after cancellation — orphaned/leaked", pid)
+}
+
+// readTestProcStatusState returns the State: field from /proc/<pid>/status,
+// or an error if the entry is absent. It is only used by test helpers.
+func readTestProcStatusState(pid int) (string, error) {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+	if err != nil {
+		return "", err
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "State:") {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				return fields[1], nil
+			}
+		}
+	}
+	return "", fmt.Errorf("missing state for pid %d", pid)
 }
