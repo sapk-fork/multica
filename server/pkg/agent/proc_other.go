@@ -92,15 +92,17 @@ func processGroupHasLiveMember(pgid int) bool {
 	return false
 }
 
-// readProcStatusStateAndPgid returns the State and Pgid fields from
-// /proc/<pid>/status. It is a small, best-effort parser used by
-// processGroupHasLiveMember; if the entry disappears mid-read it returns an
-// error so the caller can ignore that pid.
+// readProcStatusStateAndPgid returns the State and process-group fields from
+// /proc/<pid>/status. It prefers Pgid: and falls back to NSpgid: when running
+// inside a PID namespace where the regular Pgid: line is not populated. This is
+// a small, best-effort parser used by processGroupHasLiveMember; if the entry
+// disappears mid-read it returns an error so the caller can ignore that pid.
 func readProcStatusStateAndPgid(pid int) (state string, pgid int, err error) {
 	data, rerr := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
 	if rerr != nil {
 		return "", 0, rerr
 	}
+	var nspgid int
 	for _, line := range strings.Split(string(data), "\n") {
 		if strings.HasPrefix(line, "State:") {
 			fields := strings.Fields(line)
@@ -112,10 +114,18 @@ func readProcStatusStateAndPgid(pid int) (state string, pgid int, err error) {
 			if len(fields) >= 2 {
 				pgid, _ = strconv.Atoi(fields[1])
 			}
+		} else if strings.HasPrefix(line, "NSpgid:") {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				nspgid, _ = strconv.Atoi(fields[1])
+			}
 		}
 	}
 	if state == "" {
 		return "", 0, fmt.Errorf("missing state for pid %d", pid)
+	}
+	if pgid == 0 {
+		pgid = nspgid
 	}
 	return state, pgid, nil
 }
