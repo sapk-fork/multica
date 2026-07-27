@@ -1691,6 +1691,72 @@ api_key = "secret"
 	}
 }
 
+// TestPrepareKimiSharesSessionStore pins M-99: redirecting KIMI_CODE_HOME to a
+// per-task directory must not orphan sessions that live in the shared
+// ~/.kimi-code home. Kimi stores session data under sessions/<workDirKey>/<id>/
+// and indexes them in session_index.jsonl; both must be symlinked into the
+// per-task home so session/resume can find existing sessions.
+func TestPrepareKimiSharesSessionStore(t *testing.T) {
+	// Cannot use t.Parallel() with t.Setenv.
+
+	sharedHome := t.TempDir()
+	if err := os.WriteFile(filepath.Join(sharedHome, "config.toml"), []byte(`[providers.kimi]
+api_key = "secret"
+`), 0o644); err != nil {
+		t.Fatalf("write shared config.toml: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sharedHome, "mcp.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatalf("write shared mcp.json: %v", err)
+	}
+
+	// Seed an existing session in the shared home, mirroring Kimi's real layout.
+	sessionID := "session_94501e9e-6025-447c-b4e5-3a86bff35d80"
+	sessionDir := filepath.Join(sharedHome, "sessions", "some-workdir-key", sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("create shared session dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sessionDir, "state.json"), []byte(`{"id":"`+sessionID+`"}`), 0o644); err != nil {
+		t.Fatalf("write shared session state: %v", err)
+	}
+	indexPath := filepath.Join(sharedHome, "session_index.jsonl")
+	if err := os.WriteFile(indexPath, []byte(`{"id":"`+sessionID+`","path":"sessions/some-workdir-key/`+sessionID+`"}
+`), 0o644); err != nil {
+		t.Fatalf("write shared session index: %v", err)
+	}
+	t.Setenv("KIMI_CODE_HOME", sharedHome)
+
+	env, err := Prepare(PrepareParams{
+		WorkspacesRoot: t.TempDir(),
+		WorkspaceID:    "ws-kimi",
+		TaskID:         "e5f6a7b8-c9d0-1234-efab-567890123456",
+		AgentName:      "Kimi Agent",
+		Provider:       "kimi",
+		Task: TaskContextForEnv{
+			IssueID: "kimi-session-resume-test",
+		},
+	}, testLogger())
+	if err != nil {
+		t.Fatalf("Prepare failed: %v", err)
+	}
+	defer env.Cleanup(true)
+
+	if env.KimiCodeHome == "" {
+		t.Fatal("expected KimiCodeHome to be set after Prepare")
+	}
+
+	if target, err := os.Readlink(filepath.Join(env.KimiCodeHome, "sessions")); err != nil || target != filepath.Join(sharedHome, "sessions") {
+		t.Errorf("expected sessions/ symlinked to shared home, got target=%q err=%v", target, err)
+	}
+	if target, err := os.Readlink(filepath.Join(env.KimiCodeHome, "session_index.jsonl")); err != nil || target != indexPath {
+		t.Errorf("expected session_index.jsonl symlinked to shared home, got target=%q err=%v", target, err)
+	}
+
+	// The existing session must be reachable through the symlink.
+	if _, err := os.Stat(filepath.Join(env.KimiCodeHome, "sessions", "some-workdir-key", sessionID, "state.json")); err != nil {
+		t.Errorf("shared session not reachable from per-task home: %v", err)
+	}
+}
+
 func TestInjectRuntimeConfigQoder(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

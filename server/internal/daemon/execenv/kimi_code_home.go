@@ -22,12 +22,18 @@ import (
 // the per-task KIMI_CODE_HOME, mirroring how codexSymlinkedFiles shares
 // auth.json: changes (e.g. an OAuth token refresh) propagate automatically,
 // and the task keeps working with the user's real credentials and MCP
-// servers. Everything else (skills/, plugins/, sessions, logs) is left
-// task-local, created fresh/lazily by the CLI.
+// servers. sessions/ and session_index.jsonl are also symlinked so Kimi can
+// resolve existing sessions for resume; without this, redirecting
+// KIMI_CODE_HOME to a fresh per-task directory orphans every session that was
+// created under the shared ~/.kimi-code home. Everything else (skills/,
+// plugins/, tasks/, cron/, logs/, bin/) is left task-local, created fresh or
+// lazily by the CLI.
 var kimiSymlinkedFiles = []string{
 	"config.toml",
 	"credentials",
 	"mcp.json",
+	"sessions",
+	"session_index.jsonl",
 }
 
 // resolveSharedKimiCodeHome mirrors resolveSharedCodexHome: an explicit

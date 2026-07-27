@@ -2327,6 +2327,13 @@ func TestIsACPSessionNotFound(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "kimi unknown sessionid",
+			// Some kimi-cli releases surface the same rejection as
+			// "Unknown sessionId" (M-99), not "Session not found".
+			err:  &acpRPCError{Method: "session/resume", Code: -32602, Message: "Invalid params: Unknown sessionId: session_94501e9e-6025-447c-b4e5-3a86bff35d80", Data: `{"sessionId":"session_94501e9e-6025-447c-b4e5-3a86bff35d80"}`},
+			want: true,
+		},
+		{
 			name: "invalid params without session wording",
 			err:  &acpRPCError{Method: "session/set_model", Code: -32602, Message: "model not available: bogus-model"},
 			want: false,
