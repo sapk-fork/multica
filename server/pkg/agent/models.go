@@ -834,11 +834,10 @@ func discoverHermesModels(ctx context.Context, executablePath string) ([]Model, 
 
 // discoverKimiModels spins up a throwaway `kimi acp` process and
 // drives the same minimal ACP handshake as Hermes to surface the
-// model catalog the installed CLI advertises from `session/new`.
-// Current kimi builds (≥ 0.2x) return it via the ACP configOptions
-// schema (the select entry with category "model"); older builds used
-// the `models.availableModels` block — parseACPSessionNewModels
-// handles both shapes.
+// model catalog advertised by Kimi's `session/new` response. Kimi
+// ≤0.28 returns a `models` block (`availableModels`/`currentModelId`);
+// 0.29 moved the same catalog into `configOptions` (MUL-5239). The
+// shared parser accepts both, so the discovery path stays identical.
 //
 // Kimi also advertises a per-session thinking-effort select under
 // `configOptions` with `category: "thought_level"` and `id: "thinking"`.
@@ -1277,16 +1276,6 @@ func parseACPSessionNewModels(raw json.RawMessage) []Model {
 			CurrentModelID       string         `json:"currentModelId"`
 			CurrentModelIDSnake  string         `json:"current_model_id"`
 		} `json:"models"`
-		ConfigOptions []struct {
-			Type         string `json:"type"`
-			ID           string `json:"id"`
-			Category     string `json:"category"`
-			CurrentValue string `json:"currentValue"`
-			Options      []struct {
-				Value string `json:"value"`
-				Name  string `json:"name"`
-			} `json:"options"`
-		} `json:"configOptions"`
 	}
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		return nil
@@ -1296,31 +1285,10 @@ func parseACPSessionNewModels(raw json.RawMessage) []Model {
 		availableModels = resp.Models.AvailableModelsSnake
 	}
 	if len(availableModels) == 0 {
-		// No legacy models block — try the config-options schema. The
-		// catalog is the select entry whose category is "model"; the
-		// plain id match is a weaker fallback for runtimes that omit
-		// the category field.
-		for _, opt := range resp.ConfigOptions {
-			if opt.Category == "model" || (opt.Category == "" && opt.ID == "model") {
-				currentModelID := strings.TrimSpace(opt.CurrentValue)
-				models := make([]Model, 0, len(opt.Options))
-				seen := map[string]bool{}
-				for _, o := range opt.Options {
-					modelID := strings.TrimSpace(o.Value)
-					if modelID == "" || seen[modelID] {
-						continue
-					}
-					seen[modelID] = true
-					models = append(models, Model{
-						ID:      modelID,
-						Label:   acpModelLabel(o.Name, modelID),
-						Default: modelID == currentModelID,
-					})
-				}
-				return models
-			}
-		}
-		return nil
+		// No legacy models block — try the config-options schema via the
+		// shared helper, which handles both camelCase and snake_case keys
+		// and case-insensitive category matching.
+		return parseACPConfigOptionModels(raw)
 	}
 	currentModelID := strings.TrimSpace(resp.Models.CurrentModelID)
 	if currentModelID == "" {
