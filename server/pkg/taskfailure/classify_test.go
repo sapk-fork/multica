@@ -48,7 +48,13 @@ func TestClassifyRules(t *testing.T) {
 		{"no llm provider configured", "no llm provider configured; set OPENAI_API_KEY", ReasonAgentMissingConfig},
 		{"no provider configured", "no provider configured for runtime", ReasonAgentMissingConfig},
 
-		// 3. Provider auth / access.
+		// 3. Quota / billing pre-empt: quota wording alongside a
+		//    401/403 code still lands in provider_quota_limit, not
+		//    provider_auth_or_access.
+		{"kimi usage limit with 403", "Error: [provider.api_error] 403 You've reached your usage limit for this billing cycle.", ReasonAgentProviderQuotaLimit},
+		{"403 with insufficient_balance", `API Error: 403 Forbidden: {"error":{"code":"insufficient_balance"}}`, ReasonAgentProviderQuotaLimit},
+
+		// 4. Provider auth / access.
 		{"401", "API Error: 401 Unauthorized", ReasonAgentProviderAuthOrAccess},
 		{"403", "API Error: 403 Forbidden", ReasonAgentProviderAuthOrAccess},
 		{"unauthorized text", "Request unauthorized for this organization", ReasonAgentProviderAuthOrAccess},
@@ -62,7 +68,7 @@ func TestClassifyRules(t *testing.T) {
 		{"does not have access", "Your account does not have access to this model", ReasonAgentProviderAuthOrAccess},
 		{"may not have access", "you may not have access to claude-3-opus", ReasonAgentProviderAuthOrAccess},
 
-		// 4. Provider quota / billing.
+		// 5. Provider quota / billing.
 		{"402", "API Error: 402 Payment Required", ReasonAgentProviderQuotaLimit},
 		{"insufficient_balance", `{"error":{"code":"insufficient_balance"}}`, ReasonAgentProviderQuotaLimit},
 		{"balance is too low", "balance is too low to make this request", ReasonAgentProviderQuotaLimit},
@@ -70,17 +76,18 @@ func TestClassifyRules(t *testing.T) {
 		{"usage limit", "Account exceeded the daily usage limit", ReasonAgentProviderQuotaLimit},
 		{"hit your limit ascii", "you've hit your limit; upgrade to continue", ReasonAgentProviderQuotaLimit},
 		{"hit your limit curly", "you\u2019ve hit your limit", ReasonAgentProviderQuotaLimit},
+		{"billing cycle", "you've reached your usage limit for this billing cycle", ReasonAgentProviderQuotaLimit},
 		{"credits", "Your account has 0 credits remaining", ReasonAgentProviderQuotaLimit},
 		{"quota", "quota exceeded for project foo", ReasonAgentProviderQuotaLimit},
 
-		// 5. Capacity / rate limit.
+		// 6. Capacity / rate limit.
 		{"429", "API Error: 429 Too Many Requests", ReasonAgentProviderCapacityOrRateLimit},
 		{"529", "Server overloaded: HTTP 529", ReasonAgentProviderCapacityOrRateLimit},
 		{"rate limit", "rate limit exceeded for tier 3", ReasonAgentProviderCapacityOrRateLimit},
 		{"overloaded", "overloaded_error: please retry", ReasonAgentProviderCapacityOrRateLimit},
 		{"no capacity available", "no capacity available; try again later", ReasonAgentProviderCapacityOrRateLimit},
 
-		// 6. Provider 5xx / server error.
+		// 7. Provider 5xx / server error.
 		{"server had an error", "the server had an error processing your request", ReasonAgentProviderServerError},
 		{"provider returned error", "provider returned error: malformed response", ReasonAgentProviderServerError},
 		{"internal error", "An internal error occurred while serving the request", ReasonAgentProviderServerError},
@@ -91,7 +98,7 @@ func TestClassifyRules(t *testing.T) {
 		{"service unavailable", "service unavailable, retry later", ReasonAgentProviderServerError},
 		{"bad gateway", "Bad Gateway: upstream rejected", ReasonAgentProviderServerError},
 
-		// 7. Provider network.
+		// 8. Provider network.
 		{"stream disconnected", "stream disconnected before completion", ReasonAgentProviderNetwork},
 		{"connection closed mid-response", "API Error: Connection closed mid-response. The response above may be incomplete.", ReasonAgentProviderNetwork},
 		{"connection closed with exit status wins over process failure", "claude exited with error: exit status 1\nAPI Error: Connection closed mid-response.", ReasonAgentProviderNetwork},
@@ -109,7 +116,7 @@ func TestClassifyRules(t *testing.T) {
 		{"wrapped context deadline", `Post "https://api.example.com/v1": context deadline exceeded`, ReasonAgentProviderNetwork},
 		{"http client timeout", `Get "https://api.example.com": net/http: request canceled (Client.Timeout exceeded while awaiting headers)`, ReasonAgentProviderNetwork},
 
-		// 8. Model not found / unavailable.
+		// 9. Model not found / unavailable.
 		{"model not found", "Error: model claude-3-opus-99 not found", ReasonAgentModelNotFoundOrUnavailable},
 		{"model not found phrase", "the model was not found in this account", ReasonAgentModelNotFoundOrUnavailable},
 		{"unknown model", "unknown model 'foo-1.0'", ReasonAgentModelNotFoundOrUnavailable},
@@ -117,21 +124,21 @@ func TestClassifyRules(t *testing.T) {
 		{"http 404", "HTTP 404: model endpoint not registered", ReasonAgentModelNotFoundOrUnavailable},
 		{"404 page not found", "404 page not found", ReasonAgentModelNotFoundOrUnavailable},
 
-		// 9. Empty / unparseable output.
+		// 10. Empty / unparseable output.
 		{"returned empty output", "openclaw returned empty output", ReasonAgentEmptyOrUnparseableOutput},
 		{"returned no parseable output", "kimi returned no parseable output", ReasonAgentEmptyOrUnparseableOutput},
 
-		// 10. Agent timeout.
+		// 11. Agent timeout.
 		{"timed out after", "claude timed out after 2h0m0s", ReasonAgentTimeout},
 
-		// 11. Runtime missing executable.
+		// 12. Runtime missing executable.
 		{"executable not found", "executable not found in $PATH", ReasonAgentRuntimeMissingExecutable},
 
-		// 12. Runtime version unsupported.
+		// 13. Runtime version unsupported.
 		{"below the minimum supported version", "claude CLI 0.1.0 is below the minimum supported version 0.5.0", ReasonAgentRuntimeVersionUnsupported},
 		{"requires a newer version", "this protocol requires a newer version of the runtime", ReasonAgentRuntimeVersionUnsupported},
 
-		// 13. Process failure.
+		// 14. Process failure.
 		{"exit status", "agent exit status 137", ReasonAgentProcessFailure},
 		{"signal", "agent terminated by signal: killed", ReasonAgentProcessFailure},
 		{"panic", "panic: runtime error: invalid memory address", ReasonAgentProcessFailure},
@@ -141,11 +148,11 @@ func TestClassifyRules(t *testing.T) {
 		{"file already closed", "write |1: file already closed", ReasonAgentProcessFailure},
 		{"initialize failed", "initialize failed: backend not ready", ReasonAgentProcessFailure},
 
-		// 14. Catchall.
+		// 15. Catchall.
 		{"unrecognized", "the agent gave up for reasons unknown", ReasonAgentUnknown},
 		{"sentence with no marker", "Hello world.", ReasonAgentUnknown},
 
-		// 15. Digit-boundary regression: 3-digit HTTP status codes must NOT
+		// 16. Digit-boundary regression: 3-digit HTTP status codes must NOT
 		//     match when embedded in a longer number. Before the fix these
 		//     landed in provider auth/quota/capacity buckets, masking hard
 		//     process failures under a provider reason and polluting failure

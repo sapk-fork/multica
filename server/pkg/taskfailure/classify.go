@@ -35,6 +35,29 @@ var (
 	httpCapacityCodeRe = regexp.MustCompile(`(^|[^0-9])(429|529)([^0-9]|$)`)
 )
 
+// quotaKeywords identifies provider quota / billing exhaustion wording
+// in free-form error text (e.g. kimi's "403 ... usage limit for this
+// billing cycle"). Shared between the pre-empt rule below (case 3, which
+// fires before the 401/403 auth-code rule so a message that happens to
+// carry both a quota HTTP code and explicit quota wording still lands in
+// provider_quota_limit) and rule 5's containsAny check, so the two lists
+// can't drift.
+var quotaKeywords = []string{
+	"insufficient_balance",
+	"balance is too low",
+	"monthly usage limit",
+	"usage limit",
+	"you've hit your limit",
+	// Curly apostrophe variant: providers and copy-pasted error
+	// strings sometimes use U+2019 instead of ASCII '. SQL ILIKE
+	// would not match the curly form either, so this is a small
+	// in-flight improvement on top of the SQL classifier.
+	"you’ve hit your limit",
+	"billing cycle",
+	"credits",
+	"quota",
+}
+
 // Classify maps a free-form error string from the agent runtime / CLI
 // to one of the 14 agent_error.* sub-reasons. Always returns a valid
 // Reason; falls back to ReasonAgentUnknown when no rule matches and for
@@ -100,7 +123,19 @@ func Classify(rawError string) Reason {
 		strings.Contains(lower, "no provider configured"):
 		return ReasonAgentMissingConfig
 
-	// 3. Auth / access. 401 / 403 / "Not logged in" / invalid token
+	// 3. Quota / billing pre-empt. Some provider errors (e.g. kimi's
+	//    "403 ... usage limit for this billing cycle") carry both a
+	//    401/403 HTTP code and explicit quota wording; check the
+	//    wording before the auth rule below so those land in
+	//    provider_quota_limit instead of provider_auth_or_access. This
+	//    is a targeted pre-empt, not a reorder of rules 4/6: the 402
+	//    code check in rule 6 never collides with 401/403 so it stays
+	//    where it is, and bare 401/403 messages with no quota wording
+	//    still fall through to rule 4 unaffected.
+	case containsAny(lower, quotaKeywords...):
+		return ReasonAgentProviderQuotaLimit
+
+	// 4. Auth / access. 401 / 403 / "Not logged in" / invalid token
 	//    / lacks access to the model. Status codes use a digit boundary
 	//    so "4030" / "1401ms" don't spuriously land here.
 	case httpAuthCodeRe.MatchString(lower),
@@ -118,26 +153,16 @@ func Classify(rawError string) Reason {
 		):
 		return ReasonAgentProviderAuthOrAccess
 
-	// 4. Quota / billing. 402 / insufficient balance / monthly usage
-	//    limit / credits exhausted.
+	// 5. Quota / billing. 402 / insufficient balance / monthly usage
+	//    limit / credits exhausted. Wording overlap with rule 3 above
+	//    is intentional: rule 3 only pre-empts rule 4, this rule still
+	//    catches quota wording for messages that never hit an auth
+	//    code at all.
 	case httpQuotaCodeRe.MatchString(lower),
-		containsAny(lower,
-			"insufficient_balance",
-			"balance is too low",
-			"monthly usage limit",
-			"usage limit",
-			"you've hit your limit",
-			// Curly apostrophe variant: providers and copy-pasted error
-			// strings sometimes use U+2019 instead of ASCII '. SQL ILIKE
-			// would not match the curly form either, so this is a small
-			// in-flight improvement on top of the SQL classifier.
-			"you\u2019ve hit your limit",
-			"credits",
-			"quota",
-		):
+		containsAny(lower, quotaKeywords...):
 		return ReasonAgentProviderQuotaLimit
 
-	// 5. Capacity / rate limit. 429 / 529 / overloaded / rate limit.
+	// 6. Capacity / rate limit. 429 / 529 / overloaded / rate limit.
 	case httpCapacityCodeRe.MatchString(lower),
 		containsAny(lower,
 			"rate limit",
@@ -146,7 +171,7 @@ func Classify(rawError string) Reason {
 		):
 		return ReasonAgentProviderCapacityOrRateLimit
 
-	// 6. Provider 5xx / server error. The 5xx regex is checked here
+	// 7. Provider 5xx / server error. The 5xx regex is checked here
 	//    rather than as plain string matches because the SQL uses an
 	//    anchored regex — see providerHTTP5xxRe's docstring.
 	case containsAny(lower,
@@ -159,7 +184,7 @@ func Classify(rawError string) Reason {
 		providerHTTP5xxRe.MatchString(lower):
 		return ReasonAgentProviderServerError
 
-	// 7. Provider network. Stream cut, dial failures, DNS / I/O
+	// 8. Provider network. Stream cut, dial failures, DNS / I/O
 	//    timeout below the HTTP layer. "connection closed" / "mid-response"
 	//    catch the Claude Code CLI's mid-stream disconnect
 	//    ("API Error: Connection closed mid-response. ...") so a transient cut
@@ -194,7 +219,7 @@ func Classify(rawError string) Reason {
 	):
 		return ReasonAgentProviderNetwork
 
-	// 8. Model not found / unavailable. The SQL uses `%model%not%found%`,
+	// 9. Model not found / unavailable. The SQL uses `%model%not%found%`,
 	//    which matches "model … not found" with anything in between;
 	//    we approximate with both substrings present, which captures
 	//    typical phrasings like "model X not found" and "the requested
@@ -208,7 +233,7 @@ func Classify(rawError string) Reason {
 		):
 		return ReasonAgentModelNotFoundOrUnavailable
 
-	// 9. Empty / unparseable output from the agent CLI itself. These
+	// 10. Empty / unparseable output from the agent CLI itself. These
 	//    strings come from server/pkg/agent/*.go wrappers and are
 	//    stable.
 	case containsAny(lower,
@@ -217,22 +242,22 @@ func Classify(rawError string) Reason {
 	):
 		return ReasonAgentEmptyOrUnparseableOutput
 
-	// 10. Agent subprocess hard timeout (per-task wall clock).
+	// 11. Agent subprocess hard timeout (per-task wall clock).
 	case strings.Contains(lower, "timed out after"):
 		return ReasonAgentTimeout
 
-	// 11. Runner CLI binary missing.
+	// 12. Runner CLI binary missing.
 	case strings.Contains(lower, "executable not found"):
 		return ReasonAgentRuntimeMissingExecutable
 
-	// 12. Runner CLI version too old / incompatible protocol.
+	// 13. Runner CLI version too old / incompatible protocol.
 	case containsAny(lower,
 		"below the minimum supported version",
 		"requires a newer version",
 	):
 		return ReasonAgentRuntimeVersionUnsupported
 
-	// 13. Agent / runner process-level failure. Checked last among
+	// 14. Agent / runner process-level failure. Checked last among
 	//     specific rules because "exit status" / "signal" can co-occur
 	//     with more specific upstream errors that SHOULD win (e.g. an
 	//     agent that crashed *because* the provider rate-limited it
