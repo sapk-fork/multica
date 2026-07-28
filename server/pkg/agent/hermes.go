@@ -2212,11 +2212,17 @@ var acpErrorDetailRe = regexp.MustCompile(`(?:Error:|detail:|Details:)\s*(.+)`)
 
 // acpTerminalErrorRe matches markers that only appear when the
 // adapter has *given up* on the upstream call — either after
-// exhausting retries ("after N retries"), or because the error is
+// exhausting retries ("after N retries"), because the error is
 // classified as non-retryable up front (Non-retryable, BadRequest /
-// Authentication errors, ❌ / [ERROR] log levels). Per-attempt
-// warnings ("(attempt 1/3)") deliberately do NOT match this pattern.
-var acpTerminalErrorRe = regexp.MustCompile(`(?:❌|\[ERROR\]|after \d+ retr|Non-retryable|BadRequestError|AuthenticationError)`)
+// Authentication errors, ❌ / [ERROR] log levels), or because the line
+// carries explicit quota/usage-exhaustion wording (e.g. kimi's "403
+// ... usage limit for this billing cycle", which has none of the
+// other markers and would otherwise never flip terminal). The quota
+// phrase list mirrors taskfailure.Classify's quota rule (see
+// server/pkg/taskfailure/classify.go, MUL-1949) so the two lists
+// don't drift. Per-attempt warnings ("(attempt 1/3)") deliberately do
+// NOT match this pattern.
+var acpTerminalErrorRe = regexp.MustCompile(`(?:❌|\[ERROR\]|after \d+ retr|Non-retryable|BadRequestError|AuthenticationError|(?i:usage limit|billing cycle|insufficient_balance|quota|credits))`)
 
 // acpAgentOutputTerminalRe matches the synthetic agent-text turn that
 // hermes-style ACP adapters inject when they exhaust retries against

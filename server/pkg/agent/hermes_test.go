@@ -2239,6 +2239,104 @@ func TestHermesProviderErrorSnifferTerminalNonRetryable(t *testing.T) {
 	}
 }
 
+// TestHermesProviderErrorSnifferTerminalQuotaExhaustion pins the fix for
+// the kimi credit-exhaustion bug: a quota/usage-limit message carries
+// none of acpTerminalErrorRe's other markers (❌, [ERROR], "after N
+// retries", Non-retryable, BadRequestError, AuthenticationError), so
+// before the fix it never flipped terminal and the run stayed
+// "completed". The line is already captured via acpErrorDetailRe's
+// "Error:" prefix; only the terminal classification was missing.
+func TestHermesProviderErrorSnifferTerminalQuotaExhaustion(t *testing.T) {
+	t.Parallel()
+
+	for _, line := range []string{
+		`Error: [provider.api_error] 403 You've reached your usage limit for this billing cycle.`,
+		`Error: 403 insufficient_balance: please top up your account`,
+	} {
+		s := newACPProviderErrorSniffer("kimi")
+		s.Write([]byte(line + "\n"))
+		if msg := s.terminalMessage(); msg == "" {
+			t.Errorf("expected %q to be classified as terminal", line)
+		}
+	}
+}
+
+// fakeHermesACPQuotaExhaustionScript impersonates a kimi-shaped ACP
+// backend hitting credit exhaustion: the upstream returns 403 with
+// explicit quota wording on stderr, and the agent's synthetic text
+// turn is a generic apology (not the "API call failed after N
+// retries" phrasing acpAgentOutputTerminalRe looks for), and output is
+// non-empty so the "empty output" promotion path can't paper over a
+// missing terminal classification either. The only way this run can
+// promote to "failed" is via the sniffer's terminalMessage().
+func fakeHermesACPQuotaExhaustionScript() string {
+	return `#!/bin/sh
+while IFS= read -r line; do
+  id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+  case "$line" in
+    *'"method":"initialize"'*)
+      printf '{"jsonrpc":"2.0","id":%s,"result":{"protocolVersion":1,"agentCapabilities":{}}}\n' "$id"
+      ;;
+    *'"method":"session/new"'*)
+      printf '{"jsonrpc":"2.0","id":%s,"result":{"sessionId":"ses_quota"}}\n' "$id"
+      ;;
+    *'"method":"session/prompt"'*)
+      printf '%s\n' "Error: [provider.api_error] 403 You've reached your usage limit for this billing cycle." >&2
+      printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"ses_quota","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"I was unable to complete this task."}}}}\n'
+      printf '{"jsonrpc":"2.0","id":%s,"result":{"stopReason":"end_turn"}}\n' "$id"
+      exit 0
+      ;;
+  esac
+done
+`
+}
+
+// TestHermesBackendPromotesProviderErrorOnQuotaExhaustion pins the fix
+// for the kimi credit-exhaustion bug at the backend level: a run whose
+// only failure signal is quota/usage-limit wording on stderr (no ❌ /
+// [ERROR] / "after N retries" marker anywhere) must still surface as
+// Status=failed, not silently "completed".
+func TestHermesBackendPromotesProviderErrorOnQuotaExhaustion(t *testing.T) {
+	t.Parallel()
+
+	fakePath := filepath.Join(t.TempDir(), "hermes")
+	writeTestExecutable(t, fakePath, []byte(fakeHermesACPQuotaExhaustionScript()))
+
+	backend, err := New("hermes", Config{ExecutablePath: fakePath, Logger: slog.Default()})
+	if err != nil {
+		t.Fatalf("new hermes backend: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	session, err := backend.Execute(ctx, "prompt-ignored", ExecOptions{
+		Timeout: 5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	go func() {
+		for range session.Messages {
+		}
+	}()
+
+	select {
+	case result, ok := <-session.Result:
+		if !ok {
+			t.Fatal("result channel closed without a value")
+		}
+		if result.Status != "failed" {
+			t.Fatalf("expected status=failed (sniffer should promote on quota exhaustion), got %q (error=%q output=%q)", result.Status, result.Error, result.Output)
+		}
+		if !strings.Contains(result.Error, "usage limit") {
+			t.Errorf("expected error to surface the usage-limit message, got %q", result.Error)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("timeout waiting for result")
+	}
+}
+
 // TestHermesBackendPromotesProviderErrorWithNonEmptyOutput pins the
 // fix for GitHub multica#1952: a hermes run that hits a 429 (or any
 // upstream provider error) must surface as Status=failed even though
