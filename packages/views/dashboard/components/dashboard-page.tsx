@@ -28,7 +28,6 @@ import {
   dashboardModelRunTimeOptions,
   dashboardRuntimeUsageOptions,
 } from "@multica/core/dashboard";
-import { runtimeListOptions } from "@multica/core/runtimes/queries";
 import { useCustomPricingStore } from "@multica/core/runtimes/custom-pricing-store";
 import { useViewingTimezone } from "../../common/use-viewing-timezone";
 import { PAGE_GUTTER } from "../../layout/page-header";
@@ -185,7 +184,6 @@ export function DashboardPage() {
   const { data: projects = [] } = useQuery(projectListOptions(wsId));
   const agentsQuery = useQuery(agentListOptions(wsId));
   const agents = agentsQuery.data ?? EMPTY_AGENTS;
-  const { data: runtimes = [] } = useQuery(runtimeListOptions(wsId));
 
   // Validate the picked project against the current workspace's list. A
   // stale UUID — left over from a project that's been deleted, or from the
@@ -259,8 +257,6 @@ export function DashboardPage() {
   const failureDailyRows = failuresDailyQuery.data ?? EMPTY_FAILURE_DAILY;
   const failureByAgentRows = failuresByAgentQuery.data ?? EMPTY_FAILURE_BY_AGENT;
   const runtimeRunTime = runtimeRunTimeQuery.data ?? EMPTY_RUNTIME_RUNTIME;
-  const modelRunTime = modelRunTimeQuery.data ?? [];
-  const runtimeUsage = runtimeUsageQuery.data ?? [];
 
   const queryClient = useQueryClient();
   // "Refreshing" covers any of the six rollups being in flight, whichever
@@ -637,14 +633,9 @@ export function DashboardPage() {
                 />
 
                 <Leaderboard
-                  agentRows={visibleAgentRows}
+                  rows={visibleAgentRows}
                   agents={agents}
                   deletedAgentCount={deletedAgentCount}
-                  byModelUsage={byModelUsage}
-                  modelRunTime={modelRunTime}
-                  runtimeRunTime={runtimeRunTime}
-                  runtimeUsage={runtimeUsage}
-                  runtimes={runtimes}
                   lessThanMinuteLabel={lessThanMinuteLabel}
                 />
               </>
