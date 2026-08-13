@@ -262,8 +262,6 @@ import {
   DashboardRuntimeRunTimeListSchema,
   DashboardModelRunTimeListSchema,
   DashboardRuntimeUsageListSchema,
-  EMPTY_AGENT_TEMPLATE_DETAIL,
-  EMPTY_AGENT_TEMPLATE_SUMMARY_LIST,
   EMPTY_APP_CONFIG,
   EMPTY_ATTACHMENT,
   EMPTY_CHAT_MESSAGE_LIST,
