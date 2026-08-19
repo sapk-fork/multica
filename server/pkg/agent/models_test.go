@@ -1915,7 +1915,7 @@ func TestDiscoverKimiModelsNonexistentBinaryReturnsEmpty(t *testing.T) {
 	// catalog (no error) so the UI offers manual entry, and the
 	// uncached result lets the next load retry. No static fallback.
 	ctx := context.Background()
-	models, err := discoverKimiModels(ctx, "/nonexistent/kimi")
+	models, err := discoverKimiModels(ctx, Command{Path: "/nonexistent/kimi"})
 	if err != nil {
 		t.Fatalf("discoverKimiModels returned error: %v", err)
 	}
