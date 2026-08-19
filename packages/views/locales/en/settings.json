@@ -46,7 +46,8 @@
       "in_review": "Delivered, waiting on human review. Finalizes the autopilot run.",
       "done": "Completed.",
       "blocked": "Stalled on an external dependency.",
-      "cancelled": "Decided not to do."
+      "cancelled": "Decided not to do.",
+      "archived": "Set aside without deleting. Terminal — behaves like cancelled."
     }
   },
   "quick_actions": {
