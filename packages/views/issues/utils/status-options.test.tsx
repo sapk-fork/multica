@@ -61,9 +61,11 @@ const BUILT_INS: IssueStatusEntry[] = (
 );
 
 describe("useStatusOptions", () => {
-  // A cold render must offer the same 7 statuses it always did, or the picker
-  // opens empty on first paint and on any workspace whose catalog fetch failed.
-  it("offers the 7 built-ins when the catalog has not loaded", () => {
+  // A cold render must offer the same built-in statuses it always did, or the
+  // picker opens empty on first paint and on any workspace whose catalog fetch
+  // failed. Fork note: 8 built-ins, not upstream's 7 — "archived" (M-11) is a
+  // fork-only terminal status/category.
+  it("offers the 8 built-ins when the catalog has not loaded", () => {
     catalogEntries = undefined;
     const { result } = renderHook(() => useStatusOptions("workspace-1"));
 
@@ -75,6 +77,7 @@ describe("useStatusOptions", () => {
       "done",
       "blocked",
       "cancelled",
+      "archived",
     ]);
     expect(result.current.hasCustom).toBe(false);
   });
@@ -85,8 +88,9 @@ describe("useStatusOptions", () => {
 
     const inReview = result.current.groups.find((g) => g.category === "in_review");
     expect(inReview?.options.map((o) => o.key)).toEqual(["in_review", "qa"]);
-    // Still 7 groups: a custom status must never create an eighth board column.
-    expect(result.current.groups).toHaveLength(7);
+    // Still 8 groups (7 upstream + the fork's "archived"): a custom status
+    // must never create an extra board column.
+    expect(result.current.groups).toHaveLength(8);
     expect(result.current.hasCustom).toBe(true);
   });
 
