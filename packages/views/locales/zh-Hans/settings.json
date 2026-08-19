@@ -46,7 +46,8 @@
       "in_review": "已交付，等待人工 review。会结束 autopilot 运行。",
       "done": "已完成。",
       "blocked": "被外部依赖阻塞。",
-      "cancelled": "决定不做。"
+      "cancelled": "决定不做。",
+      "archived": "归档但不删除。终态 — 行为与「决定不做」相同。"
     }
   },
   "quick_actions": {
