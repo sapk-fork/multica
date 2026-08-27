@@ -354,17 +354,21 @@ describe("estimateCost", () => {
     // Regression: canonicalCandidates only stripped `/` prefixes, so Hermes
     // ids like `alibaba-coding-plan:qwen3.8-max` and `custom:ark-code-latest`
     // never resolved and stayed uncosted. `:` must be stripped like `/`.
+    // Fork note: upstream probes this with `alibaba-coding-plan:qwen3.8-max`,
+    // which the fork's models.dev snapshot does not price. The behaviour under
+    // test is the `:` strip, not the row, so we probe the same code path with
+    // `qwen3.7-plus`, which the snapshot does price.
     const cost = estimateCost({
       ...zeroUsage,
       provider: "hermes",
-      model: "alibaba-coding-plan:qwen3.8-max",
+      model: "alibaba-coding-plan:qwen3.7-plus",
       input_tokens: 1_000_000,
       output_tokens: 1_000_000,
       cache_read_tokens: 1_000_000,
       cache_write_tokens: 1_000_000,
     });
-    // 1M × $2 + 1M × $6 + 1M × $0.17 + 1M × $2.50 = $10.67.
-    expect(cost).toBeCloseTo(10.67, 5);
+    // 1M × $0.40 + 1M × $1.60 + 1M × $0.04 + 1M × $0.50 = $2.54.
+    expect(cost).toBeCloseTo(2.54, 5);
     // `ark-code-latest` is a rolling Volcengine alias, not a stable model
     // identity, so it is deliberately unmapped after the prefix strip.
     expect(isModelPriced("custom:ark-code-latest", "hermes")).toBe(false);
@@ -372,6 +376,12 @@ describe("estimateCost", () => {
   });
 
   it("prices the Qwen / Kimi models added from models.dev", () => {
+    // Fork note: MODEL_PRICING is generated from models.dev
+    // (scripts/generate-pricing.mjs), not hand-maintained as upstream. The
+    // snapshot prices `qwen3.7-plus` and `kimi-k3`, so those rows are
+    // asserted here. Upstream's `qwen3.6-flash` and `kimi/k3` assertions are
+    // dropped rather than hand-patched into the generated file — same
+    // reasoning as the grok-4.5/4.6 deletions in 0f08fe046.
     expect(
       estimateCost({
         ...zeroUsage,
@@ -383,45 +393,24 @@ describe("estimateCost", () => {
     expect(
       estimateCost({
         ...zeroUsage,
-        model: "kimi-code/k3",
+        model: "kimi-k3",
         provider: "kimi",
         input_tokens: 1_000_000,
         output_tokens: 1_000_000,
       }),
-    ).toBeCloseTo(18, 5); // kimi/k3 → $3 + $15
-    expect(
-      estimateCost({
-        ...zeroUsage,
-        model: "qwen3.6-flash",
-        input_tokens: 1_000_000,
-        output_tokens: 1_000_000,
-      }),
-    ).toBeCloseTo(1.75, 5); // $0.25 + $1.50 (International ≤256K tier)
+    ).toBeCloseTo(18, 5); // kimi-k3 → $3 + $15
     // `ark-code-latest` is a rolling Volcengine alias (target switched in
     // the console, possibly across model families), not a stable model
     // identity — it stays unmapped like grok-composer-*.
     expect(isModelPriced("ark-code-latest")).toBe(false);
   });
 
-  it("keeps subscription-only and preview SKUs distinct from their GA siblings", () => {
-    // qwen3.8-max-preview is subscription-priced at 0; it must NOT inherit
-    // qwen3.8-max's $2/$6 tier, and `qwen3.8-max-preview[1m]` must resolve
-    // to the preview row after the context-tag strip.
-    expect(
-      estimateCost({
-        ...zeroUsage,
-        model: "qwen3.8-max-preview[1m]",
-        input_tokens: 1_000_000,
-      }),
-    ).toBe(0);
-    expect(
-      estimateCost({
-        ...zeroUsage,
-        model: "qwen3.8-max",
-        input_tokens: 1_000_000,
-      }),
-    ).toBeCloseTo(2, 5);
-  });
+  // Fork note: upstream's "keeps subscription-only and preview SKUs distinct
+  // from their GA siblings" test is dropped here. It asserts the
+  // `qwen3.8-max` / `qwen3.8-max-preview` pair, and the fork's models.dev
+  // snapshot prices neither, so there is no GA/preview pair to distinguish.
+  // Per the standing pricing caveat we drop the assertion rather than
+  // hand-patch rows into the generated table.
 
   it("iteratively strips nested routing prefixes (custom:anthropic/claude-opus-4.7)", () => {
     // Regression for the review blocker: stripProvider used to peel a single
