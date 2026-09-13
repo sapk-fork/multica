@@ -115,6 +115,7 @@ export const MODEL_PRICING: Readonly<Record<string, {
   "gpt-5.6-luna": { input: 1, output: 6, cacheRead: 0.1, cacheWrite: 1.25 },
   "gpt-5.6-sol": { input: 5, output: 30, cacheRead: 0.5, cacheWrite: 6.25 },
   "gpt-5.6-terra": { input: 2.5, output: 15, cacheRead: 0.25, cacheWrite: 3.125 },
+  "gpt-6-astra": { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 },
   "gpt-image-2": { input: 5, output: 30, cacheRead: 1.25, cacheWrite: 5 },
   "gpt-realtime-2.1": { input: 4, output: 24, cacheRead: 0.4, cacheWrite: 4 },
   "grok-4.20-0309-non-reasoning": { input: 1.25, output: 2.5, cacheRead: 0.2, cacheWrite: 1.25 },

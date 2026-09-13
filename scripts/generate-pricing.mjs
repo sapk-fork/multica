@@ -86,6 +86,16 @@ async function loadModelsDev() {
     { key: "cursor/composer-1.5",   input: 3.5,  output: 17.5, cache_read: 0.35,  cache_write: 0 },
     { key: "cursor/composer-1",     input: 1.25, output: 10,   cache_read: 0.125, cache_write: 0 },
     { key: "cursor",                input: 3,    output: 15,   cache_read: 0.5,   cache_write: 0 },
+    // OpenAI SKUs that upstream prices in its own tables (server/internal/
+    // metrics/pricing.go, and the static MODEL_PRICING this file replaced)
+    // but that the pinned models.dev snapshot does not carry yet. Without a
+    // row here the fork's generated map silently loses a price upstream had,
+    // and upstream's own runtimes/utils.test.ts assertions fail on the
+    // rebased branch. Drop an entry once the snapshot supplies it — the
+    // models.dev value then wins, because the loop below skips keys already
+    // claimed. Rates: OpenAI's published $10 / $50 for Astra; 5.6+ bills
+    // cache read at 0.1x input and cache write at 1.25x input.
+    { key: "gpt-6-astra",           input: 10,   output: 50,   cache_read: 1,     cache_write: 12.5 },
   ];
   for (const e of extraEntries) {
     if (!rows.has(e.key)) {
