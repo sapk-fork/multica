@@ -34,7 +34,6 @@ import {
 import {
   useInboxSortStore,
   type InboxSortField,
-  type InboxSortDirection,
 } from "@multica/core/inbox/store";
 import {
   useMarkInboxRead,
@@ -71,6 +70,8 @@ import {
   ChevronLeft,
   ListChecks,
   ArrowLeft,
+  ArrowUp,
+  ArrowDown,
   ArrowUpDown,
 } from "lucide-react";
 import type { InboxItem } from "@multica/core/types";
@@ -151,11 +152,28 @@ export function InboxPage() {
   const sortField = useInboxSortStore((s) => s.sortField);
   const sortDirection = useInboxSortStore((s) => s.sortDirection);
   const setSortField = useInboxSortStore((s) => s.setSortField);
-  const setSortDirection = useInboxSortStore((s) => s.setSortDirection);
+  const toggleSort = useInboxSortStore((s) => s.toggleSort);
+  // The paginated endpoint guarantees the projection, including on empty pages.
+  const priorityFilterSupport = isArchivedView ? "supported" : inboxPriorityFilterSupport(rawItems);
+  const prioritySortingSupported = priorityFilterSupport === "supported";
+  // A legacy backend omits issue_priority from every row, which would score them
+  // all equal and leave the list date-ordered while the menu claimed Priority.
+  // Reuse the filter's capability probe rather than a second signal: keep the
+  // stored preference but apply date until the projection is proven, the way
+  // inboxFiltersForPrioritySupport holds a stale priority filter dormant.
+  const effectiveSortField: InboxSortField =
+    sortField === "priority" && !prioritySortingSupported ? "date" : sortField;
 
+  // Main-view only, guarded here rather than at the control: the archived list
+  // is cursor-paginated, so ordering it client-side would rank the pages loaded
+  // so far and read as a sorted list while leaving the rest out of order. The
+  // invariant then holds whatever the render path does.
   const items = useMemo(
-    () => sortInboxItems(deduplicateInboxItems(rawItems), sortField, sortDirection),
-    [rawItems, sortField, sortDirection],
+    () =>
+      isArchivedView
+        ? []
+        : sortInboxItems(deduplicateInboxItems(rawItems), effectiveSortField, sortDirection),
+    [isArchivedView, rawItems, effectiveSortField, sortDirection],
   );
   const archiveQuery = useInfiniteQuery({
     ...archivedInboxPagesOptions(wsId, filters), enabled: isArchivedView,
@@ -168,8 +186,6 @@ export function InboxPage() {
     archiveQuery.data?.pages.flatMap((page) => page.items) ?? [],
   ), [archiveQuery.data]);
   const viewItems = isArchivedView ? archivedItems : items;
-  // The paginated endpoint guarantees the projection, including on empty pages.
-  const priorityFilterSupport = isArchivedView ? "supported" : inboxPriorityFilterSupport(rawItems);
   const effectiveFilters = useMemo(() => inboxFiltersForPrioritySupport(filters, priorityFilterSupport), [filters, priorityFilterSupport]);
   const visibleItems = useMemo(() => filterInboxItems(viewItems, effectiveFilters), [viewItems, effectiveFilters]);
   const hasActiveFilters = inboxFilterCount(effectiveFilters) > 0;
@@ -551,6 +567,7 @@ export function InboxPage() {
                 variant="ghost"
                 size="icon-sm"
                 className="text-muted-foreground"
+                data-testid="inbox-sort-trigger"
               />
             }
           >
@@ -560,36 +577,48 @@ export function InboxPage() {
             <DropdownMenuGroup>
               <DropdownMenuLabel>{t(($) => $.sort.sort_by)}</DropdownMenuLabel>
               <DropdownMenuRadioGroup
-                value={sortField}
+                value={effectiveSortField}
                 onValueChange={(value) => setSortField(value as InboxSortField)}
               >
                 <DropdownMenuRadioItem value="date">
                   {t(($) => $.sort.date)}
                 </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="priority">
-                  {t(($) => $.sort.priority)}
-                </DropdownMenuRadioItem>
+                {/* Absent on a backend that predates the projection: offering
+                    it would check a sort that cannot order anything. */}
+                {prioritySortingSupported ? (
+                  <DropdownMenuRadioItem value="priority">
+                    {t(($) => $.sort.priority)}
+                  </DropdownMenuRadioItem>
+                ) : null}
                 <DropdownMenuRadioItem value="unread">
                   {t(($) => $.sort.unread)}
                 </DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
             </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuRadioGroup
-              value={sortDirection}
-              onValueChange={(value) =>
-                setSortDirection(value as InboxSortDirection)
-              }
-            >
-              <DropdownMenuRadioItem value="desc">
-                {t(($) => $.sort.desc)}
-              </DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="asc">
-                {t(($) => $.sort.asc)}
-              </DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+        {/* One direction button instead of a second radio group: the toolbar
+            pattern in skill-list-toolbar.tsx. Its title names the direction it
+            switches to, so the control is labelled without a second group
+            label, and it is the live caller for the store's toggleSort. */}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground"
+          data-testid="inbox-sort-direction"
+          onClick={() => toggleSort(sortField)}
+          title={
+            sortDirection === "asc"
+              ? t(($) => $.sort.desc)
+              : t(($) => $.sort.asc)
+          }
+        >
+          {sortDirection === "asc" ? (
+            <ArrowUp className="h-4 w-4" />
+          ) : (
+            <ArrowDown className="h-4 w-4" />
+          )}
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
