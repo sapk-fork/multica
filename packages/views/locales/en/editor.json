@@ -181,6 +181,10 @@
     "filter_placeholder": "Filter rows",
     "clear_filter": "Clear filter",
     "no_matches": "No matching rows",
-    "close": "Close"
-  }
+    "close": "Close",
+  "details_block": {
+    "summary_default": "Details",
+    "summary_aria_label": "Summary",
+    "body_placeholder": "Body (Markdown)",
+    "body_aria_label": "Details body (Markdown)"  }
 }
