@@ -28,8 +28,13 @@ import {
   archivedInboxLookupOptions,
   deduplicateInboxItems,
   deduplicateArchivedInboxItems,
+  sortInboxItems,
   useInboxUnreadCount,
 } from "@multica/core/inbox/queries";
+import {
+  useInboxSortStore,
+  type InboxSortField,
+} from "@multica/core/inbox/store";
 import {
   useMarkInboxRead,
   useMarkInboxUnread,
@@ -65,6 +70,9 @@ import {
   ChevronLeft,
   ListChecks,
   ArrowLeft,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from "lucide-react";
 import type { InboxItem } from "@multica/core/types";
 import { Button } from "@multica/ui/components/ui/button";
@@ -81,6 +89,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuGroup,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
 } from "@multica/ui/components/ui/dropdown-menu";
 import { useIsCompact } from "@multica/ui/hooks/use-mobile";
 import { cn } from "@multica/ui/lib/utils";
@@ -135,7 +147,34 @@ export function InboxPage() {
   const { data: rawItems = [], isLoading: loading } = useQuery({
     ...inboxListOptions(wsId), enabled: !isArchivedView,
   });
-  const items = useMemo(() => deduplicateInboxItems(rawItems), [rawItems]);
+  // Sort preference (persisted, workspace-aware). Select primitives
+  // individually so each selector returns a stable reference.
+  const sortField = useInboxSortStore((s) => s.sortField);
+  const sortDirection = useInboxSortStore((s) => s.sortDirection);
+  const setSortField = useInboxSortStore((s) => s.setSortField);
+  const toggleSort = useInboxSortStore((s) => s.toggleSort);
+  // The paginated endpoint guarantees the projection, including on empty pages.
+  const priorityFilterSupport = isArchivedView ? "supported" : inboxPriorityFilterSupport(rawItems);
+  const prioritySortingSupported = priorityFilterSupport === "supported";
+  // A legacy backend omits issue_priority from every row, which would score them
+  // all equal and leave the list date-ordered while the menu claimed Priority.
+  // Reuse the filter's capability probe rather than a second signal: keep the
+  // stored preference but apply date until the projection is proven, the way
+  // inboxFiltersForPrioritySupport holds a stale priority filter dormant.
+  const effectiveSortField: InboxSortField =
+    sortField === "priority" && !prioritySortingSupported ? "date" : sortField;
+
+  // Main-view only, guarded here rather than at the control: the archived list
+  // is cursor-paginated, so ordering it client-side would rank the pages loaded
+  // so far and read as a sorted list while leaving the rest out of order. The
+  // invariant then holds whatever the render path does.
+  const items = useMemo(
+    () =>
+      isArchivedView
+        ? []
+        : sortInboxItems(deduplicateInboxItems(rawItems), effectiveSortField, sortDirection),
+    [isArchivedView, rawItems, effectiveSortField, sortDirection],
+  );
   const archiveQuery = useInfiniteQuery({
     ...archivedInboxPagesOptions(wsId, filters), enabled: isArchivedView,
   });
@@ -147,8 +186,6 @@ export function InboxPage() {
     archiveQuery.data?.pages.flatMap((page) => page.items) ?? [],
   ), [archiveQuery.data]);
   const viewItems = isArchivedView ? archivedItems : items;
-  // The paginated endpoint guarantees the projection, including on empty pages.
-  const priorityFilterSupport = isArchivedView ? "supported" : inboxPriorityFilterSupport(rawItems);
   const effectiveFilters = useMemo(() => inboxFiltersForPrioritySupport(filters, priorityFilterSupport), [filters, priorityFilterSupport]);
   const visibleItems = useMemo(() => filterInboxItems(viewItems, effectiveFilters), [viewItems, effectiveFilters]);
   const hasActiveFilters = inboxFilterCount(effectiveFilters) > 0;
@@ -516,42 +553,105 @@ export function InboxPage() {
         priorityFilterSupport={priorityFilterSupport}
         archived={isArchivedView}
       />
-      {/* Batch actions are main-view only. Every entry archives from the MAIN
-          inbox, so offering them while the archived list is on screen reads as
-          "archive all of these" and does the opposite of what it looks like. */}
+      {/* Sort and batch actions are main-view only. The archived list is
+          paginated, so a client-side sort would only order the pages loaded so
+          far; and every batch entry archives from the MAIN inbox, so offering
+          them while the archived list is on screen reads as "archive all of
+          these" and does the opposite of what it looks like. */}
       {!isArchivedView && (
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground"
-            />
+      <div className="flex items-center gap-0.5">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+                data-testid="inbox-sort-trigger"
+              />
+            }
+          >
+            <ArrowUpDown className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-auto">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>{t(($) => $.sort.sort_by)}</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={effectiveSortField}
+                onValueChange={(value) => setSortField(value as InboxSortField)}
+              >
+                <DropdownMenuRadioItem value="date">
+                  {t(($) => $.sort.date)}
+                </DropdownMenuRadioItem>
+                {/* Absent on a backend that predates the projection: offering
+                    it would check a sort that cannot order anything. */}
+                {prioritySortingSupported ? (
+                  <DropdownMenuRadioItem value="priority">
+                    {t(($) => $.sort.priority)}
+                  </DropdownMenuRadioItem>
+                ) : null}
+                <DropdownMenuRadioItem value="unread">
+                  {t(($) => $.sort.unread)}
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {/* One direction button instead of a second radio group: the toolbar
+            pattern in skill-list-toolbar.tsx. Its title names the direction it
+            switches to, so the control is labelled without a second group
+            label, and it is the live caller for the store's toggleSort. */}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground"
+          data-testid="inbox-sort-direction"
+          onClick={() => toggleSort(sortField)}
+          title={
+            sortDirection === "asc"
+              ? t(($) => $.sort.desc)
+              : t(($) => $.sort.asc)
           }
         >
-          <MoreHorizontal className="h-4 w-4" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-auto">
-          <DropdownMenuItem onClick={handleMarkAllRead}>
-            <CheckCheck className="h-4 w-4" />
-            {t(($) => $.menu.mark_all_read)}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleArchiveAll}>
-            <Archive className="h-4 w-4" />
-            {t(($) => $.menu.archive_all)}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleArchiveAllRead}>
-            <BookCheck className="h-4 w-4" />
-            {t(($) => $.menu.archive_all_read)}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleArchiveCompleted}>
-            <ListChecks className="h-4 w-4" />
-            {t(($) => $.menu.archive_completed)}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          {sortDirection === "asc" ? (
+            <ArrowUp className="h-4 w-4" />
+          ) : (
+            <ArrowDown className="h-4 w-4" />
+          )}
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+              />
+            }
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-auto">
+            <DropdownMenuItem onClick={handleMarkAllRead}>
+              <CheckCheck className="h-4 w-4" />
+              {t(($) => $.menu.mark_all_read)}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleArchiveAll}>
+              <Archive className="h-4 w-4" />
+              {t(($) => $.menu.archive_all)}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleArchiveAllRead}>
+              <BookCheck className="h-4 w-4" />
+              {t(($) => $.menu.archive_all_read)}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleArchiveCompleted}>
+              <ListChecks className="h-4 w-4" />
+              {t(($) => $.menu.archive_completed)}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       )}
     </PageHeader>
   );
