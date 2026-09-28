@@ -200,6 +200,10 @@ const BUILT_IN_ICON_COLOR: Record<BuiltInIssueStatus, string> = {
   done: "text-info",
   blocked: "text-destructive",
   cancelled: "text-muted-foreground",
+  // Archived is the fork's M-11 terminal status. It presents as the `closed`
+  // category, so it takes the same muted tone as Cancelled rather than
+  // inventing a second "terminal" colour the palette does not have.
+  archived: "text-muted-foreground",
 };
 
 // ---------------------------------------------------------------------------
