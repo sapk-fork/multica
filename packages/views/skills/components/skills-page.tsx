@@ -31,6 +31,8 @@ import {
 } from "@multica/core/workspace/queries";
 import { runtimeDisplayLabel, runtimeListOptions } from "@multica/core/runtimes";
 import { resolvePublicFileUrl } from "@multica/core/workspace/avatar-url";
+import { resolveAvatarUrl } from "@multica/core/gravatar";
+import { useGravatarSettings } from "@multica/core/gravatar/use-gravatar-settings";
 import { Button } from "@multica/ui/components/ui/button";
 import { Checkbox } from "@multica/ui/components/ui/checkbox";
 import {
@@ -377,7 +379,13 @@ function SourceCell({
   );
 }
 
-function CreatorCell({ creator }: { creator: MemberWithUser | null }) {
+function CreatorCell({
+  creator,
+  gravatarEnabled,
+}: {
+  creator: MemberWithUser | null;
+  gravatarEnabled: boolean;
+}) {
   return (
     <ListGridCell className="hidden gap-1.5 @2xl:flex">
       {creator && (
@@ -385,7 +393,12 @@ function CreatorCell({ creator }: { creator: MemberWithUser | null }) {
           <ActorAvatar
             name={creator.name}
             initials={creator.name.slice(0, 2).toUpperCase()}
-            avatarUrl={resolvePublicFileUrl(creator.avatar_url)}
+            avatarUrl={resolveAvatarUrl({
+              avatarUrl: creator.avatar_url,
+              email: creator.email,
+              gravatarEnabled,
+              resolvePublicFileUrl,
+            })}
             size="md"
           />
           <span className="min-w-0 truncate text-caption text-muted-foreground">
@@ -585,6 +598,9 @@ export default function SkillsPage() {
   const rowLink = useRowLink();
   const timeAgo = useTimeAgo();
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+  // One read for the whole list: CreatorCell renders per row, and a
+  // per-row hook would re-subscribe every visible row to the same boolean.
+  const { enabled: gravatarEnabled } = useGravatarSettings();
 
   const {
     data: skills = [],
@@ -886,7 +902,10 @@ export default function SkillsPage() {
                   <ListGridCell className="hidden px-0 @2xl:flex" />
                 )}
                 {isColVisible("creator") ? (
-                  <CreatorCell creator={row.creator} />
+                  <CreatorCell
+                    creator={row.creator}
+                    gravatarEnabled={gravatarEnabled}
+                  />
                 ) : (
                   <ListGridCell className="hidden px-0 @2xl:flex" />
                 )}

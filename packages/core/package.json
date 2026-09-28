@@ -148,6 +148,9 @@
     "./provider": "./provider.tsx",
     "./logger": "./logger.ts",
     "./utils": "./utils.ts",
+    "./gravatar": "./gravatar/index.ts",
+    "./gravatar/settings": "./gravatar/settings.ts",
+    "./gravatar/use-gravatar-settings": "./gravatar/use-gravatar-settings.ts",
     "./constants/*": "./constants/*.ts",
     "./feature-flags": "./feature-flags/index.ts",
     "./platform": "./platform/index.ts",
@@ -168,6 +171,7 @@
   },
   "dependencies": {
     "@formatjs/intl-localematcher": "catalog:",
+    "@noble/hashes": "^1.8.0",
     "@tanstack/react-query": "catalog:",
     "i18next": "catalog:",
     "posthog-js": "catalog:",

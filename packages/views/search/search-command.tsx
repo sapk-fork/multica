@@ -55,6 +55,8 @@ import type { ProjectStatus } from "@multica/core/types";
 import { ActorAvatar } from "../common/actor-avatar";
 import { ShortcutKeycaps } from "../common/shortcut-keycaps";
 import { ActorAvatar as ActorAvatarBase } from "@multica/ui/components/common/actor-avatar";
+import { resolveAvatarUrl } from "@multica/core/gravatar";
+import { useGravatarSettings } from "@multica/core/gravatar/use-gravatar-settings";
 import {
   Dialog,
   DialogContent,
@@ -349,6 +351,7 @@ export function SearchCommand() {
   }, []);
   const wsId = useWorkspaceId();
   const { colorOf, iconOf } = useIssueStatuses(wsId);
+  const gravatarEnabled = useGravatarSettings().enabled;
   const recentItems = useRecentIssuesStore(selectRecentIssues(wsId));
   const p: WorkspacePaths = useWorkspacePaths();
   const { theme, setTheme } = useTheme();
@@ -823,7 +826,12 @@ export function SearchCommand() {
                     <ActorAvatarBase
                       name={member.name}
                       initials={memberInitials(member.name)}
-                      avatarUrl={resolvePublicFileUrl(member.avatar_url)}
+                      avatarUrl={resolveAvatarUrl({
+                        avatarUrl: member.avatar_url,
+                        email: member.email,
+                        gravatarEnabled,
+                        resolvePublicFileUrl,
+                      })}
                       size="md"
                     />
                     <div className="min-w-0 flex-1">
