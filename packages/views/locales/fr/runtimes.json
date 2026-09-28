@@ -106,6 +106,14 @@
     "long_offline": {
       "label": "Hors ligne depuis longtemps",
       "description": "Aucun signal depuis au moins 6 jours. Si cette machine doit rester hors ligne, associez ses agents à un autre runtime ou supprimez celui-ci."
+    },
+    "on_hold": {
+      "label": "En pause",
+      "resumes_in": "Reprise dans {{time}}",
+      "tooltip": "Ce runtime est en pause — les tâches sont en file d'attente et reprendront automatiquement.",
+      "resume_button": "Reprendre",
+      "resume_toast": "Runtime repris",
+      "resume_failed": "Échec de la reprise du runtime"
     }
   },
   "detail": {
