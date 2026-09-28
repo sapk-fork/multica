@@ -32,6 +32,9 @@ const canEditRef = vi.hoisted(() => ({ current: true }));
 
 vi.mock("@multica/core/hooks", () => ({ useWorkspaceId: () => "ws-1" }));
 vi.mock("@multica/core/workspace/queries", () => ({
+  // The gravatar fallback reads the workspace's `settings` blob, which
+  // useCurrentWorkspace resolves through the workspace list query.
+  workspaceListOptions: () => ({ queryKey: ["workspaces"] }),
   skillDetailOptions: (wsId: string, id: string) => ({
     queryKey: ["skill", wsId, id],
     queryFn: () => Promise.resolve(skillRef.current),
