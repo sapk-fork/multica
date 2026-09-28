@@ -39,7 +39,7 @@ import {
 import { issueDetailOptions, issueTimelineOptions } from "@multica/core/issues/queries";
 import { useWorkspaceId } from "@multica/core";
 import { useIssueStatuses } from "@multica/core/issue-statuses/hooks";
-import { useCurrentWorkspace, useWorkspacePaths, WORKSPACE_PAGES } from "@multica/core/paths";
+import { useWorkspacePaths, WORKSPACE_PAGES } from "@multica/core/paths";
 import type { WorkspacePageKey, WorkspacePaths } from "@multica/core/paths";
 import { useModalStore } from "@multica/core/modals";
 import { createShortcutChord } from "@multica/core/shortcuts";
@@ -56,7 +56,7 @@ import { ActorAvatar } from "../common/actor-avatar";
 import { ShortcutKeycaps } from "../common/shortcut-keycaps";
 import { ActorAvatar as ActorAvatarBase } from "@multica/ui/components/common/actor-avatar";
 import { resolveAvatarUrl } from "@multica/core/gravatar";
-import { deriveGravatarSettings } from "@multica/core/gravatar/settings";
+import { useGravatarSettings } from "@multica/core/gravatar/use-gravatar-settings";
 import {
   Dialog,
   DialogContent,
@@ -351,7 +351,7 @@ export function SearchCommand() {
   }, []);
   const wsId = useWorkspaceId();
   const { colorOf, iconOf } = useIssueStatuses(wsId);
-  const gravatarEnabled = deriveGravatarSettings(useCurrentWorkspace()).enabled;
+  const gravatarEnabled = useGravatarSettings().enabled;
   const recentItems = useRecentIssuesStore(selectRecentIssues(wsId));
   const p: WorkspacePaths = useWorkspacePaths();
   const { theme, setTheme } = useTheme();

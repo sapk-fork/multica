@@ -379,8 +379,13 @@ function SourceCell({
   );
 }
 
-function CreatorCell({ creator }: { creator: MemberWithUser | null }) {
-  const { enabled: gravatarEnabled } = useGravatarSettings();
+function CreatorCell({
+  creator,
+  gravatarEnabled,
+}: {
+  creator: MemberWithUser | null;
+  gravatarEnabled: boolean;
+}) {
   return (
     <ListGridCell className="hidden gap-1.5 @2xl:flex">
       {creator && (
@@ -593,6 +598,9 @@ export default function SkillsPage() {
   const rowLink = useRowLink();
   const timeAgo = useTimeAgo();
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+  // One read for the whole list: CreatorCell renders per row, and a
+  // per-row hook would re-subscribe every visible row to the same boolean.
+  const { enabled: gravatarEnabled } = useGravatarSettings();
 
   const {
     data: skills = [],
@@ -894,7 +902,10 @@ export default function SkillsPage() {
                   <ListGridCell className="hidden px-0 @2xl:flex" />
                 )}
                 {isColVisible("creator") ? (
-                  <CreatorCell creator={row.creator} />
+                  <CreatorCell
+                    creator={row.creator}
+                    gravatarEnabled={gravatarEnabled}
+                  />
                 ) : (
                   <ListGridCell className="hidden px-0 @2xl:flex" />
                 )}
