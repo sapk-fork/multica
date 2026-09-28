@@ -40,7 +40,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@multica/core/api";
 import { useAuthStore } from "@multica/core/auth";
 import { useWorkspaceId } from "@multica/core/hooks";
-import { useCurrentWorkspace } from "@multica/core/paths";
 import { useWorkspacePaths } from "@multica/core/paths";
 import {
   agentListOptions,
@@ -353,8 +352,6 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
   const { t } = useT("skills");
   const { t: tCommon } = useT("common");
   const wsId = useWorkspaceId();
-  const workspace = useCurrentWorkspace();
-  const gravatarEnabled = deriveGravatarSettings(workspace).enabled;
   const qc = useQueryClient();
   const paths = useWorkspacePaths();
   const navigation = useNavigation();
