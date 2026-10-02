@@ -554,6 +554,8 @@
     "cancel_edit": "取消",
     "copy_action": "复制",
     "copy_link_action": "复制链接",
+    "export_pdf_action": "下载 PDF",
+    "export_pdf_failed_toast": "无法打开打印对话框",
     "link_copied": "链接已复制",
     "link_copy_failed": "复制链接失败",
     "copied_toast": "已复制",

@@ -566,6 +566,8 @@
     "cancel_edit": "Cancel",
     "copy_action": "Copy",
     "copy_link_action": "Copy link",
+    "export_pdf_action": "Download PDF",
+    "export_pdf_failed_toast": "Failed to open the print dialog",
     "link_copied": "Link copied",
     "link_copy_failed": "Failed to copy link",
     "copied_toast": "Copied",

@@ -566,6 +566,8 @@
     "cancel_edit": "Annuler",
     "copy_action": "Copier",
     "copy_link_action": "Copier le lien",
+    "export_pdf_action": "Télécharger en PDF",
+    "export_pdf_failed_toast": "Échec de l'ouverture de la boîte de dialogue d'impression",
     "link_copied": "Lien copié",
     "link_copy_failed": "Échec de la copie du lien",
     "copied_toast": "Copié",
