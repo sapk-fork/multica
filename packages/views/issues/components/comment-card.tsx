@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { CheckCircle2, ChevronRight, CornerUpLeft, ListChevronsDownUp, Copy, Link2, Loader2, MessageSquarePlus, MoreHorizontal, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { CheckCircle2, ChevronRight, CornerUpLeft, ListChevronsDownUp, Copy, FileDown, Link2, Loader2, MessageSquarePlus, MoreHorizontal, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@multica/ui/components/ui/card";
 import { Button, buttonVariants } from "@multica/ui/components/ui/button";
@@ -62,6 +62,7 @@ import { useAttachmentVersions } from "./deliverables/attachment-versions";
 import { VersionBadge } from "./deliverables/version-badge";
 import { useRunCommentMotion } from "./use-run-comment-motion";
 import { WakeupSourceChip } from "./wakeup-source-chip";
+import { CommentPrintSurface } from "./comment-print";
 
 const commentActionClassName =
   "text-muted-foreground aria-expanded:bg-transparent aria-expanded:hover:bg-muted dark:aria-expanded:hover:bg-muted/50";
@@ -681,6 +682,11 @@ function CommentRow({
   const canEditEntry = receipts.length === 0 && (isOwn || (canModerate && entry.actor_type === "member"));
   const canDeleteEntry = !receipts.some(isSupplementInFlight) && (isOwn || canModerate);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  // `CommentPrintSurface` closes itself through this callback, so it has to
+  // keep one identity for the life of the component: an inline arrow would
+  // re-run the surface's print effect on every render and print in a loop.
+  const closePrint = useCallback(() => setPrinting(false), []);
 
   const reactions = entry.reactions ?? [];
 
@@ -797,6 +803,10 @@ function CommentRow({
                   {t(($) => $.comment.copy_link_action)}
                 </DropdownMenuItem>
               )}
+              <DropdownMenuItem onClick={() => setPrinting(true)}>
+                <FileDown className="h-3.5 w-3.5" aria-hidden />
+                {t(($) => $.comment.export_pdf_action)}
+              </DropdownMenuItem>
               {onCreateSubIssue && entry.comment_type === "comment" && (
                 <DropdownMenuItem onClick={() => onCreateSubIssue(entry.id)}>
                   <MessageSquarePlus className="h-3.5 w-3.5" aria-hidden />
@@ -931,6 +941,7 @@ function CommentRow({
         getActorName={getActorName}
         className="mt-1.5 pl-12 pr-4 max-md:pl-3 max-md:pr-3"
       />}
+      {printing && <CommentPrintSurface entry={entry} onClose={closePrint} />}
     </div>
   );
 }
@@ -1064,6 +1075,10 @@ function CommentCardImpl({
   const canEditEntry = receipts.length === 0 && (isOwn || (canModerate && entry.actor_type === "member"));
   const canDeleteEntry = !receipts.some(isSupplementInFlight) && (isOwn || canModerate);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  // See the reply row's `closePrint`: the surface's print effect re-runs on
+  // every change to this callback, so it must hold one identity.
+  const closePrint = useCallback(() => setPrinting(false), []);
   // A reply here goes into the running turn of a run that belongs to this
   // thread by default; another thread's turn is only reached by choice.
   const steerThreadRunByDefault = useCallback(
@@ -1328,6 +1343,10 @@ function CommentCardImpl({
                           {t(($) => $.comment.copy_link_action)}
                         </DropdownMenuItem>
                       )}
+                      <DropdownMenuItem onClick={() => setPrinting(true)}>
+                        <FileDown className="h-3.5 w-3.5" aria-hidden />
+                        {t(($) => $.comment.export_pdf_action)}
+                      </DropdownMenuItem>
                       {onCreateSubIssue && entry.comment_type === "comment" && (
                         <DropdownMenuItem onClick={() => onCreateSubIssue(entry.id)}>
                           <MessageSquarePlus className="h-3.5 w-3.5" aria-hidden />
@@ -1529,6 +1548,7 @@ function CommentCardImpl({
           )}
           </>
         )}
+      {printing && <CommentPrintSurface entry={entry} onClose={closePrint} />}
     </Card>
   );
 }
