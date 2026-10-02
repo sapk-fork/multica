@@ -15,7 +15,7 @@ vi.mock("./code-block-static", () => ({
 const { copyTextMock } = vi.hoisted(() => ({ copyTextMock: vi.fn() }));
 vi.mock("@multica/ui/lib/clipboard", () => ({ copyText: copyTextMock }));
 
-import { DynamicBlock } from "./dynamic-block";
+import { DynamicBlock, DynamicBlockSkeleton } from "./dynamic-block";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -49,6 +49,27 @@ describe("DynamicBlock", () => {
     const { container } = renderBlock();
     expect(container.querySelector("[data-collapsed]")).toBeNull();
     expect(screen.queryByRole("button", { name: "Show all" })).toBeNull();
+  });
+
+  // The print stylesheet un-collapses `[data-collapsed]` and hides what is left
+  // over: the "Show all" button and the gradient it fades with. Both are
+  // selected by attribute, so both need one that is not a Tailwind class.
+  it("marks the collapse gradient so a print stylesheet can find it", () => {
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(900);
+    const { container } = renderBlock();
+
+    const body = container.querySelector<HTMLElement>("[data-collapsed]")!;
+    expect(body.querySelector("[data-fade]")).not.toBeNull();
+    expect(body.querySelector("[data-fade]")).toBe(
+      body.querySelector("button")!.previousElementSibling,
+    );
+  });
+
+  // The comment PDF export waits for this before printing, so it polls for a
+  // durable hook rather than for a Tailwind class it does not own.
+  it("marks the skeleton a print surface waits on", () => {
+    const { container } = render(<DynamicBlockSkeleton />);
+    expect(container.querySelector("[data-dynamic-block-skeleton]")).not.toBeNull();
   });
 
   it("copies the fence source", async () => {

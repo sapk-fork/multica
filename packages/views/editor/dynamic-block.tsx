@@ -266,7 +266,7 @@ function CollapsibleBody({ children }: { children: ReactNode }) {
       <div ref={contentRef}>{children}</div>
       {collapsed && (
         <>
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-surface" />
+          <div data-fade="" className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-surface" />
           <Button
             type="button"
             variant="outline"
@@ -338,11 +338,18 @@ function DynamicBlockErrorPanel({
 /**
  * Loading state for a preview body: a quiet page outline at the height the
  * block will most likely take, so the finished render does not move the page.
+ *
+ * `data-dynamic-block-skeleton` is the hook the comment PDF export polls before
+ * printing: a surface holding one of these still has content in flight, and
+ * `window.print()` would snapshot the outline instead of the diagram.
  */
 export function DynamicBlockSkeleton({ className }: { className?: string }) {
   const { t } = useT("editor");
   return (
-    <div className={cn("flex h-full flex-col gap-3 px-5 py-[18px]", className)}>
+    <div
+      data-dynamic-block-skeleton=""
+      className={cn("flex h-full flex-col gap-3 px-5 py-[18px]", className)}
+    >
       <div className="h-3 w-[38%] rounded-sm bg-muted" />
       <div className="min-h-3 flex-1 rounded-sm bg-muted" />
       <div className="flex items-center gap-1.5 text-caption text-muted-foreground">
