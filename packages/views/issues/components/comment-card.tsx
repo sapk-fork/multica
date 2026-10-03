@@ -62,7 +62,7 @@ import { useAttachmentVersions } from "./deliverables/attachment-versions";
 import { VersionBadge } from "./deliverables/version-badge";
 import { useRunCommentMotion } from "./use-run-comment-motion";
 import { WakeupSourceChip } from "./wakeup-source-chip";
-import { CommentPrintSurface } from "./comment-print";
+import { exportCommentImage } from "./comment-export";
 
 const commentActionClassName =
   "text-muted-foreground aria-expanded:bg-transparent aria-expanded:hover:bg-muted dark:aria-expanded:hover:bg-muted/50";
@@ -682,11 +682,6 @@ function CommentRow({
   const canEditEntry = receipts.length === 0 && (isOwn || (canModerate && entry.actor_type === "member"));
   const canDeleteEntry = !receipts.some(isSupplementInFlight) && (isOwn || canModerate);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [printing, setPrinting] = useState(false);
-  // `CommentPrintSurface` closes itself through this callback, so it has to
-  // keep one identity for the life of the component: an inline arrow would
-  // re-run the surface's print effect on every render and print in a loop.
-  const closePrint = useCallback(() => setPrinting(false), []);
 
   const reactions = entry.reactions ?? [];
 
@@ -803,7 +798,7 @@ function CommentRow({
                   {t(($) => $.comment.copy_link_action)}
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onClick={() => setPrinting(true)}>
+              <DropdownMenuItem onClick={() => exportCommentImage(entry)}>
                 <FileDown className="h-3.5 w-3.5" aria-hidden />
                 {t(($) => $.comment.export_png_action)}
               </DropdownMenuItem>
@@ -941,7 +936,6 @@ function CommentRow({
         getActorName={getActorName}
         className="mt-1.5 pl-12 pr-4 max-md:pl-3 max-md:pr-3"
       />}
-      {printing && <CommentPrintSurface entry={entry} onClose={closePrint} />}
     </div>
   );
 }
@@ -1075,10 +1069,6 @@ function CommentCardImpl({
   const canEditEntry = receipts.length === 0 && (isOwn || (canModerate && entry.actor_type === "member"));
   const canDeleteEntry = !receipts.some(isSupplementInFlight) && (isOwn || canModerate);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [printing, setPrinting] = useState(false);
-  // See the reply row's `closePrint`: the surface's print effect re-runs on
-  // every change to this callback, so it must hold one identity.
-  const closePrint = useCallback(() => setPrinting(false), []);
   // A reply here goes into the running turn of a run that belongs to this
   // thread by default; another thread's turn is only reached by choice.
   const steerThreadRunByDefault = useCallback(
@@ -1343,7 +1333,7 @@ function CommentCardImpl({
                           {t(($) => $.comment.copy_link_action)}
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuItem onClick={() => setPrinting(true)}>
+                      <DropdownMenuItem onClick={() => exportCommentImage(entry)}>
                         <FileDown className="h-3.5 w-3.5" aria-hidden />
                         {t(($) => $.comment.export_png_action)}
                       </DropdownMenuItem>
@@ -1548,7 +1538,6 @@ function CommentCardImpl({
           )}
           </>
         )}
-      {printing && <CommentPrintSurface entry={entry} onClose={closePrint} />}
     </Card>
   );
 }
