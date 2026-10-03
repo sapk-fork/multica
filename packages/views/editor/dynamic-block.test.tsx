@@ -72,6 +72,18 @@ describe("DynamicBlock", () => {
     expect(container.querySelector("[data-dynamic-block-skeleton]")).not.toBeNull();
   });
 
+  // The comment PNG export hides this bar. The stylesheet has to name
+  // something durable rather than a Tailwind class it does not own, and the
+  // capture stylesheet's own assertion fails if the two ever drift apart — so
+  // this is the half that says the hook exists at all.
+  it("marks the title bar so the capture can drop it", () => {
+    const { container } = renderBlock();
+
+    const header = container.querySelector<HTMLElement>("[data-dynamic-block-header]");
+    expect(header).not.toBeNull();
+    expect(header!.querySelector("[data-dynamic-block-actions]")).not.toBeNull();
+  });
+
   it("copies the fence source", async () => {
     copyTextMock.mockResolvedValue(true);
     renderBlock();

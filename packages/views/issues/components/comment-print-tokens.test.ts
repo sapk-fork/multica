@@ -31,6 +31,22 @@ function topLevelRule(css: string, selector: string): string {
   throw new Error(`unbalanced braces after \`${selector}\``);
 }
 
+/**
+ * Declaration body of the top-level rule whose selector list mentions `token`.
+ *
+ * `topLevelRule` needs the rule's *first* selector, which a comma-separated list
+ * does not give you, and the opening brace of such a rule sits after every one of
+ * its selectors rather than after the first — so the search starts at the end of
+ * the token's own line. The sheet has no nested rules, so the closing brace is
+ * unambiguous.
+ */
+function ruleBodyMentioning(css: string, token: string): string {
+  const at = css.indexOf(token);
+  expect(at, `no top-level rule mentions \`${token}\``).toBeGreaterThan(-1);
+  const open = css.indexOf("{", css.indexOf("\n", at));
+  return css.slice(open + 1, css.indexOf("}", open));
+}
+
 /** `name -> value` for every custom property in a declaration body. */
 function customProperties(body: string): Map<string, string> {
   const out = new Map<string, string>();
@@ -103,5 +119,15 @@ describe("comment-print.css light token block", () => {
     expect(topLevelRule(css, ".comment-print-doc [data-rich-block-shell]")).toContain(
       "min-height: 0",
     );
+  });
+
+  it("drops every framed block's title bar", () => {
+    // The icon, the block's name and the preview/source tabs are our own
+    // chrome; a shared image that opens with a "Mermaid" label reads as a
+    // screenshot of the app. The bar is the one thing left that says so, the
+    // toolbar and zoom already go with it.
+    expect(
+      ruleBodyMentioning(readFileSync(PRINT_CSS, "utf8"), ".comment-print-doc [data-dynamic-block-header]"),
+    ).toContain("display: none");
   });
 });
