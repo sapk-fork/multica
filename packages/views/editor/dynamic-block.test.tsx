@@ -72,16 +72,22 @@ describe("DynamicBlock", () => {
     expect(container.querySelector("[data-dynamic-block-skeleton]")).not.toBeNull();
   });
 
-  // The comment PNG export hides this bar. The stylesheet has to name
+  // The comment PNG export keeps this bar and strips it: the title is content,
+  // the icon and the preview/source tabs are ours. The stylesheet has to name
   // something durable rather than a Tailwind class it does not own, and the
-  // capture stylesheet's own assertion fails if the two ever drift apart — so
-  // this is the half that says the hook exists at all.
-  it("marks the title bar so the capture can drop it", () => {
+  // capture stylesheet's own assertions fail if the two ever drift apart — so
+  // this is the half that says the four things it names exist at all.
+  it("marks the title, and the chrome the capture strips, on the title bar", () => {
     const { container } = renderBlock();
 
     const header = container.querySelector<HTMLElement>("[data-dynamic-block-header]");
     expect(header).not.toBeNull();
+    // Kept: the title, here "Latency".
+    expect(header!.textContent).toContain("Latency");
+    // Stripped: the icon beside it, the actions, and the view tabs.
+    expect(header!.querySelector(":scope > svg")).not.toBeNull();
     expect(header!.querySelector("[data-dynamic-block-actions]")).not.toBeNull();
+    expect(header!.querySelector("[role='tablist']")).not.toBeNull();
   });
 
   it("copies the fence source", async () => {

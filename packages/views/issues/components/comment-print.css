@@ -123,11 +123,8 @@
    bar (`opacity: 0`, so invisible but still occupying space), the diagram's own
    edge fades and toolbar, a skeleton that outlived the readiness budget —
    its bars are layout, not content, so a blank box beats a captured outline —
-   and every framed block's title bar, which is our own chrome (the icon, the
-   block's name, the preview/source tabs) rather than anything the author
-   wrote. What is left of a framed block is its content edge to edge. */
+   and a framed block's hover-revealed action bar. */
 .comment-print-doc [data-dynamic-block-actions],
-.comment-print-doc [data-dynamic-block-header],
 .comment-print-doc .mermaid-diagram-toolbar,
 .comment-print-doc .mermaid-diagram-zoom,
 .comment-print-doc .mermaid-diagram::before,
@@ -143,6 +140,22 @@
    wait has already proved the content mounted, so nothing can jump. */
 .comment-print-doc [data-rich-block-shell] {
   min-height: 0 !important;
+}
+
+/* A framed block keeps its title bar, minus the parts that are ours.
+ *
+ * The bar was hidden whole for a while, on the grounds that a "Mermaid" label
+ * with an icon reads as a screenshot of our app. That was half right: the icon
+ * and the preview/source tabs are chrome, but the title is content — a user's
+ * `package.json` above a config block tells the reader what they are looking at,
+ * and with no user title the same slot falls back to the block's kind. So the
+ * bar stays and the two things that identify it as ours go instead. */
+.comment-print-doc [data-dynamic-block-header] > svg {
+  display: none !important;
+}
+
+.comment-print-doc [data-dynamic-block-header] [role="tablist"] {
+  display: none !important;
 }
 
 /* Un-collapse "Show all". A clipped block captures as half a block with a

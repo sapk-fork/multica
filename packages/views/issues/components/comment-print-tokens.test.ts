@@ -121,13 +121,29 @@ describe("comment-print.css light token block", () => {
     );
   });
 
-  it("drops every framed block's title bar", () => {
-    // The icon, the block's name and the preview/source tabs are our own
-    // chrome; a shared image that opens with a "Mermaid" label reads as a
-    // screenshot of the app. The bar is the one thing left that says so, the
-    // toolbar and zoom already go with it.
+  it("keeps a framed block's title, which is content", () => {
+    // `package.json` above a config block tells the reader what they are
+    // looking at. The bar was hidden whole for a while, which took the title
+    // with it — this pins the title's survival, since the rest of the bar (icon,
+    // preview/source tabs) is still ours to drop.
+    const css = readFileSync(PRINT_CSS, "utf8");
+
+    // Hidden as a list item, or as a rule of its own: either shape takes the
+    // title down with the icon.
+    expect(css).not.toContain(".comment-print-doc [data-dynamic-block-header],");
+    expect(css).not.toContain(".comment-print-doc [data-dynamic-block-header] {");
+    // The bar's own controls still go.
+    expect(css).toContain(".comment-print-doc [data-dynamic-block-actions],");
+  });
+
+  it("drops the icon and the view tabs out of the bar it keeps", () => {
+    const css = readFileSync(PRINT_CSS, "utf8");
+
     expect(
-      ruleBodyMentioning(readFileSync(PRINT_CSS, "utf8"), ".comment-print-doc [data-dynamic-block-header]"),
+      topLevelRule(css, ".comment-print-doc [data-dynamic-block-header] > svg"),
+    ).toContain("display: none");
+    expect(
+      topLevelRule(css, '.comment-print-doc [data-dynamic-block-header] [role="tablist"]'),
     ).toContain("display: none");
   });
 });
