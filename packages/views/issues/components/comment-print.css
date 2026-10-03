@@ -132,6 +132,15 @@
   display: none !important;
 }
 
+/* Release the near-viewport block's reserved height. `LazyRichBlock` keeps a
+   `min-height` after mount on purpose, so the page never shrinks back and
+   re-triggers a measurement pass — but a reserved 280px under a diagram that
+   draws 120px is a third of a Slack image filled with nothing. The readiness
+   wait has already proved the content mounted, so nothing can jump. */
+.comment-print-doc [data-rich-block-shell] {
+  min-height: 0 !important;
+}
+
 /* Un-collapse "Show all". A clipped block captures as half a block with a
    gradient and a button laid over the missing half. */
 .comment-print-doc [data-collapsed] {
