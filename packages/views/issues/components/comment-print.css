@@ -1,20 +1,17 @@
 /*
- * Print surface for the comment PDF export (M-125).
+ * The capture surface for the comment image export (M-125).
  *
- * The export rides the browser's own print pipeline (`window.print()`), so this
- * file IS the feature: it hides the application and hands the page to one
- * element. No build-time dependency is what keeps the export cheap to add and
- * cheap to drop.
+ * The browser renders the page; this file makes the surface *be* the page. The
+ * surface is portalled over the app, so without these rules the capture would
+ * inherit the issue view's scroll containers, sticky comment headers, hover
+ * toolbars, collapsed blocks and horizontal scrollers — none of which survive a
+ * fixed-size image.
  *
  * `comment-print-tokens.test.ts` guards the token block below. Every value there
  * is copied from `:root` in `packages/ui/styles/tokens.css`, and the test fails
  * if the copy drifts or if a token dark mode overrides is left out — a
  * hand-copied block otherwise rots silently.
  */
-
-@page {
-  margin: 14mm;
-}
 
 /* On screen this is a full-bleed white sheet over the app, which is what makes
    the export read as a document preview rather than a modal. */
@@ -27,8 +24,10 @@
 }
 
 /*
- * Light tokens, pinned — and deliberately OUTSIDE `@media print`, because a
- * dark-mode reader has to see a light preview while the surface is still open.
+ * Light tokens, pinned. The capture happens on screen, so the reader's theme is
+ * the live one: without this a dark-mode reader exports a dark sheet, which is
+ * unreadable pasted into a light document and merely aggressive pasted into a
+ * dark chat.
  *
  * `.dark` sits on <html> and re-declares every one of these, so re-declaring
  * them here insulates the export from the reader's theme without a single
@@ -36,7 +35,7 @@
  * reads `--muted`, `--primary`, `--foreground`, `--muted-foreground` and
  * `color-scheme` off its host with `getComputedStyle` and draws the diagram in
  * them (`getMermaidThemeVariables` / `getSandboxCssVariables`). Pinned light, a
- * diagram drawn for a dark page stays legible on white paper.
+ * diagram drawn for a dark page stays legible on the white sheet.
  */
 .comment-print-doc {
     --accent: oklch(0.967 0.001 286.375);
@@ -120,132 +119,90 @@
   font-weight: 600;
 }
 
-@media print {
-  /* One element reaches the page: the print surface. The issue view, portalled
-     menus, toasts and the dev overlay are all children of <body> too. */
-  body > *:not(.comment-print-portal) {
-    display: none !important;
-  }
-
-  /* The canvas takes its background from <body>. A dark-mode reader must not
-     print a dark sheet around a white document. */
-  html,
-  body {
-    background: #ffffff !important;
-  }
-
-  .comment-print-portal {
-    position: static;
-    inset: auto;
-    overflow: visible;
-  }
-
-  .comment-print-doc {
-    max-width: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  /* Table shading, code backgrounds and KaTeX rules carry information here, not
-     decoration. Without this the browser drops them and the PDF reads flat. */
-  .comment-print-doc,
-  .comment-print-doc * {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  /* Dark-mode syntax colours are literal oklch() values in
-     `editor/styles/code.css`, not tokens, so pinning the tokens above does not
-     reach them. The `.dark` prefix is what makes these beat the
-     `.dark :is(.rich-text-editor, …) .hljs-*` rules they override. */
-  .dark .comment-print-doc .rich-text-editor .hljs-keyword,
-  .dark .comment-print-doc .rich-text-editor .hljs-selector-tag,
-  .dark .comment-print-doc .rich-text-editor .hljs-built_in { color: oklch(0.55 0.16 255); }
-  .dark .comment-print-doc .rich-text-editor .hljs-string,
-  .dark .comment-print-doc .rich-text-editor .hljs-addition { color: oklch(0.55 0.14 155); }
-  .dark .comment-print-doc .rich-text-editor .hljs-comment,
-  .dark .comment-print-doc .rich-text-editor .hljs-quote { color: var(--muted-foreground); }
-  .dark .comment-print-doc .rich-text-editor .hljs-number,
-  .dark .comment-print-doc .rich-text-editor .hljs-literal { color: oklch(0.58 0.16 30); }
-  .dark .comment-print-doc .rich-text-editor .hljs-title,
-  .dark .comment-print-doc .rich-text-editor .hljs-section,
-  .dark .comment-print-doc .rich-text-editor .hljs-title\.function_ { color: oklch(0.55 0.14 280); }
-  .dark .comment-print-doc .rich-text-editor .hljs-attr,
-  .dark .comment-print-doc .rich-text-editor .hljs-attribute { color: oklch(0.58 0.12 60); }
-  .dark .comment-print-doc .rich-text-editor .hljs-variable,
-  .dark .comment-print-doc .rich-text-editor .hljs-template-variable { color: oklch(0.55 0.14 20); }
-  .dark .comment-print-doc .rich-text-editor .hljs-type,
-  .dark .comment-print-doc .rich-text-editor .hljs-title\.class_ { color: oklch(0.55 0.14 200); }
-  .dark .comment-print-doc .rich-text-editor .hljs-deletion { color: oklch(0.55 0.2 25); }
-  .dark .comment-print-doc .rich-text-editor .hljs-name { color: oklch(0.55 0.16 255); }
-
-  /* Screen affordances that would otherwise print: the hover-revealed action bar
-     (`opacity: 0`, so invisible but still occupying space), the diagram's own
-     edge fades, and a skeleton that outlived the readiness budget — its bars are
-     layout, not content, so a blank box beats a printed page outline. */
-  .comment-print-doc [data-dynamic-block-actions],
-  .comment-print-doc .mermaid-diagram-toolbar,
-  .comment-print-doc .mermaid-diagram-zoom,
-  .comment-print-doc .mermaid-diagram::before,
-  .comment-print-doc .mermaid-diagram::after,
-  .comment-print-doc [data-dynamic-block-skeleton] {
-    display: none !important;
-  }
-
-  /* Un-collapse "Show all". A clipped block prints as half a block with a
-     gradient and a button laid over the missing half. */
-  .comment-print-doc [data-collapsed] {
-    max-height: none !important;
-    overflow: visible !important;
-  }
-  .comment-print-doc [data-collapsed] > [data-fade],
-  .comment-print-doc [data-collapsed] > button {
-    display: none !important;
-  }
-
-  /* Diagrams scroll sideways on screen and a PDF cannot scroll, so a wide chart
-     would print as its left edge. Releasing the box and capping the frame at the
-     page width is enough: the sandbox draws `svg { width: 100%; height: 100% }`
-     with the default `preserveAspectRatio`, so a narrowed frame scales the whole
-     drawing down instead of cropping it. */
-  .comment-print-doc .mermaid-diagram-scroll {
-    overflow: visible !important;
-    max-height: none !important;
-  }
-  .comment-print-doc .mermaid-diagram-frame {
-    max-width: 100% !important;
-  }
-
-  /* Same story for wide GFM tables (`.tableWrapper { overflow-x: auto }`). */
-  .comment-print-doc .tableWrapper {
-    overflow: visible !important;
-  }
-  .comment-print-doc table {
-    width: 100% !important;
-  }
-
-  .comment-print-doc pre {
-    white-space: pre-wrap !important;
-    overflow: visible !important;
-    break-inside: avoid;
-  }
-  .comment-print-doc h1,
-  .comment-print-doc h2,
-  .comment-print-doc h3 {
-    break-after: avoid;
-  }
-  .comment-print-doc img {
-    max-width: 100% !important;
-    height: auto !important;
-  }
-
-  /* A link that leaves the page is a dead end in a PDF, so print the target. */
-  .comment-print-doc a {
-    color: var(--foreground);
-  }
-  .comment-print-doc a[href^="http"]::after {
-    content: " (" attr(href) ")";
-    font-size: var(--text-micro);
-    color: var(--muted-foreground);
-  }
+/* Screen affordances that would otherwise be captured: the hover-revealed action
+   bar (`opacity: 0`, so invisible but still occupying space), the diagram's own
+   edge fades and toolbar, and a skeleton that outlived the readiness budget —
+   its bars are layout, not content, so a blank box beats a captured outline. */
+.comment-print-doc [data-dynamic-block-actions],
+.comment-print-doc .mermaid-diagram-toolbar,
+.comment-print-doc .mermaid-diagram-zoom,
+.comment-print-doc .mermaid-diagram::before,
+.comment-print-doc .mermaid-diagram::after,
+.comment-print-doc [data-dynamic-block-skeleton] {
+  display: none !important;
 }
+
+/* Un-collapse "Show all". A clipped block captures as half a block with a
+   gradient and a button laid over the missing half. */
+.comment-print-doc [data-collapsed] {
+  max-height: none !important;
+  overflow: visible !important;
+}
+.comment-print-doc [data-collapsed] > [data-fade],
+.comment-print-doc [data-collapsed] > button {
+  display: none !important;
+}
+
+/* On screen a diagram scrolls sideways and a table scrolls too; an image is one
+   fixed box, so a wide chart or table would be captured as its left edge.
+   Releasing the scroller and capping the frame at the column width is enough —
+   the inline SVG scales with `width: 100%` (`mermaid.css`), so a wide diagram
+   comes out whole and smaller. */
+.comment-print-doc .mermaid-diagram-scroll {
+  overflow: visible !important;
+  max-height: none !important;
+}
+.comment-print-doc .mermaid-diagram-frame {
+  max-width: 100% !important;
+}
+.comment-print-doc .tableWrapper {
+  overflow: visible !important;
+}
+.comment-print-doc table {
+  width: 100% !important;
+}
+
+/* A long fence or a long line would otherwise be cut at the column edge. */
+.comment-print-doc pre {
+  white-space: pre-wrap !important;
+  overflow: visible !important;
+}
+.comment-print-doc img {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+/* A link's target is invisible in an image, so print it. */
+.comment-print-doc a {
+  color: var(--foreground);
+}
+.comment-print-doc a[href^="http"]::after {
+  content: " (" attr(href) ")";
+  font-size: var(--text-micro);
+  color: var(--muted-foreground);
+}
+
+/* Dark-mode syntax colours are literal oklch() values in
+   `editor/styles/code.css`, not tokens, so pinning the tokens above does not
+   reach them. The `.dark` prefix is what makes these beat the
+   `.dark :is(.rich-text-editor, …) .hljs-*` rules they override. */
+.dark .comment-print-doc .rich-text-editor .hljs-keyword,
+.dark .comment-print-doc .rich-text-editor .hljs-selector-tag,
+.dark .comment-print-doc .rich-text-editor .hljs-built_in { color: oklch(0.55 0.16 255); }
+.dark .comment-print-doc .rich-text-editor .hljs-string,
+.dark .comment-print-doc .rich-text-editor .hljs-addition { color: oklch(0.55 0.14 155); }
+.dark .comment-print-doc .rich-text-editor .hljs-comment,
+.dark .comment-print-doc .rich-text-editor .hljs-quote { color: var(--muted-foreground); }
+.dark .comment-print-doc .rich-text-editor .hljs-number,
+.dark .comment-print-doc .rich-text-editor .hljs-literal { color: oklch(0.58 0.16 30); }
+.dark .comment-print-doc .rich-text-editor .hljs-title,
+.dark .comment-print-doc .rich-text-editor .hljs-section,
+.dark .comment-print-doc .rich-text-editor .hljs-title\.function_ { color: oklch(0.55 0.14 280); }
+.dark .comment-print-doc .rich-text-editor .hljs-attr,
+.dark .comment-print-doc .rich-text-editor .hljs-attribute { color: oklch(0.58 0.12 60); }
+.dark .comment-print-doc .rich-text-editor .hljs-variable,
+.dark .comment-print-doc .rich-text-editor .hljs-template-variable { color: oklch(0.55 0.14 20); }
+.dark .comment-print-doc .rich-text-editor .hljs-type,
+.dark .comment-print-doc .rich-text-editor .hljs-title\.class_ { color: oklch(0.55 0.14 200); }
+.dark .comment-print-doc .rich-text-editor .hljs-deletion { color: oklch(0.55 0.2 25); }
+.dark .comment-print-doc .rich-text-editor .hljs-name { color: oklch(0.55 0.16 255); }

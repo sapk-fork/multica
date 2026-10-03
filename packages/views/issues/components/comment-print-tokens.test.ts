@@ -71,6 +71,19 @@ describe("comment-print.css light token block", () => {
     expect(extra).toEqual([]);
   });
 
+  it("carries no print-pipeline rules", () => {
+    // M-125 pivoted from `window.print()` to a PNG capture (sapk drops the file
+    // into Slack, which renders an image inline). `@page`, `@media print` and
+    // `print-color-adjust` only ever governed a print dialog this surface no
+    // longer opens; left in place they read as a live mechanism and quietly rot
+    // against markup that is no longer printed.
+    const css = readFileSync(PRINT_CSS, "utf8");
+
+    expect(css).not.toContain("@media print");
+    expect(css).not.toContain("@page");
+    expect(css).not.toContain("print-color-adjust");
+  });
+
   it("leaves light mode to light mode", () => {
     // `color-scheme` is not a custom property, so it is outside the block above.
     expect(topLevelRule(readFileSync(PRINT_CSS, "utf8"), ".comment-print-doc")).toContain(
