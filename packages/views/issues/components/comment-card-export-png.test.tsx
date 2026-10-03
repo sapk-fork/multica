@@ -5,14 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { TimelineEntry } from "@multica/core/types";
 import { renderWithI18n } from "../../test/i18n";
 
-// The export must capture the comment whose menu was opened — a reply's own
-// body, never the thread root's — and must leave nothing on the page behind it.
+// The export must request the comment whose menu was opened — a reply's own
+// body, never the thread root's. What happens to the request afterwards belongs
+// to `comment-export.test.tsx`, which drives the app-level host.
 
-const { domToBlob } = vi.hoisted(() => ({ domToBlob: vi.fn() }));
-vi.mock("modern-screenshot", () => ({ domToBlob }));
-
-const { downloadBlob } = vi.hoisted(() => ({ downloadBlob: vi.fn() }));
-vi.mock("../../editor/utils/mermaid-export", () => ({ downloadBlob }));
+import { useModalStore } from "@multica/core/modals";
 
 vi.mock("@multica/core/api", () => ({
   api: { uploadFile: vi.fn() },
@@ -92,20 +89,16 @@ function renderThread(root: TimelineEntry, replies: TimelineEntry[]) {
   );
 }
 
-/** What each capture actually saw on the page, in call order. */
-let captured: string[];
+function requestedEntry(): TimelineEntry | undefined {
+  return useModalStore.getState().data?.entry as TimelineEntry | undefined;
+}
 
 beforeEach(() => {
-  captured = [];
-  domToBlob.mockReset();
-  domToBlob.mockImplementation(async () => {
-    captured.push(document.querySelector(".comment-print-doc")?.textContent ?? "");
-    return new Blob(["png"], { type: "image/png" });
-  });
-  downloadBlob.mockReset();
+  useModalStore.setState({ modal: null, data: null });
 });
 
 afterEach(() => {
+  useModalStore.setState({ modal: null, data: null });
   vi.useRealTimers();
 });
 
@@ -116,76 +109,39 @@ async function exportFrom(index: number) {
   fireEvent.click(await screen.findByText("Download PNG"));
 }
 
-const portal = () => document.querySelector(".comment-print-portal");
-
 describe("CommentCard — download comment as PNG", () => {
-  it("captures the thread root's own body", async () => {
+  it("asks the export host for the thread root's own comment", async () => {
     renderThread(comment("root", null), []);
 
     await exportFrom(0);
 
-    await waitFor(() => expect(captured).toHaveLength(1));
-    expect(captured[0]).toContain("body root");
+    await waitFor(() =>
+      expect(useModalStore.getState().modal).toBe("comment-image-export"),
+    );
+    expect(requestedEntry()).toMatchObject({ id: "root", parent_id: null });
   });
 
-  it("captures a reply's own body, not the thread root's", async () => {
+  it("asks for a reply's own comment, not the thread root's", async () => {
     renderThread(comment("root", null), [comment("reply", "root")]);
 
     // Menus render in order: root first, then the reply.
     await exportFrom(1);
 
-    await waitFor(() => expect(captured).toHaveLength(1));
-    expect(captured[0]).toContain("body reply");
-    expect(captured[0]).not.toContain("body root");
-  });
-
-  it("keeps the surface up until the capture has landed", async () => {
-    let land: (blob: Blob) => void = () => {};
-    domToBlob.mockImplementation(
-      () =>
-        new Promise<Blob>((resolve) => {
-          land = resolve;
-        }),
+    await waitFor(() =>
+      expect(useModalStore.getState().modal).toBe("comment-image-export"),
     );
-    renderThread(comment("root", null), []);
-
-    await exportFrom(0);
-    await waitFor(() => expect(domToBlob).toHaveBeenCalledTimes(1));
-
-    // Capturing, nothing downloaded yet.
-    expect(portal()).not.toBeNull();
-    expect(portal()?.textContent).toContain("body root");
-    expect(downloadBlob).not.toHaveBeenCalled();
-
-    land(new Blob(["png"], { type: "image/png" }));
-
-    await waitFor(() => expect(portal()).toBeNull());
-    expect(downloadBlob).toHaveBeenCalledTimes(1);
+    expect(requestedEntry()).toMatchObject({ id: "reply", parent_id: "root" });
   });
 
-  it("captures exactly once per click", async () => {
+  it("replaces a request still in flight rather than queueing a second surface", async () => {
     renderThread(comment("root", null), []);
 
     await exportFrom(0);
-
-    await waitFor(() => expect(domToBlob).toHaveBeenCalledTimes(1));
-    // Past the readiness wait: a second capture here means the surface re-ran
-    // its export effect.
-    await new Promise((resolve) => setTimeout(resolve, 120));
-    expect(domToBlob).toHaveBeenCalledTimes(1);
-    expect(captured).toHaveLength(1);
-  });
-
-  it("lets a reader export again after the first image is on its way", async () => {
-    renderThread(comment("root", null), []);
-
-    await exportFrom(0);
-    await waitFor(() => expect(portal()).toBeNull());
-
     await exportFrom(0);
 
-    await waitFor(() => expect(domToBlob).toHaveBeenCalledTimes(2));
-    expect(captured).toHaveLength(2);
-    expect(downloadBlob).toHaveBeenCalledTimes(2);
+    await waitFor(() =>
+      expect(useModalStore.getState().modal).toBe("comment-image-export"),
+    );
+    expect(requestedEntry()).toMatchObject({ id: "root" });
   });
 });

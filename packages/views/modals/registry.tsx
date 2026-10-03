@@ -11,6 +11,7 @@ import { MarkDuplicateIssueModal } from "./mark-duplicate-issue";
 import { AddChildIssueModal } from "./add-child-issue";
 import { DeleteIssueConfirmModal } from "./delete-issue-confirm";
 import { RunConfirmModal } from "./run-confirm";
+import { CommentExportHost } from "../issues/components/comment-export-host";
 import { IssueLimitUpgradeDialog } from "./issue-limit-upgrade-dialog";
 
 export function ModalRegistry() {
@@ -54,6 +55,9 @@ export function ModalRegistry() {
       break;
     case "issue-mark-duplicate":
       activeModal = <MarkDuplicateIssueModal onClose={close} data={data} />;
+      break;
+    case "comment-image-export":
+      activeModal = <CommentExportHost />;
       break;
     case "issue-add-child":
       activeModal = <AddChildIssueModal onClose={close} data={data} />;

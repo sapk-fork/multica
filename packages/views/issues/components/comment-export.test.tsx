@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { waitFor } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
+import { useModalStore } from "@multica/core/modals";
 import type { TimelineEntry } from "@multica/core/types";
 
 const { domToBlob } = vi.hoisted(() => ({ domToBlob: vi.fn() }));
@@ -28,24 +29,28 @@ vi.mock("../../editor", async () => ({
   ReadonlyContent: ({ content }: { content: string }) => <div>{content}</div>,
 }));
 
+import { CommentExportHost } from "./comment-export-host";
 import { exportCommentImage } from "./comment-export";
 
-const entry: TimelineEntry = {
-  type: "comment",
-  id: "root",
-  actor_type: "member",
-  actor_id: "user-1",
-  content: "body root",
-  parent_id: null,
-  comment_type: "comment",
-  reactions: [],
-  attachments: [],
-  created_at: "2026-09-11T07:00:00Z",
-  updated_at: "2026-09-11T07:00:00Z",
-  revision: 1,
-};
+function comment(id: string, parentId: string | null): TimelineEntry {
+  return {
+    type: "comment",
+    id,
+    actor_type: "member",
+    actor_id: "user-1",
+    content: `body ${id}`,
+    parent_id: parentId,
+    comment_type: "comment",
+    reactions: [],
+    attachments: [],
+    created_at: "2026-09-11T07:00:00Z",
+    updated_at: "2026-09-11T07:00:00Z",
+    revision: 1,
+  };
+}
 
 beforeEach(() => {
+  useModalStore.setState({ modal: null, data: null });
   domToBlob.mockReset();
   domToBlob.mockResolvedValue(new Blob(["png"], { type: "image/png" }));
   downloadBlob.mockReset();
@@ -53,13 +58,30 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  document.querySelectorAll(".comment-print-portal").forEach((node) => node.remove());
-  document.body.innerHTML = "";
+  useModalStore.setState({ modal: null, data: null });
 });
 
 describe("exportCommentImage", () => {
-  it("captures the comment it was handed, and downloads it", async () => {
-    exportCommentImage(entry);
+  it("asks the app-level host for the comment it was handed", () => {
+    exportCommentImage(comment("reply", "root"));
+
+    expect(useModalStore.getState().modal).toBe("comment-image-export");
+    expect(useModalStore.getState().data?.entry).toMatchObject({ id: "reply" });
+  });
+
+  it("renders nothing on its own — the request outlives the card that made it", () => {
+    // The whole point: the opener is a virtualized row, and the surface must
+    // not be anchored to it.
+    exportCommentImage(comment("root", null));
+
+    expect(document.querySelector(".comment-print-portal")).toBeNull();
+  });
+});
+
+describe("CommentExportHost", () => {
+  it("captures and downloads the requested comment", async () => {
+    render(<CommentExportHost />);
+    exportCommentImage(comment("root", null));
 
     await waitFor(() => expect(domToBlob).toHaveBeenCalledTimes(1));
     expect(domToBlob.mock.calls[0]![0]?.textContent).toContain("body root");
@@ -68,33 +90,29 @@ describe("exportCommentImage", () => {
     );
   });
 
-  it("mounts its host on the document, then takes it away again", async () => {
-    exportCommentImage(entry);
-    expect(document.querySelector("[data-comment-export-root]")).not.toBeNull();
+  it("closes the request when the export is done, taking the surface with it", async () => {
+    render(<CommentExportHost />);
+    exportCommentImage(comment("root", null));
 
-    // Wait for the export itself first: asserting cleanup while the surface has
-    // not even rendered would pass on a component that never cleans up.
     await waitFor(() => expect(downloadBlob).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(document.querySelector(".comment-print-portal")).toBeNull());
-    expect(document.querySelector("[data-comment-export-root]")).toBeNull();
+    expect(useModalStore.getState().modal).toBeNull();
   });
 
-  it("cleans up after a failed capture too, so the app is not left under a sheet", async () => {
+  it("closes the request after a failed capture, so the app is not left under a sheet", async () => {
     domToBlob.mockRejectedValue(new Error("canvas too large"));
-
-    exportCommentImage(entry);
+    render(<CommentExportHost />);
+    exportCommentImage(comment("root", null));
 
     await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(document.querySelector(".comment-print-portal")).toBeNull());
     expect(downloadBlob).not.toHaveBeenCalled();
-    expect(document.querySelector("[data-comment-export-root]")).toBeNull();
+    await waitFor(() => expect(document.querySelector(".comment-print-portal")).toBeNull());
   });
 
-  it("exports on demand rather than on render: a fresh call captures again", async () => {
-    exportCommentImage(entry);
-    await waitFor(() => expect(domToBlob).toHaveBeenCalledTimes(1));
+  it("shows nothing while no comment is being exported", () => {
+    render(<CommentExportHost />);
 
-    exportCommentImage(entry);
-    await waitFor(() => expect(domToBlob).toHaveBeenCalledTimes(2));
+    expect(document.querySelector(".comment-print-portal")).toBeNull();
+    expect(domToBlob).not.toHaveBeenCalled();
   });
 });

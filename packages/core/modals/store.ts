@@ -13,6 +13,9 @@ type ModalType =
   | "issue-add-child"
   | "issue-delete-confirm"
   | "issue-run-confirm"
+  // The comment image export (M-125) is an overlay rather than a dialog, but it
+  // is the same idea: one app-level surface, opened from anywhere, hosted once.
+  | "comment-image-export"
   | null;
 
 export type IssueLimitRecoveryReason = "issue_limit" | "autopilot_quota";
