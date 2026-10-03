@@ -30,7 +30,9 @@
  */
 
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useId,
   useMemo,
@@ -51,6 +53,20 @@ import { hashSource } from "./utils/source-hash";
 import type { Size } from "./utils/zoom-transform";
 
 type MermaidAPI = typeof import("mermaid").default;
+
+/**
+ * Draws the diagram straight into the host document instead of the sandboxed
+ * `srcDoc` iframe, for surfaces that rasterize the page (M-125's comment image
+ * export). A sandboxed iframe is a separate document with an opaque origin, so
+ * nothing outside it can read what it drew — a capture comes back with a hole
+ * where the diagram should be.
+ *
+ * A context rather than a prop because the diagram is four layers down from the
+ * surface that needs it: capture surface → `ReadonlyContent` → mermaid fence →
+ * `MermaidBlock` → here. Drilling a boolean through all four would put a
+ * rendering decision in every one of them.
+ */
+export const InlineMermaidContext = createContext(false);
 
 let mermaidPromise: Promise<MermaidAPI> | null = null;
 
@@ -386,6 +402,7 @@ export function MermaidDiagram({
 }) {
   const { t } = useT("editor");
   const reactId = useId();
+  const inlineSvg = useContext(InlineMermaidContext);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const expandButtonRef = useRef<HTMLButtonElement>(null);
@@ -558,6 +575,7 @@ export function MermaidDiagram({
       ref={containerRef}
       className="mermaid-diagram"
       data-framed={frame ? "" : undefined}
+      data-inline={inlineSvg ? "" : undefined}
       aria-label={t(($) => $.mermaid.diagram_label)}
       style={containerStyle}
       data-overflow-start={overflow.start ? "" : undefined}
@@ -572,60 +590,75 @@ export function MermaidDiagram({
               The gesture drives this instead of `onClick`, because a click
               fires at the end of a drag too and would reopen the viewer over
               a user who was only trying to look at the rest of a wide chart. */}
-          <div
-            ref={scrollRef}
-            className="mermaid-diagram-scroll"
-            style={{ maxHeight: MERMAID_PREVIEW_MAX_HEIGHT_PX }}
-            {...dragToScroll}
-          >
-            <iframe
-              className="mermaid-diagram-frame"
-              sandbox=""
-              srcDoc={rendered.inlineDocument}
-              style={{
-                height: `${zoom.size.height}px`,
-                width: `${zoom.size.width}px`,
-              }}
-              title={t(($) => $.mermaid.diagram_label)}
+          {inlineSvg ? (
+            // Capture surfaces (M-125) rasterize the host document, and a
+            // `sandbox=""` srcDoc iframe is a separate document no rasterizer
+            // can read — the diagram would come back as an empty box. The SVG
+            // goes in directly instead, with none of the screen affordances
+            // (toolbar, zoom, edge fades, viewer) that a static image has no
+            // use for.
+            <div
+              className="mermaid-diagram-inline"
+              dangerouslySetInnerHTML={{ __html: rendered.svg }}
             />
-          </div>
-          {/* Framed, the zoom floats on its own: the frame's title bar holds
-              the other actions. Standalone it joins the toolbar, because two
-              pills stacked on a short, wide diagram covered most of it. */}
-          {frame && <MermaidZoomControls zoom={zoom} />}
-          {!frame && (
-            <div className="mermaid-diagram-toolbar">
-              <MermaidZoomControls zoom={zoom} />
-              <button
-                type="button"
-                onClick={handleCopySource}
-                title={t(($) => $.mermaid.copy_source)}
-                aria-label={t(($) => $.mermaid.copy_source)}
+          ) : (
+            <>
+              <div
+                ref={scrollRef}
+                className="mermaid-diagram-scroll"
+                style={{ maxHeight: MERMAID_PREVIEW_MAX_HEIGHT_PX }}
+                {...dragToScroll}
               >
-                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-              </button>
-              <button
-                ref={expandButtonRef}
-                type="button"
-                onClick={() => setViewerOpen(true)}
-                title={t(($) => $.mermaid.open_viewer)}
-                aria-label={t(($) => $.mermaid.open_viewer)}
-              >
-                <Maximize2 className="size-3.5" />
-              </button>
-            </div>
-          )}
-          <MermaidViewer
-            open={viewerOpen}
-            onOpenChange={setViewerOpen}
-            chart={chart}
-            svg={rendered.svg}
-            viewerDocument={rendered.viewerDocument}
-            layout={rendered.layout}
+                <iframe
+                  className="mermaid-diagram-frame"
+                  sandbox=""
+                  srcDoc={rendered.inlineDocument}
+                  style={{
+                    height: `${zoom.size.height}px`,
+                    width: `${zoom.size.width}px`,
+                  }}
+                  title={t(($) => $.mermaid.diagram_label)}
+                />
+              </div>
+              {/* Framed, the zoom floats on its own: the frame's title bar holds
+                  the other actions. Standalone it joins the toolbar, because two
+                  pills stacked on a short, wide diagram covered most of it. */}
+              {frame && <MermaidZoomControls zoom={zoom} />}
+              {!frame && (
+                <div className="mermaid-diagram-toolbar">
+                  <MermaidZoomControls zoom={zoom} />
+                  <button
+                    type="button"
+                    onClick={handleCopySource}
+                    title={t(($) => $.mermaid.copy_source)}
+                    aria-label={t(($) => $.mermaid.copy_source)}
+                  >
+                    {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                  </button>
+                  <button
+                    ref={expandButtonRef}
+                    type="button"
+                    onClick={() => setViewerOpen(true)}
+                    title={t(($) => $.mermaid.open_viewer)}
+                    aria-label={t(($) => $.mermaid.open_viewer)}
+                  >
+                    <Maximize2 className="size-3.5" />
+                  </button>
+                </div>
+              )}
+              <MermaidViewer
+                open={viewerOpen}
+                onOpenChange={setViewerOpen}
+                chart={chart}
+                svg={rendered.svg}
+                viewerDocument={rendered.viewerDocument}
+                layout={rendered.layout}
             exportBackground={rendered.exportBackground}
             exportFontFamily={rendered.exportFontFamily}
             finalFocusRef={frame ? frame.finalFocusRef : expandButtonRef}
           />
+            </>
+          )}
         </>
       ) : frame ? (
         <DynamicBlockSkeleton className="absolute inset-0 p-4" />

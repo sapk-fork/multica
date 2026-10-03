@@ -50,6 +50,23 @@
   pointer-events: none;
 }
 
+/* Inline (capture) presentation — see `InlineMermaidContext`. The SVG sits in
+   the host document, so nothing sizes it for us: Mermaid writes `width: 100%`
+   plus an inline `max-width` tuned to the sandbox that used to hold it, and
+   `!important` outranks both. `height: auto` keeps the viewBox's aspect ratio,
+   so a diagram wider than the column scales down whole rather than overflowing. */
+.rich-text-editor .mermaid-diagram[data-inline] .mermaid-diagram-inline {
+  display: flex;
+  justify-content: center;
+}
+
+.rich-text-editor .mermaid-diagram[data-inline] .mermaid-diagram-inline svg {
+  display: block;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+}
+
 /* Edge fades: a hint that the diagram continues past the container. Driven by
    data attributes the component sets from scroll position, so a diagram that
    fits shows no fade, and a scrolled-to-the-end one fades only on the left. */

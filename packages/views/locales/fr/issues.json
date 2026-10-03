@@ -566,6 +566,8 @@
     "cancel_edit": "Annuler",
     "copy_action": "Copier",
     "copy_link_action": "Copier le lien",
+    "export_png_action": "Télécharger en PNG",
+    "export_png_failed_toast": "Impossible de créer l'image",
     "link_copied": "Lien copié",
     "link_copy_failed": "Échec de la copie du lien",
     "copied_toast": "Copié",

@@ -25,7 +25,7 @@ vi.mock("mermaid", () => ({
 
 const MOCK_SVG = '<svg viewBox="0 0 1000 500"><g><text>mock diagram</text></g></svg>';
 
-import { MermaidDiagram } from "./mermaid-diagram";
+import { InlineMermaidContext, MermaidDiagram } from "./mermaid-diagram";
 
 const CHART = "graph LR\n  A[Start] --> B[Done]";
 const VIEWPORT = { width: 800, height: 400 };
@@ -538,6 +538,66 @@ describe("MermaidDiagram inline tap vs drag", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open diagram viewer" }));
 
     expect(await screen.findByRole("application")).toBeInTheDocument();
+  });
+});
+
+describe("MermaidDiagram capture presentation", () => {
+  // The comment image export (M-125) rasterizes the document node, and a
+  // `sandbox=""` srcDoc iframe is a separate document no rasterizer can read:
+  // the capture comes back with an empty box where the diagram should be. Inside
+  // a capture surface the SVG therefore goes straight into the host document.
+  it("puts the SVG in the host document instead of a sandboxed iframe", async () => {
+    stubColumnWidth(800);
+    render(
+      <InlineMermaidContext.Provider value={true}>
+        <MermaidDiagram chart={CHART} />
+      </InlineMermaidContext.Provider>,
+    );
+
+    await waitFor(() => {
+      expect(document.querySelector(".mermaid-diagram-inline")).not.toBeNull();
+    });
+    expect(document.querySelector(".mermaid-diagram-inline")!.innerHTML).toContain("mock diagram");
+    expect(document.querySelector("iframe")).toBeNull();
+  });
+
+  it("drops the screen affordances a captured image has no use for", async () => {
+    render(
+      <InlineMermaidContext.Provider value={true}>
+        <MermaidDiagram chart={CHART} />
+      </InlineMermaidContext.Provider>,
+    );
+
+    await waitFor(() => {
+      expect(document.querySelector(".mermaid-diagram-inline")).not.toBeNull();
+    });
+    expect(document.querySelector(".mermaid-diagram-toolbar")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy diagram source" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Zoom in" })).toBeNull();
+  });
+
+  it("leaves the on-screen preview sandboxed outside a capture surface", async () => {
+    render(<MermaidDiagram chart={CHART} />);
+
+    const frame = await findFrame();
+    expect(frame.getAttribute("sandbox")).toBe("");
+    expect(document.querySelector(".mermaid-diagram-inline")).toBeNull();
+  });
+
+  it("still reports a parse failure instead of capturing an empty box", async () => {
+    mermaidRenderMock.mockRejectedValueOnce(new Error("Parse error on line 3"));
+
+    render(
+      <InlineMermaidContext.Provider value={true}>
+        <MermaidDiagram chart={CHART} />
+      </InlineMermaidContext.Provider>,
+    );
+
+    await waitFor(() => {
+      expect(document.querySelector(".mermaid-diagram-error")).not.toBeNull();
+    });
+    expect(screen.getByText("Parse error on line 3")).toBeInTheDocument();
+    expect(document.querySelector(".mermaid-diagram-inline")).toBeNull();
   });
 });
 

@@ -554,6 +554,8 @@
     "cancel_edit": "キャンセル",
     "copy_action": "コピー",
     "copy_link_action": "リンクをコピー",
+    "export_png_action": "PNG をダウンロード",
+    "export_png_failed_toast": "画像を作成できませんでした",
     "link_copied": "リンクをコピーしました",
     "link_copy_failed": "リンクをコピーできませんでした",
     "copied_toast": "コピーしました",

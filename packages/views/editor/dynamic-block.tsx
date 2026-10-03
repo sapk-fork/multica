@@ -135,7 +135,17 @@ export function DynamicBlock({
         className,
       )}
     >
-      <div className="flex h-9 items-center gap-2 border-b pr-1.5 pl-3">
+      {/* Two hooks, one bar, because the capture treats it in two states:
+          `data-dynamic-block-header` names it, and `data-dynamic-block-titled`
+          says the author gave the block a title of its own. With one, the bar
+          holds the title and the capture strips the rest of it; without one, the
+          title slot falls back to our kind name ("Mermaid"), and the capture
+          drops the whole bar rather than leave an empty bordered strip. */}
+      <div
+        data-dynamic-block-header=""
+        data-dynamic-block-titled={trimmedTitle ? "" : undefined}
+        className="flex h-9 items-center gap-2 border-b pr-1.5 pl-3"
+      >
         <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
         {/* With no title, the kind name stands in and the chip would repeat it. */}
         <span
@@ -147,7 +157,14 @@ export function DynamicBlock({
           {trimmedTitle || kindLabel}
         </span>
         {trimmedTitle && (
-          <span className="inline-flex h-[18px] shrink-0 items-center rounded-sm bg-secondary px-1.5 text-micro text-muted-foreground">
+          // The chip names our rendering library — "Mermaid" — beside the
+          // author's own title, so the comment PNG export drops it. It gets a
+          // hook for the same reason the bar and the actions do: the stylesheet
+          // must not have to name Tailwind utilities it does not own.
+          <span
+            data-dynamic-block-kind=""
+            className="inline-flex h-[18px] shrink-0 items-center rounded-sm bg-secondary px-1.5 text-micro text-muted-foreground"
+          >
             {kindLabel}
           </span>
         )}
@@ -266,7 +283,7 @@ function CollapsibleBody({ children }: { children: ReactNode }) {
       <div ref={contentRef}>{children}</div>
       {collapsed && (
         <>
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-surface" />
+          <div data-fade="" className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-surface" />
           <Button
             type="button"
             variant="outline"
@@ -338,11 +355,18 @@ function DynamicBlockErrorPanel({
 /**
  * Loading state for a preview body: a quiet page outline at the height the
  * block will most likely take, so the finished render does not move the page.
+ *
+ * `data-dynamic-block-skeleton` is the hook the comment PDF export polls before
+ * printing: a surface holding one of these still has content in flight, and
+ * the comment image export would capture the outline instead of the diagram.
  */
 export function DynamicBlockSkeleton({ className }: { className?: string }) {
   const { t } = useT("editor");
   return (
-    <div className={cn("flex h-full flex-col gap-3 px-5 py-[18px]", className)}>
+    <div
+      data-dynamic-block-skeleton=""
+      className={cn("flex h-full flex-col gap-3 px-5 py-[18px]", className)}
+    >
       <div className="h-3 w-[38%] rounded-sm bg-muted" />
       <div className="min-h-3 flex-1 rounded-sm bg-muted" />
       <div className="flex items-center gap-1.5 text-caption text-muted-foreground">

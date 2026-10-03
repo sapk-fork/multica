@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { CheckCircle2, ChevronRight, CornerUpLeft, ListChevronsDownUp, Copy, Link2, Loader2, MessageSquarePlus, MoreHorizontal, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { CheckCircle2, ChevronRight, CornerUpLeft, ListChevronsDownUp, Copy, FileDown, Link2, Loader2, MessageSquarePlus, MoreHorizontal, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@multica/ui/components/ui/card";
 import { Button, buttonVariants } from "@multica/ui/components/ui/button";
@@ -62,6 +62,7 @@ import { useAttachmentVersions } from "./deliverables/attachment-versions";
 import { VersionBadge } from "./deliverables/version-badge";
 import { useRunCommentMotion } from "./use-run-comment-motion";
 import { WakeupSourceChip } from "./wakeup-source-chip";
+import { exportCommentImage } from "./comment-export";
 
 const commentActionClassName =
   "text-muted-foreground aria-expanded:bg-transparent aria-expanded:hover:bg-muted dark:aria-expanded:hover:bg-muted/50";
@@ -797,6 +798,10 @@ function CommentRow({
                   {t(($) => $.comment.copy_link_action)}
                 </DropdownMenuItem>
               )}
+              <DropdownMenuItem onClick={() => exportCommentImage(entry)}>
+                <FileDown className="h-3.5 w-3.5" aria-hidden />
+                {t(($) => $.comment.export_png_action)}
+              </DropdownMenuItem>
               {onCreateSubIssue && entry.comment_type === "comment" && (
                 <DropdownMenuItem onClick={() => onCreateSubIssue(entry.id)}>
                   <MessageSquarePlus className="h-3.5 w-3.5" aria-hidden />
@@ -1328,6 +1333,10 @@ function CommentCardImpl({
                           {t(($) => $.comment.copy_link_action)}
                         </DropdownMenuItem>
                       )}
+                      <DropdownMenuItem onClick={() => exportCommentImage(entry)}>
+                        <FileDown className="h-3.5 w-3.5" aria-hidden />
+                        {t(($) => $.comment.export_png_action)}
+                      </DropdownMenuItem>
                       {onCreateSubIssue && entry.comment_type === "comment" && (
                         <DropdownMenuItem onClick={() => onCreateSubIssue(entry.id)}>
                           <MessageSquarePlus className="h-3.5 w-3.5" aria-hidden />
