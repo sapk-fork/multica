@@ -1,0 +1,178 @@
+import "./env";
+
+import { expect, test, type Page } from "@playwright/test";
+
+import { createTestApi, loginAsDefault } from "./helpers";
+import type { TestApiClient } from "./fixtures";
+
+/**
+ * "Download PNG" hands one comment to the browser's own rasterizer.
+ *
+ * The capture is real — the surface, the readiness wait and the download all
+ * run — but the rasterizer's output is observed rather than inspected: what this
+ * file proves is *which* comment reached the capture, that the surface is torn
+ * down afterwards, and that the file lands with a comment's own name.
+ *
+ * What it cannot prove is anything about the pixels beyond that: no image
+ * decoding, no layout fidelity. Whether the captured sheet is legible and well
+ * composed stays the manual check.
+ */
+
+const ROOT_BODY = "Root comment body, the thread opener, never the captured one.";
+const REPLY_BODY = "Reply comment body, the only body that should reach the capture.";
+
+/** The sheet's own text at the moment the download was triggered. */
+interface CaptureRecord {
+  text: string;
+}
+
+/**
+ * Records the surface and the download together.
+ *
+ * `downloadBlob` is the one place the export hands the image to the browser, so
+ * hooking `URL.createObjectURL` there observes the real capture rather than a
+ * stand-in — and it needs no seam in the product code.
+ */
+async function watchCapture(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __captures: CaptureRecord[] };
+    w.__captures = [];
+    const original = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (object: Blob | MediaSource) => {
+      if (object instanceof Blob && object.type === "image/png") {
+        w.__captures.push({
+          text: document.querySelector(".comment-print-doc")?.textContent ?? "",
+        });
+      }
+      return original(object as Blob);
+    };
+  });
+
+  return {
+    // Listen BEFORE the click: the capture can finish in a couple of seconds,
+    // and a download that fires before the listener is attached is missed.
+    downloaded: page.waitForEvent("download", { timeout: 120_000 }),
+    async records(): Promise<CaptureRecord[]> {
+      return page.evaluate(
+        () => (window as unknown as { __captures: CaptureRecord[] }).__captures,
+      );
+    },
+  };
+}
+
+/**
+ * The card holding `ownText` and not `otherText`. Both the thread root and each
+ * reply carry `data-comment-block`, and the reply's block sits inside the
+ * root's — so excluding the other body is what tells the two apart.
+ */
+function commentBlock(page: Page, ownText: string, otherText: string) {
+  return page
+    .locator("[data-comment-block]")
+    .filter({ hasText: ownText })
+    .filter({ hasNotText: otherText })
+    .first();
+}
+
+let api: TestApiClient;
+let issueId: string;
+let workspaceSlug: string;
+
+test.beforeEach(async ({ page }) => {
+  api = await createTestApi();
+  const issue = await api.createIssue(`E2E comment PNG export ${Date.now()}`);
+  issueId = issue.id;
+  const root = await api.createComment(issueId, ROOT_BODY);
+  await api.createComment(issueId, REPLY_BODY, root.id);
+  workspaceSlug = await loginAsDefault(page);
+});
+
+test.afterEach(async () => {
+  if (api) await api.cleanup();
+});
+
+/**
+ * The stub has to be installed before the document exists, so navigation happens
+ * here rather than in `beforeEach`.
+ */
+async function openIssue(page: Page) {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/${workspaceSlug}/issues/${issueId}`, { waitUntil: "domcontentloaded" });
+  await expect(page.getByText(REPLY_BODY, { exact: true })).toBeVisible({ timeout: 30_000 });
+}
+
+async function exportToPngFrom(page: Page, ownText: string, otherText: string) {
+  const trigger = commentBlock(page, ownText, otherText).getByRole("button", {
+    name: "Comment actions",
+  });
+  await expect(trigger).toBeVisible();
+  // A reply's sticky header sits on top of its own action row once the row is
+  // scrolled to the top of the viewport, so a pointer click would land on the
+  // header. The keyboard reaches the same trigger without that contest.
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+
+  const item = page.getByRole("menuitem", { name: "Download PNG" });
+  await expect(item).toBeVisible();
+  await item.focus();
+  await page.keyboard.press("Enter");
+}
+
+test.describe("Comment actions — Download PNG", () => {
+  test("a reply's capture holds that reply, not the thread root", async ({ page }) => {
+    const capture = await watchCapture(page);
+    await openIssue(page);
+
+    await exportToPngFrom(page, REPLY_BODY, ROOT_BODY);
+    const download = await capture.downloaded;
+
+    expect(download.suggestedFilename()).toMatch(/^comment-\d{4}-\d{2}-\d{2}-\d{4}\.png$/);
+    const records = await capture.records();
+    expect(records).toHaveLength(1);
+    expect(records[0]!.text).toContain(REPLY_BODY);
+    expect(records[0]!.text).not.toContain(ROOT_BODY);
+  });
+
+  test("the thread root's capture holds the root", async ({ page }) => {
+    const capture = await watchCapture(page);
+    await openIssue(page);
+
+    await exportToPngFrom(page, ROOT_BODY, REPLY_BODY);
+    await capture.downloaded;
+
+    const records = await capture.records();
+    expect(records).toHaveLength(1);
+    expect(records[0]!.text).toContain(ROOT_BODY);
+    expect(records[0]!.text).not.toContain(REPLY_BODY);
+  });
+
+  test("the capture surface leaves the document once the file is on its way", async ({ page }) => {
+    const capture = await watchCapture(page);
+    await openIssue(page);
+
+    await exportToPngFrom(page, REPLY_BODY, ROOT_BODY);
+
+    // Downloading first, so an absent surface cannot pass by never opening.
+    await capture.downloaded;
+    await expect(page.locator(".comment-print-portal")).toHaveCount(0);
+    await expect(page.locator(".comment-print-doc")).toHaveCount(0);
+    // Cleanup is total: no host node is left in the app either.
+    await expect(page.locator("[data-comment-export-root]")).toHaveCount(0);
+  });
+
+  test("a reader can export again after the first file is on its way", async ({ page }) => {
+    const capture = await watchCapture(page);
+    await openIssue(page);
+
+    await exportToPngFrom(page, REPLY_BODY, ROOT_BODY);
+    await capture.downloaded;
+    await expect(page.locator(".comment-print-portal")).toHaveCount(0);
+
+    await exportToPngFrom(page, REPLY_BODY, ROOT_BODY);
+    const second = await capture.downloaded;
+
+    expect(second.suggestedFilename()).toMatch(/\.png$/);
+    await expect
+      .poll(async () => (await capture.records()).length, { timeout: 30_000 })
+      .toBe(2);
+  });
+});
