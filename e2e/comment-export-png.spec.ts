@@ -1,6 +1,7 @@
 import "./env";
 
-import { expect, test, type Page } from "@playwright/test";
+import { readFile } from "fs/promises";
+import { expect, test, type Download, type Page } from "@playwright/test";
 
 import { createTestApi, loginAsDefault } from "./helpers";
 import type { TestApiClient } from "./fixtures";
@@ -21,9 +22,44 @@ import type { TestApiClient } from "./fixtures";
 const ROOT_BODY = "Root comment body, the thread opener, never the captured one.";
 const REPLY_BODY = "Reply comment body, the only body that should reach the capture.";
 
-/** The sheet's own text at the moment the download was triggered. */
+/** The sheet's own text and colours at the moment the download was triggered. */
 interface CaptureRecord {
   text: string;
+  background: string;
+  color: string;
+}
+
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+/**
+ * The reader gets an image, not an empty or HTML payload wearing a `.png` name.
+ * A `download` event and a matching filename both pass on a file with nothing in
+ * it, and IHDR carries the pixel size for free.
+ */
+async function readPng(download: Download) {
+  const path = await download.path();
+  expect(path, "the download never reached the disk").toBeTruthy();
+  const bytes = await readFile(path!);
+  expect([...bytes.subarray(0, 8)]).toEqual(PNG_SIGNATURE);
+  expect(bytes.length).toBeGreaterThan(512);
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+}
+
+/**
+ * Perceived brightness of any CSS colour, 0 (black) to 1 (white).
+ *
+ * The app's own colours are `oklch()`, which a regex cannot read, so the browser
+ * resolves them: a canvas accepts every syntax `getComputedStyle` hands back.
+ */
+function brightness(page: Page, color: string) {
+  return page.evaluate((value) => {
+    const ctx = document.createElement("canvas").getContext("2d");
+    if (!ctx) return -1;
+    ctx.fillStyle = value;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  }, color);
 }
 
 /**
@@ -40,8 +76,15 @@ async function watchCapture(page: Page) {
     const original = URL.createObjectURL.bind(URL);
     URL.createObjectURL = (object: Blob | MediaSource) => {
       if (object instanceof Blob && object.type === "image/png") {
+        // The surface is still mounted here: `downloadBlob` runs before the
+        // export tears it down, which makes this the one moment its colours are
+        // guaranteed to be the ones the rasterizer saw.
+        const doc = document.querySelector<HTMLElement>(".comment-print-doc");
+        const style = doc ? getComputedStyle(doc) : null;
         w.__captures.push({
-          text: document.querySelector(".comment-print-doc")?.textContent ?? "",
+          text: doc?.textContent ?? "",
+          background: style?.backgroundColor ?? "",
+          color: style?.color ?? "",
         });
       }
       return original(object as Blob);
@@ -126,6 +169,7 @@ test.describe("Comment actions — Download PNG", () => {
     const download = await capture.downloaded;
 
     expect(download.suggestedFilename()).toMatch(/^comment-\d{4}-\d{2}-\d{2}-\d{4}\.png$/);
+    expect((await readPng(download)).width).toBeGreaterThan(0);
     const records = await capture.records();
     expect(records).toHaveLength(1);
     expect(records[0]!.text).toContain(REPLY_BODY);
@@ -167,12 +211,38 @@ test.describe("Comment actions — Download PNG", () => {
     await capture.downloaded;
     await expect(page.locator(".comment-print-portal")).toHaveCount(0);
 
+    // A second wait, not a second await of the first: one promise resolves once,
+    // so awaiting `capture.downloaded` again would hand back the *first*
+    // download and pass on a file that was never re-exported.
+    const second = page.waitForEvent("download", { timeout: 120_000 });
     await exportToPngFrom(page, REPLY_BODY, ROOT_BODY);
-    const second = await capture.downloaded;
 
-    expect(second.suggestedFilename()).toMatch(/\.png$/);
+    expect((await second).suggestedFilename()).toMatch(/\.png$/);
     await expect
       .poll(async () => (await capture.records()).length, { timeout: 30_000 })
       .toBe(2);
+  });
+
+  // The sheet is pinned to light tokens so a dark-mode reader drops a legible
+  // image into a chat while the app around it stays dark. The token test guards
+  // the stylesheet; only a real browser can say whether the pin still wins the
+  // cascade against `.dark` on <html>.
+  test("a dark-mode reader gets the light sheet, not the app's dark one", async ({ page }) => {
+    const capture = await watchCapture(page);
+    await page.emulateMedia({ colorScheme: "dark" });
+    await openIssue(page);
+    // Without this the case could sit in light mode and prove nothing.
+    expect(await page.evaluate(() => document.documentElement.className)).toContain("dark");
+
+    await exportToPngFrom(page, REPLY_BODY, ROOT_BODY);
+    await capture.downloaded;
+
+    const records = await capture.records();
+    expect(records).toHaveLength(1);
+    const app = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    expect(records[0]!.background).not.toBe(app);
+    expect(await brightness(page, records[0]!.background)).toBeGreaterThan(
+      await brightness(page, app),
+    );
   });
 });
