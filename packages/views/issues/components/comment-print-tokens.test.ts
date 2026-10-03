@@ -129,7 +129,10 @@ describe("comment-print.css light token block", () => {
     expect(css).toContain(".comment-print-doc [data-dynamic-block-actions],");
   });
 
-  it("drops the icon and the view tabs out of the bar it keeps", () => {
+  it("drops the icon, the view tabs and the library chip out of the bar it keeps", () => {
+    // Three things are ours: the icon, the preview/source tabs, and the chip
+    // that names our rendering library beside the author's own title. The title
+    // itself is content and stays — see the assertion above.
     const css = readFileSync(PRINT_CSS, "utf8");
 
     expect(
@@ -137,6 +140,12 @@ describe("comment-print.css light token block", () => {
     ).toContain("display: none");
     expect(
       topLevelRule(css, '.comment-print-doc [data-dynamic-block-header] [role="tablist"]'),
+    ).toContain("display: none");
+    expect(
+      topLevelRule(
+        css,
+        ".comment-print-doc [data-dynamic-block-header] [data-dynamic-block-kind]",
+      ),
     ).toContain("display: none");
   });
 });

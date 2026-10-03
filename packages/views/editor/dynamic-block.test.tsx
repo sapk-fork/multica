@@ -84,10 +84,14 @@ describe("DynamicBlock", () => {
     expect(header).not.toBeNull();
     // Kept: the title, here "Latency".
     expect(header!.textContent).toContain("Latency");
-    // Stripped: the icon beside it, the actions, and the view tabs.
+    // Stripped: the icon beside it, the actions, the view tabs, and the chip
+    // naming our rendering library.
     expect(header!.querySelector(":scope > svg")).not.toBeNull();
     expect(header!.querySelector("[data-dynamic-block-actions]")).not.toBeNull();
     expect(header!.querySelector("[role='tablist']")).not.toBeNull();
+    const chip = header!.querySelector("[data-dynamic-block-kind]");
+    expect(chip).not.toBeNull();
+    expect(chip!.textContent).toBe("HTML");
   });
 
   it("copies the fence source", async () => {

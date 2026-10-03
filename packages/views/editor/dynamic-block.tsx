@@ -153,7 +153,14 @@ export function DynamicBlock({
           {trimmedTitle || kindLabel}
         </span>
         {trimmedTitle && (
-          <span className="inline-flex h-[18px] shrink-0 items-center rounded-sm bg-secondary px-1.5 text-micro text-muted-foreground">
+          // The chip names our rendering library — "Mermaid" — beside the
+          // author's own title, so the comment PNG export drops it. It gets a
+          // hook for the same reason the bar and the actions do: the stylesheet
+          // must not have to name Tailwind utilities it does not own.
+          <span
+            data-dynamic-block-kind=""
+            className="inline-flex h-[18px] shrink-0 items-center rounded-sm bg-secondary px-1.5 text-micro text-muted-foreground"
+          >
             {kindLabel}
           </span>
         )}

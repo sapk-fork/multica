@@ -158,6 +158,13 @@
   display: none !important;
 }
 
+/* The chip beside the title names our rendering library ("Mermaid"), not the
+   author's code. A recipient outside Multica learns nothing from it, so the
+   sheet keeps "Release flow" and drops the badge. */
+.comment-print-doc [data-dynamic-block-header] [data-dynamic-block-kind] {
+  display: none !important;
+}
+
 /* Un-collapse "Show all". A clipped block captures as half a block with a
    gradient and a button laid over the missing half. */
 .comment-print-doc [data-collapsed] {
