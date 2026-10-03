@@ -90,4 +90,18 @@ describe("comment-print.css light token block", () => {
       "color-scheme: light",
     );
   });
+
+  it("releases a rich block's reserved height", () => {
+    // `LazyRichBlock` keeps its `min-height` after mount so the page never
+    // shrinks back and re-triggers a measurement pass. On screen that
+    // reservation is deliberate; in a fixed-size image it is dead pixels, and a
+    // diagram drawing 120px inside a 280px box shipped a third of its height as
+    // white. Nothing else fails if the release is dropped — the export stays
+    // green and merely wastes the reader's Slack column — so it is pinned here.
+    const css = readFileSync(PRINT_CSS, "utf8");
+
+    expect(topLevelRule(css, ".comment-print-doc [data-rich-block-shell]")).toContain(
+      "min-height: 0",
+    );
+  });
 });
