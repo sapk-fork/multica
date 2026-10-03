@@ -118,15 +118,30 @@ describe("comment-print.css light token block", () => {
     // `package.json` above a config block tells the reader what they are
     // looking at. The bar was hidden whole for a while, which took the title
     // with it — this pins the title's survival, since the rest of the bar (icon,
-    // preview/source tabs) is still ours to drop.
+    // preview/source tabs, kind chip) is still ours to drop.
     const css = readFileSync(PRINT_CSS, "utf8");
 
-    // Hidden as a list item, or as a rule of its own: either shape takes the
-    // title down with the icon.
+    // Hidden as a list item, or by a rule of its own: either UNconditional shape
+    // takes a titled block's title down with the icon. The conditional one below
+    // is the untitled state, which is a different thing.
     expect(css).not.toContain(".comment-print-doc [data-dynamic-block-header],");
     expect(css).not.toContain(".comment-print-doc [data-dynamic-block-header] {");
     // The bar's own controls still go.
     expect(css).toContain(".comment-print-doc [data-dynamic-block-actions],");
+  });
+
+  it("drops an untitled block's whole bar, which holds nothing but our kind name", () => {
+    // The other state of the same bar: with no author title the slot reads
+    // "Mermaid" or "JSON", which says something about our renderer and nothing
+    // about the reader's code. Hiding only that text would leave an empty
+    // bordered strip, so the bar goes — which is why the header carries
+    // `data-dynamic-block-titled` at all.
+    expect(
+      topLevelRule(
+        readFileSync(PRINT_CSS, "utf8"),
+        ".comment-print-doc [data-dynamic-block-header]:not([data-dynamic-block-titled])",
+      ),
+    ).toContain("display: none");
   });
 
   it("drops the icon, the view tabs and the library chip out of the bar it keeps", () => {

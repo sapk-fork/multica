@@ -165,6 +165,13 @@
   display: none !important;
 }
 
+/* An untitled block's bar holds nothing but our kind name, which is the same
+   information as the chip above — so the bar goes whole. Hiding only the kind
+   text would leave an empty bordered strip, which reads as a broken block. */
+.comment-print-doc [data-dynamic-block-header]:not([data-dynamic-block-titled]) {
+  display: none !important;
+}
+
 /* Un-collapse "Show all". A clipped block captures as half a block with a
    gradient and a button laid over the missing half. */
 .comment-print-doc [data-collapsed] {

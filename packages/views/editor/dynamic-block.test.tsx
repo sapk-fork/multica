@@ -19,11 +19,11 @@ import { DynamicBlock, DynamicBlockSkeleton } from "./dynamic-block";
 
 afterEach(() => vi.restoreAllMocks());
 
-function renderBlock() {
+function renderBlock(props?: { title?: string }) {
   return render(
     <DynamicBlock
       kind="html"
-      title="Latency"
+      title={props?.title ?? "Latency"}
       source="<p>chart</p>"
       preview={() => <div data-testid="content">chart</div>}
     />,
@@ -84,6 +84,8 @@ describe("DynamicBlock", () => {
     expect(header).not.toBeNull();
     // Kept: the title, here "Latency".
     expect(header!.textContent).toContain("Latency");
+    // And marked as titled, which is the capture's cue to keep the bar at all.
+    expect(header!.hasAttribute("data-dynamic-block-titled")).toBe(true);
     // Stripped: the icon beside it, the actions, the view tabs, and the chip
     // naming our rendering library.
     expect(header!.querySelector(":scope > svg")).not.toBeNull();
@@ -92,6 +94,22 @@ describe("DynamicBlock", () => {
     const chip = header!.querySelector("[data-dynamic-block-kind]");
     expect(chip).not.toBeNull();
     expect(chip!.textContent).toBe("HTML");
+  });
+
+  // An untitled block's bar holds only our kind name — "Mermaid", "JSON" — so a
+  // shared image would open by naming the library that drew the block. The
+  // capture drops the whole bar in that state rather than leaving an empty
+  // bordered strip, which needs the bar to say which state it is in.
+  it("marks the bar as untitled when the author wrote no title", () => {
+    const { container } = renderBlock({ title: "  " });
+
+    const header = container.querySelector<HTMLElement>("[data-dynamic-block-header]");
+    expect(header).not.toBeNull();
+    expect(header!.hasAttribute("data-dynamic-block-titled")).toBe(false);
+    // With no title the kind name stands in, and the chip that would repeat it
+    // is already gone.
+    expect(header!.textContent).toContain("HTML");
+    expect(header!.querySelector("[data-dynamic-block-kind]")).toBeNull();
   });
 
   it("copies the fence source", async () => {

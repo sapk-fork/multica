@@ -135,11 +135,15 @@ export function DynamicBlock({
         className,
       )}
     >
-      {/* `data-dynamic-block-header` is the hook the comment capture surface
-          uses to drop this bar: it is the icon, the block's name and the
-          preview/source tabs — chrome a shared image has no use for. */}
+      {/* Two hooks, one bar, because the capture treats it in two states:
+          `data-dynamic-block-header` names it, and `data-dynamic-block-titled`
+          says the author gave the block a title of its own. With one, the bar
+          holds the title and the capture strips the rest of it; without one, the
+          title slot falls back to our kind name ("Mermaid"), and the capture
+          drops the whole bar rather than leave an empty bordered strip. */}
       <div
         data-dynamic-block-header=""
+        data-dynamic-block-titled={trimmedTitle ? "" : undefined}
         className="flex h-9 items-center gap-2 border-b pr-1.5 pl-3"
       >
         <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
