@@ -40,13 +40,6 @@ function topLevelRule(css: string, selector: string): string {
  * the token's own line. The sheet has no nested rules, so the closing brace is
  * unambiguous.
  */
-function ruleBodyMentioning(css: string, token: string): string {
-  const at = css.indexOf(token);
-  expect(at, `no top-level rule mentions \`${token}\``).toBeGreaterThan(-1);
-  const open = css.indexOf("{", css.indexOf("\n", at));
-  return css.slice(open + 1, css.indexOf("}", open));
-}
-
 /** `name -> value` for every custom property in a declaration body. */
 function customProperties(body: string): Map<string, string> {
   const out = new Map<string, string>();

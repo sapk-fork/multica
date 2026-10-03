@@ -49,10 +49,19 @@ function comment(id: string, parentId: string | null): TimelineEntry {
   };
 }
 
+/**
+ * Big enough to clear `captureCommentPng`'s plausibility floor. A three-byte
+ * stub is now a rejected capture, which is the point: a capture that resolves
+ * with nothing in it is the bug this guard exists for.
+ */
+function capturedPng(): Blob {
+  return new Blob(["x".repeat(40_000)], { type: "image/png" });
+}
+
 beforeEach(() => {
   useModalStore.setState({ modal: null, data: null });
   domToBlob.mockReset();
-  domToBlob.mockResolvedValue(new Blob(["png"], { type: "image/png" }));
+  domToBlob.mockResolvedValue(capturedPng());
   downloadBlob.mockReset();
   toastError.mockClear();
 });

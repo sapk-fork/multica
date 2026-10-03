@@ -60,6 +60,15 @@ const entry: TimelineEntry = {
   revision: 1,
 };
 
+/**
+ * Big enough to clear `captureCommentPng`'s plausibility floor. A three-byte
+ * stub is now a rejected capture, which is the point: a capture that resolves
+ * with nothing in it is the bug this guard exists for.
+ */
+function capturedPng(): Blob {
+  return new Blob(["x".repeat(40_000)], { type: "image/png" });
+}
+
 /** What each capture actually saw on the page, in call order. */
 let captured: string[];
 
@@ -68,7 +77,7 @@ beforeEach(() => {
   domToBlob.mockReset();
   domToBlob.mockImplementation(async () => {
     captured.push(document.querySelector(".comment-print-doc")?.textContent ?? "");
-    return new Blob(["png"], { type: "image/png" });
+    return capturedPng();
   });
   downloadBlob.mockReset();
   toastError.mockClear();
@@ -150,7 +159,7 @@ describe("CommentPrintSurface", () => {
     expect(doc()?.textContent).toContain("## Findings");
 
     await act(async () => {
-      land(new Blob(["png"], { type: "image/png" }));
+      land(capturedPng());
     });
 
     await waitFor(() => expect(portal()).toBeNull());
