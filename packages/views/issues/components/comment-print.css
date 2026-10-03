@@ -121,9 +121,13 @@
 
 /* Screen affordances that would otherwise be captured: the hover-revealed action
    bar (`opacity: 0`, so invisible but still occupying space), the diagram's own
-   edge fades and toolbar, and a skeleton that outlived the readiness budget —
-   its bars are layout, not content, so a blank box beats a captured outline. */
+   edge fades and toolbar, a skeleton that outlived the readiness budget —
+   its bars are layout, not content, so a blank box beats a captured outline —
+   and every framed block's title bar, which is our own chrome (the icon, the
+   block's name, the preview/source tabs) rather than anything the author
+   wrote. What is left of a framed block is its content edge to edge. */
 .comment-print-doc [data-dynamic-block-actions],
+.comment-print-doc [data-dynamic-block-header],
 .comment-print-doc .mermaid-diagram-toolbar,
 .comment-print-doc .mermaid-diagram-zoom,
 .comment-print-doc .mermaid-diagram::before,

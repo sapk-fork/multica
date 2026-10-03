@@ -135,7 +135,13 @@ export function DynamicBlock({
         className,
       )}
     >
-      <div className="flex h-9 items-center gap-2 border-b pr-1.5 pl-3">
+      {/* `data-dynamic-block-header` is the hook the comment capture surface
+          uses to drop this bar: it is the icon, the block's name and the
+          preview/source tabs — chrome a shared image has no use for. */}
+      <div
+        data-dynamic-block-header=""
+        className="flex h-9 items-center gap-2 border-b pr-1.5 pl-3"
+      >
         <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
         {/* With no title, the kind name stands in and the chip would repeat it. */}
         <span
