@@ -341,7 +341,7 @@ function DynamicBlockErrorPanel({
  *
  * `data-dynamic-block-skeleton` is the hook the comment PDF export polls before
  * printing: a surface holding one of these still has content in flight, and
- * `window.print()` would snapshot the outline instead of the diagram.
+ * the comment image export would capture the outline instead of the diagram.
  */
 export function DynamicBlockSkeleton({ className }: { className?: string }) {
   const { t } = useT("editor");

@@ -6,7 +6,7 @@ import type { TimelineEntry } from "@multica/core/types";
 import { renderWithI18n } from "../../test/i18n";
 
 // Comment "more actions" menu layout, in three groups: act on the comment
-// (Edit, then Resolve), take it elsewhere (Copy, Copy link, Download PDF,
+// (Edit, then Resolve), take it elsewhere (Copy, Copy link, Download PNG,
 // Create sub-issue), and Delete alone at the bottom. Edit only shows on comments the viewer may
 // edit, so on anyone else's comment Resolve leads the menu.
 
@@ -122,7 +122,7 @@ describe("CommentCard — actions menu layout", () => {
       SEPARATOR,
       "Copy",
       "Copy link",
-      "Download PDF",
+      "Download PNG",
       "Create sub-issue from here",
       SEPARATOR,
       "Delete",
@@ -139,7 +139,7 @@ describe("CommentCard — actions menu layout", () => {
       SEPARATOR,
       "Copy",
       "Copy link",
-      "Download PDF",
+      "Download PNG",
       "Create sub-issue from here",
       SEPARATOR,
       "Delete",
@@ -154,7 +154,7 @@ describe("CommentCard — actions menu layout", () => {
       SEPARATOR,
       "Copy",
       "Copy link",
-      "Download PDF",
+      "Download PNG",
       "Create sub-issue from here",
     ]);
   });
@@ -162,6 +162,6 @@ describe("CommentCard — actions menu layout", () => {
   it("drops the leading separator when there is nothing to edit or resolve", async () => {
     renderThread(comment("root", null, agentAuthor), [], { resolvable: false });
 
-    expect(await openMenuLayout(0)).toEqual(["Copy", "Copy link", "Download PDF", "Create sub-issue from here"]);
+    expect(await openMenuLayout(0)).toEqual(["Copy", "Copy link", "Download PNG", "Create sub-issue from here"]);
   });
 });

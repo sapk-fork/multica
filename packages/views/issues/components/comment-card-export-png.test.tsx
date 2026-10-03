@@ -5,8 +5,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { TimelineEntry } from "@multica/core/types";
 import { renderWithI18n } from "../../test/i18n";
 
-// The export must print the comment whose menu was opened — a reply's own body,
-// never the thread root's — and must leave nothing on the page behind it.
+// The export must capture the comment whose menu was opened — a reply's own
+// body, never the thread root's — and must leave nothing on the page behind it.
+
+const { domToBlob } = vi.hoisted(() => ({ domToBlob: vi.fn() }));
+vi.mock("modern-screenshot", () => ({ domToBlob }));
+
+const { downloadBlob } = vi.hoisted(() => ({ downloadBlob: vi.fn() }));
+vi.mock("../../editor/utils/mermaid-export", () => ({ downloadBlob }));
 
 vi.mock("@multica/core/api", () => ({
   api: { uploadFile: vi.fn() },
@@ -86,22 +92,20 @@ function renderThread(root: TimelineEntry, replies: TimelineEntry[]) {
   );
 }
 
-let printed: string[];
-let realPrint: unknown;
+/** What each capture actually saw on the page, in call order. */
+let captured: string[];
 
 beforeEach(() => {
-  printed = [];
-  realPrint = window.print;
-  Object.defineProperty(window, "print", {
-    configurable: true,
-    value: vi.fn(() => {
-      printed.push(document.querySelector(".comment-print-doc")?.textContent ?? "");
-    }),
+  captured = [];
+  domToBlob.mockReset();
+  domToBlob.mockImplementation(async () => {
+    captured.push(document.querySelector(".comment-print-doc")?.textContent ?? "");
+    return new Blob(["png"], { type: "image/png" });
   });
+  downloadBlob.mockReset();
 });
 
 afterEach(() => {
-  Object.defineProperty(window, "print", { configurable: true, value: realPrint });
   vi.useRealTimers();
 });
 
@@ -109,71 +113,79 @@ const actionMenus = () => screen.getAllByRole("button", { name: "Comment actions
 
 async function exportFrom(index: number) {
   fireEvent.click(actionMenus()[index]!);
-  fireEvent.click(await screen.findByText("Download PDF"));
+  fireEvent.click(await screen.findByText("Download PNG"));
 }
 
 const portal = () => document.querySelector(".comment-print-portal");
 
-describe("CommentCard — download comment as PDF", () => {
-  it("prints the thread root's own body", async () => {
+describe("CommentCard — download comment as PNG", () => {
+  it("captures the thread root's own body", async () => {
     renderThread(comment("root", null), []);
 
     await exportFrom(0);
 
-    await waitFor(() => expect(printed).toHaveLength(1));
-    expect(printed[0]).toContain("body root");
+    await waitFor(() => expect(captured).toHaveLength(1));
+    expect(captured[0]).toContain("body root");
   });
 
-  it("prints a reply's own body, not the thread root's", async () => {
+  it("captures a reply's own body, not the thread root's", async () => {
     renderThread(comment("root", null), [comment("reply", "root")]);
 
     // Menus render in order: root first, then the reply.
     await exportFrom(1);
 
-    await waitFor(() => expect(printed).toHaveLength(1));
-    expect(printed[0]).toContain("body reply");
-    expect(printed[0]).not.toContain("body root");
+    await waitFor(() => expect(captured).toHaveLength(1));
+    expect(captured[0]).toContain("body reply");
+    expect(captured[0]).not.toContain("body root");
   });
 
-  it("keeps the surface up until the print dialog is done with it", async () => {
+  it("keeps the surface up until the capture has landed", async () => {
+    let land: (blob: Blob) => void = () => {};
+    domToBlob.mockImplementation(
+      () =>
+        new Promise<Blob>((resolve) => {
+          land = resolve;
+        }),
+    );
     renderThread(comment("root", null), []);
 
     await exportFrom(0);
-    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(domToBlob).toHaveBeenCalledTimes(1));
 
-    // The dialog is still open; the page still has to hold the comment.
+    // Capturing, nothing downloaded yet.
     expect(portal()).not.toBeNull();
     expect(portal()?.textContent).toContain("body root");
+    expect(downloadBlob).not.toHaveBeenCalled();
 
-    window.dispatchEvent(new Event("afterprint"));
+    land(new Blob(["png"], { type: "image/png" }));
 
     await waitFor(() => expect(portal()).toBeNull());
+    expect(downloadBlob).toHaveBeenCalledTimes(1);
   });
 
-  it("opens the print pipeline exactly once per click", async () => {
+  it("captures exactly once per click", async () => {
     renderThread(comment("root", null), []);
 
     await exportFrom(0);
 
-    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1));
-    // Past the readiness wait and past the close fallback: a second dialog here
-    // means the surface re-ran its print effect.
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-    expect(window.print).toHaveBeenCalledTimes(1);
-    expect(printed).toHaveLength(1);
+    await waitFor(() => expect(domToBlob).toHaveBeenCalledTimes(1));
+    // Past the readiness wait: a second capture here means the surface re-ran
+    // its export effect.
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(domToBlob).toHaveBeenCalledTimes(1);
+    expect(captured).toHaveLength(1);
   });
 
-  it("lets a reader export again after the first dialog closes", async () => {
+  it("lets a reader export again after the first image is on its way", async () => {
     renderThread(comment("root", null), []);
 
     await exportFrom(0);
-    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1));
-    window.dispatchEvent(new Event("afterprint"));
     await waitFor(() => expect(portal()).toBeNull());
 
     await exportFrom(0);
 
-    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(2));
-    expect(printed).toHaveLength(2);
+    await waitFor(() => expect(domToBlob).toHaveBeenCalledTimes(2));
+    expect(captured).toHaveLength(2);
+    expect(downloadBlob).toHaveBeenCalledTimes(2);
   });
 });

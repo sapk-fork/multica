@@ -1,21 +1,21 @@
 /**
- * Print-surface readiness for the comment PDF export (M-125).
+ * Capture-surface readiness for the comment image export (M-125).
  *
- * `window.print()` snapshots the DOM synchronously, so anything that fills in
- * later simply misses the page. Two things in a rendered comment arrive late: a
+ * The capture rasterizes whatever is on the page when it runs, so anything that
+ * fills in later is missing from the image. Two things in a rendered comment
+ * arrive late: a
  * rich block behind `LazyRichBlock`'s near-viewport gate mounts from an
  * IntersectionObserver callback, and a Mermaid diagram or an HTML preview
- * resolves asynchronously before it swaps `DynamicBlockSkeleton` for its
- * sandboxed `srcDoc` iframe.
+ * resolves asynchronously before it swaps `DynamicBlockSkeleton` for the drawn
+ * diagram.
  *
  * "Ready" therefore means: no unmounted rich-block shell left, and no preview
  * body still reporting that it is rendering.
  */
 
 /**
- * Long enough for a cached Mermaid render plus the iframe's `srcdoc` parse. It
- * is a ceiling, not a delay: a comment whose diagram never resolves still has
- * to print.
+ * Long enough for a cached Mermaid render. It is a ceiling, not a delay: a
+ * comment whose diagram never resolves still has to export.
  */
 export const PRINT_SURFACE_READY_TIMEOUT_MS = 800;
 
@@ -42,8 +42,8 @@ export function isPrintSurfaceReady(root: ParentNode): boolean {
 }
 
 /**
- * Resolves `true` once the surface can be printed, `false` if the budget ran
- * out first. Never rejects: a print that is slightly early beats no print.
+ * Resolves `true` once the surface can be captured, `false` if the budget ran
+ * out first. Never rejects: an image that is slightly early beats no image.
  */
 export function waitForPrintSurfaceReady(
   root: ParentNode,
