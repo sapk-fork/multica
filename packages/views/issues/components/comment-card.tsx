@@ -805,7 +805,7 @@ function CommentRow({
               )}
               <DropdownMenuItem onClick={() => setPrinting(true)}>
                 <FileDown className="h-3.5 w-3.5" aria-hidden />
-                {t(($) => $.comment.export_pdf_action)}
+                {t(($) => $.comment.export_png_action)}
               </DropdownMenuItem>
               {onCreateSubIssue && entry.comment_type === "comment" && (
                 <DropdownMenuItem onClick={() => onCreateSubIssue(entry.id)}>
@@ -1345,7 +1345,7 @@ function CommentCardImpl({
                       )}
                       <DropdownMenuItem onClick={() => setPrinting(true)}>
                         <FileDown className="h-3.5 w-3.5" aria-hidden />
-                        {t(($) => $.comment.export_pdf_action)}
+                        {t(($) => $.comment.export_png_action)}
                       </DropdownMenuItem>
                       {onCreateSubIssue && entry.comment_type === "comment" && (
                         <DropdownMenuItem onClick={() => onCreateSubIssue(entry.id)}>

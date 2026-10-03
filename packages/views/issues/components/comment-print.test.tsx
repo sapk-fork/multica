@@ -6,6 +6,12 @@ import type { TimelineEntry } from "@multica/core/types";
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: toastError } }));
 
+const { domToBlob } = vi.hoisted(() => ({ domToBlob: vi.fn() }));
+vi.mock("modern-screenshot", () => ({ domToBlob }));
+
+const { downloadBlob } = vi.hoisted(() => ({ downloadBlob: vi.fn() }));
+vi.mock("../../editor/utils/mermaid-export", () => ({ downloadBlob }));
+
 vi.mock("@multica/core/api", () => ({
   api: { uploadFile: vi.fn() },
   dispatchReasonCode: () => undefined,
@@ -16,12 +22,12 @@ vi.mock("@multica/core/workspace/hooks", () => ({
   useActorName: () => ({ getActorName: () => "Ada" }),
 }));
 
-// `t` is a NEW function on every call, which is the hostile case the print
+// `t` is a NEW function on every call, which is the hostile case the capture
 // effect has to survive: an effect that listed `t` in its deps would re-run on
-// every render and open another print dialog each time. Real i18next holds one
-// identity per language, so this is strictly harder than production. The real EN
-// bundle still answers the toast, so the assertion below reads the shipped
-// string rather than a stub's.
+// every render and capture again each time. Real i18next holds one identity per
+// language, so this is strictly harder than production. The real EN bundle
+// still answers the toast, so the assertion below reads the shipped string
+// rather than a stub's.
 vi.mock("../../i18n", async () => {
   const issues = (await import("../../locales/en/issues.json")).default;
   return {
@@ -31,13 +37,13 @@ vi.mock("../../i18n", async () => {
 });
 
 // The real renderer pulls in Mermaid and KaTeX CSS; the surface's own contract
-// is "the body it was handed reaches the page", which the stub still proves.
+// is "the body it was handed reaches the capture", which the stub still proves.
 vi.mock("../../editor", async () => ({
   ...(await vi.importActual<typeof import("../../editor/use-upload-gate")>("../../editor/use-upload-gate")),
   ReadonlyContent: ({ content }: { content: string }) => <div>{content}</div>,
 }));
 
-import { CommentPrintSurface, PRINT_CLOSE_FALLBACK_MS } from "./comment-print";
+import { CommentPrintSurface } from "./comment-print";
 
 const entry: TimelineEntry = {
   type: "comment",
@@ -54,23 +60,21 @@ const entry: TimelineEntry = {
   revision: 1,
 };
 
-let printed: string[];
-let realPrint: unknown;
+/** What each capture actually saw on the page, in call order. */
+let captured: string[];
 
 beforeEach(() => {
-  printed = [];
-  realPrint = window.print;
-  Object.defineProperty(window, "print", {
-    configurable: true,
-    value: vi.fn(() => {
-      printed.push(document.querySelector(".comment-print-doc")?.textContent ?? "");
-    }),
+  captured = [];
+  domToBlob.mockReset();
+  domToBlob.mockImplementation(async () => {
+    captured.push(document.querySelector(".comment-print-doc")?.textContent ?? "");
+    return new Blob(["png"], { type: "image/png" });
   });
+  downloadBlob.mockReset();
   toastError.mockClear();
 });
 
 afterEach(() => {
-  Object.defineProperty(window, "print", { configurable: true, value: realPrint });
   vi.useRealTimers();
 });
 
@@ -97,125 +101,95 @@ function Harness({ onClose }: { onClose: () => void }) {
 const portal = () => document.querySelector(".comment-print-portal");
 const doc = () => document.querySelector(".comment-print-doc");
 
-/** Safari: `print()` returns at once and the panel opens afterwards. */
-function panelCloses() {
-  window.dispatchEvent(new Event("afterprint"));
-}
-
 describe("CommentPrintSurface", () => {
-  it("puts the comment body on the page and prints it", async () => {
+  it("puts the comment body on the page and captures it", async () => {
     render(<Harness onClose={vi.fn()} />);
 
-    await waitFor(() => expect(printed).toHaveLength(1));
-    expect(printed[0]).toContain("## Findings");
+    await waitFor(() => expect(captured).toHaveLength(1));
+    expect(captured[0]).toContain("## Findings");
+  });
+
+  it("hands the captured image to the browser as a PNG file", async () => {
+    render(<Harness onClose={vi.fn()} />);
+
+    await waitFor(() => expect(downloadBlob).toHaveBeenCalledTimes(1));
+    const [blob, filename] = downloadBlob.mock.calls[0]!;
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.type).toBe("image/png");
+    expect(filename).toBe("comment-2026-09-11-0700.png");
   });
 
   it("names the author and dates the document", async () => {
     render(<Harness onClose={vi.fn()} />);
 
-    await waitFor(() => expect(printed).toHaveLength(1));
-    expect(printed[0]).toContain("Ada");
-    expect(printed[0]).toContain("2026");
+    await waitFor(() => expect(captured).toHaveLength(1));
+    expect(captured[0]).toContain("Ada");
+    expect(captured[0]).toContain("2026");
   });
 
-  // The regression this component's ordering exists for. `window.print()`
-  // returning does NOT mean the dialog is gone: Safari's is non-blocking and
-  // opens the panel afterwards, so a surface torn down on return is torn down
-  // BEFORE the snapshot, and the reader gets a blank page.
-  it("holds the surface on the page between print() returning and afterprint", async () => {
+  // The regression this component's ordering exists for. A capture is not free:
+  // it clones the DOM, embeds fonts and rasterizes, all asynchronously. A
+  // surface torn down before the blob lands exports nothing at all.
+  it("holds the surface on the page until the capture lands", async () => {
+    let land: (blob: Blob) => void = () => {};
+    domToBlob.mockImplementation(
+      () =>
+        new Promise<Blob>((resolve) => {
+          land = resolve;
+        }),
+    );
     const onClose = vi.fn();
     render(<Harness onClose={onClose} />);
 
-    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(domToBlob).toHaveBeenCalledTimes(1));
 
-    // print() has returned; the panel is still open.
+    // Capturing, nothing downloaded yet.
     expect(onClose).not.toHaveBeenCalled();
+    expect(downloadBlob).not.toHaveBeenCalled();
     expect(portal()).not.toBeNull();
     expect(doc()?.textContent).toContain("## Findings");
 
-    panelCloses();
+    await act(async () => {
+      land(new Blob(["png"], { type: "image/png" }));
+    });
 
     await waitFor(() => expect(portal()).toBeNull());
+    expect(downloadBlob).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("closes once — afterprint, then no second close from the fallback", async () => {
-    vi.useFakeTimers();
-    const onClose = vi.fn();
-    render(<Harness onClose={onClose} />);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-    expect(window.print).toHaveBeenCalledTimes(1);
-
-    act(() => {
-      panelCloses();
-    });
-    expect(onClose).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(PRINT_CLOSE_FALLBACK_MS * 4);
-    });
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  // An engine that never fires `afterprint` (some webviews, Electron) must not
-  // leave the reader looking at a white sheet over the app forever.
-  it("still takes the surface down when afterprint never arrives", async () => {
-    vi.useFakeTimers();
-    const onClose = vi.fn();
-    render(<Harness onClose={onClose} />);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-    expect(onClose).not.toHaveBeenCalled();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(PRINT_CLOSE_FALLBACK_MS + 20);
-    });
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(portal()).toBeNull();
-  });
-
-  it("budgets the fallback long enough to clear a panel opened after print() returned", () => {
-    // The floor is the requirement, not the number: shorter than this and a
-    // non-blocking engine tears the surface down before it has snapshotted.
-    expect(PRINT_CLOSE_FALLBACK_MS).toBeGreaterThanOrEqual(500);
-  });
-
-  it("reports instead of hanging when the browser has no print pipeline", async () => {
-    Object.defineProperty(window, "print", { configurable: true, value: undefined });
+  it("reports and closes instead of hanging when the capture fails", async () => {
+    domToBlob.mockRejectedValue(new Error("canvas too large"));
     const onClose = vi.fn();
     render(<Harness onClose={onClose} />);
 
     await waitFor(() =>
-      expect(toastError).toHaveBeenCalledWith("Failed to open the print dialog"),
+      expect(toastError).toHaveBeenCalledWith("Couldn't create the image"),
     );
+    expect(downloadBlob).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(portal()).toBeNull();
   });
 
   // `useT` hands back a fresh `t` per render here (see the mock above), and the
   // harness passes a fresh `onClose` for the same reason — a caller who forgets
-  // `useCallback`. Neither may produce a second dialog.
-  it("opens the print pipeline once per mount, whatever the deps do", async () => {
+  // `useCallback`. Neither may produce a second capture.
+  it("captures once per mount, whatever the deps do", async () => {
     const onClose = vi.fn();
     const { rerender } = render(<Harness onClose={onClose} />);
 
-    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(domToBlob).toHaveBeenCalledTimes(1));
 
     for (let i = 0; i < 5; i++) {
       rerender(<Harness onClose={onClose} />);
     }
-    // The print call sits behind an `await`, so let those continuations run
-    // before counting: asserting synchronously would read the count from
-    // before the rerenders and pass on a component that would print six times.
+    // The capture sits behind an `await`, so let those continuations run before
+    // counting: asserting synchronously would read the count from before the
+    // rerenders and pass on a component that would capture six times.
     await act(async () => {});
 
-    expect(window.print).toHaveBeenCalledTimes(1);
-    expect(printed).toHaveLength(1);
+    expect(domToBlob).toHaveBeenCalledTimes(1);
+    expect(downloadBlob).toHaveBeenCalledTimes(1);
+    expect(captured).toHaveLength(1);
   });
 });
