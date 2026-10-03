@@ -335,10 +335,11 @@ export class TestApiClient {
     await this.authedFetch(`/api/issues/${id}`, { method: "DELETE" });
   }
 
-  async createComment(issueId: string, content: string) {
+  /** `parentId` makes it a reply, so tests can build a real thread. */
+  async createComment(issueId: string, content: string, parentId?: string) {
     const res = await this.authedFetch(`/api/issues/${issueId}/comments`, {
       method: "POST",
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, parent_id: parentId }),
     });
     if (!res.ok) {
       throw new Error(`create comment failed: ${res.status} ${await res.text()}`);
