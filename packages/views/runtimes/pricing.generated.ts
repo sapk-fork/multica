@@ -2,7 +2,7 @@
 //
 // Source: https://models.dev/api.json (MIT, community-maintained,
 // the same dataset OpenCode uses internally).
-// Snapshot: 2026-10-01
+// Snapshot: 2026-10-04
 //
 // Regenerate with: node scripts/generate-pricing.mjs
 
@@ -46,7 +46,7 @@ export const MODEL_PRICING: Readonly<Record<string, {
   "deepseek-reasoner": { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0.14 },
   "deepseek-v4-flash": { input: 0.15, output: 0.6, cacheRead: 0.003, cacheWrite: 0.15 },
   "deepseek-v4-flash-vision-exp": { input: 0.15, output: 0.6, cacheRead: 0.003, cacheWrite: 0.15 },
-  "deepseek-v4-pro": { input: 0.435, output: 0.87, cacheRead: 0.003625, cacheWrite: 0.435 },
+  "deepseek-v4-pro": { input: 0.66, output: 1.98, cacheRead: 0.022, cacheWrite: 0.66 },
   "deepseek-v4.1-flash": { input: 0.3, output: 1.2, cacheRead: 0.006, cacheWrite: 0.3 },
   "gemini-2.5-computer-use-preview-10-2025": { input: 1.25, output: 10, cacheRead: 1.25, cacheWrite: 1.25 },
   "gemini-2.5-flash": { input: 0.3, output: 2.5, cacheRead: 0.03, cacheWrite: 0.3 },
@@ -190,7 +190,6 @@ export const MODEL_PRICING: Readonly<Record<string, {
   "openai/gpt-5.3-chat-latest": { input: 1.75, output: 14, cacheRead: 0.175, cacheWrite: 1.75 },
   "openai/gpt-daybreak-blue-latest": { input: 4, output: 20, cacheRead: 0.4, cacheWrite: 5 },
   "openai/gpt-daybreak-red-latest": { input: 12.5, output: 75, cacheRead: 1.25, cacheWrite: 15.625 },
-  "opencode-go/deepseek-v4-pro": { input: 0.66, output: 1.98, cacheRead: 0.022, cacheWrite: 0.66 },
   "opencode-go/deepseek-v4.1-flash": { input: 0.15, output: 0.6, cacheRead: 0.003, cacheWrite: 0.15 },
   "opencode-go/glm-5.2": { input: 1.4, output: 4.4, cacheRead: 0.26, cacheWrite: 1.4 },
   "opencode-go/glm-5.3": { input: 1.4, output: 4.4, cacheRead: 0.26, cacheWrite: 1.4 },
