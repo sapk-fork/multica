@@ -288,7 +288,15 @@ export function InboxPage() {
       ...filterInboxItems(lookupItems, effectiveFilters, filterContext),
     ]);
   }, [isArchivedView, selectedOnPage, filteredItems, lookupItems, effectiveFilters, filterContext]);
-  const visibleItems = isArchivedView && pinnedKey ? selectionItems : filteredItems;
+  // Main view only: the archived list is cursor-paginated, so ordering it
+  // client-side would rank the pages loaded far out of order (the items memo
+  // short-circuits for the same reason). Sorting the filtered rows keeps the
+  // filter dimensions reading every notification while the rows the user sees
+  // honour the persisted preference.
+  const sortedFiltered = isArchivedView
+    ? filteredItems
+    : sortInboxItems(filteredItems, effectiveSortField, sortDirection);
+  const visibleItems = isArchivedView && pinnedKey ? selectionItems : sortedFiltered;
 
   // Inbox zero: the bleeding m rises once, at the moment the last notification
   // leaves; opening an already-empty inbox shows it at rest. Archived and
