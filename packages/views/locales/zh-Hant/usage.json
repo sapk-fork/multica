@@ -99,7 +99,16 @@
     "usage_totals_pending": "用量彙總仍在處理中",
     "show_all": "展開全部",
     "show_less": "只看前 {{count}} 個",
-    "no_data": "所選時間範圍內暫無 AI 代理活動。"
+    "no_data": "所選時間範圍內暫無 AI 代理活動。",
+    "no_runtime": "無執行環境",
+    "caption_models": "{{count}} 個模型",
+    "caption_runtimes": "{{count}} 個執行環境",
+    "scope_label": "檢視維度",
+    "scope_agent": "AI 代理",
+    "scope_model": "模型",
+    "scope_runtime": "執行環境",
+    "header_model": "模型",
+    "header_runtime": "執行環境"
   },
   "empty": {
     "title": "暫無消耗資料",

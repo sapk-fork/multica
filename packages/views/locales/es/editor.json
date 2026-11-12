@@ -170,6 +170,12 @@
     "view_source": "Ver fuente",
     "copy_error": "Copiar error"
   },
+  "details_block": {
+    "summary_default": "Detalles",
+    "summary_aria_label": "Resumen",
+    "body_placeholder": "Contenido (Markdown)",
+    "body_aria_label": "Contenido de detalles (Markdown)"
+  },
   "table": {
     "reset_widths": "Restablecer anchos",
     "expand": "Expandir tabla",

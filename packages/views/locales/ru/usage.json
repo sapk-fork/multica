@@ -105,7 +105,16 @@
     "usage_unreported_few": "{{count}} запуска не сообщили об использовании",
     "usage_unreported_many": "{{count}} запусков не сообщили об использовании",
     "usage_unreported_pending_few": "{{count}} запуска не сообщили об использовании · итоги ещё обрабатываются",
-    "usage_unreported_pending_many": "{{count}} запусков не сообщили об использовании · итоги ещё обрабатываются"
+    "usage_unreported_pending_many": "{{count}} запусков не сообщили об использовании · итоги ещё обрабатываются",
+    "no_runtime": "Без среды выполнения",
+    "caption_models": "{{count}} моделей",
+    "caption_runtimes": "{{count}} сред выполнения",
+    "scope_label": "Показывать по",
+    "scope_agent": "Агент",
+    "scope_model": "Модель",
+    "scope_runtime": "Среда выполнения",
+    "header_model": "Модель",
+    "header_runtime": "Среда выполнения"
   },
   "empty": {
     "title": "Данных пока нет",

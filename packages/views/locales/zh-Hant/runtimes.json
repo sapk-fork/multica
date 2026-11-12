@@ -145,6 +145,14 @@
     "long_offline": {
       "label": "長期離線",
       "description": "6 天以上沒有心跳。如果這臺主機不會恢復，請將關聯 AI 代理改綁到其他執行時，或刪除此執行時。"
+    },
+    "on_hold": {
+      "label": "暫停中",
+      "resumes_in": "{{time}}恢復",
+      "tooltip": "此執行環境已暫停 — 任務已排隊，將在恢復後自動執行。",
+      "resume_button": "恢復",
+      "resume_toast": "執行環境已恢復",
+      "resume_failed": "恢復執行環境失敗"
     }
   },
   "detail": {

@@ -76,7 +76,8 @@
       "in_review": "Entregada, a la espera de revisión humana. Finaliza la ejecución de la automatización.",
       "blocked": "Detenido por una dependencia externa.",
       "done": "Completado.",
-      "cancelled": "Se decidió no hacerlo."
+      "cancelled": "Se decidió no hacerlo.",
+      "archived": "Apartado sin eliminar. Terminal — se comporta como cancelado."
     },
     "pr_auto_complete_badge": "Se establece al fusionar los PR",
     "built_in_locked": "Los estados integrados controlan el comportamiento del sistema, así que no se pueden editar ni archivar. Sí puedes reordenarlos.",
@@ -975,8 +976,10 @@
     "deleting": "Eliminando..."
   },
   "labs": {
-    "section_placeholder_title": "Aún no hay experimentos",
-    "section_placeholder_description": "La configuración experimental aparecerá aquí a medida que se publique. Hoy esta pestaña está vacía a propósito.",
+    "experiments_title": "Experimentos",
+    "experiments_description": "Prueba funciones nuevas antes de su lanzamiento general. Estos ajustes son experimentales y pueden cambiar.",
+    "gravatar_title": "Compatible con Gravatar",
+    "gravatar_description": "Muestra imágenes de Gravatar para usuarios sin avatar personalizado. Usa el hash SHA-256 de su correo electrónico.",
     "toast_failed": "Error al actualizar la configuración"
   },
   "github": {

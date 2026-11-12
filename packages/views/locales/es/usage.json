@@ -101,7 +101,16 @@
     "usage_totals_pending": "Los totales de uso se están procesando",
     "show_all": "Mostrar todos",
     "show_less": "Mostrar los {{count}} principales",
-    "no_data": "Sin actividad de agentes en este periodo."
+    "no_data": "Sin actividad de agentes en este periodo.",
+    "no_runtime": "Sin runtime",
+    "caption_models": "{{count}} modelos",
+    "caption_runtimes": "{{count}} runtimes",
+    "scope_label": "Ver por",
+    "scope_agent": "Agente",
+    "scope_model": "Modelo",
+    "scope_runtime": "Runtime",
+    "header_model": "Modelo",
+    "header_runtime": "Runtime"
   },
   "empty": {
     "title": "Aún no hay uso",
